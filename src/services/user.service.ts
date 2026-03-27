@@ -2,6 +2,7 @@ import type { User } from '@/types/user.types'
 import { apiClient } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockUsers, getMockDelay } from '@/mock'
+import { normalizeUser } from './normalizers'
 
 let _mockUsers = [...mockUsers]
 
@@ -48,28 +49,44 @@ const mockService = {
   },
 }
 
-// Backend may return a plain array or paginated shape (pagination deferred)
-type UserListResponse = User[] | { data: User[] }
+// Backend may return a plain array, PagedResponse { items }, or legacy { data }
+type UserListResponse = Record<string, unknown>[] | { items: Record<string, unknown>[] } | { data: Record<string, unknown>[] }
+
+function extractUserList(res: UserListResponse): User[] {
+  const raws = Array.isArray(res) ? res : ('items' in res ? res.items : res.data)
+  return raws.map(normalizeUser)
+}
 
 const realService = {
   getAll: async (): Promise<User[]> => {
     const res = await apiClient.get<UserListResponse>('/users')
-    return Array.isArray(res) ? res : res.data
+    return extractUserList(res)
   },
 
-  getById: (id: string) => apiClient.get<User | null>(`/users/${id}`),
+  getById: async (id: string): Promise<User | null> => {
+    const raw = await apiClient.get<Record<string, unknown> | null>(`/users/${id}`)
+    return raw ? normalizeUser(raw) : null
+  },
 
-  create: (data: Omit<User, 'id' | 'openTicketCount'>) =>
-    apiClient.post<User>('/users', data),
+  create: async (data: Omit<User, 'id' | 'openTicketCount'>): Promise<User> => {
+    const raw = await apiClient.post<Record<string, unknown>>('/users', data)
+    return normalizeUser(raw)
+  },
 
-  update: (id: string, data: Partial<User>) =>
-    apiClient.put<User>(`/users/${id}`, data),
+  update: async (id: string, data: Partial<User>): Promise<User> => {
+    const raw = await apiClient.put<Record<string, unknown>>(`/users/${id}`, data)
+    return normalizeUser(raw)
+  },
 
-  activate: (id: string) =>
-    apiClient.patch<User>(`/users/${id}/activate`, {}),
+  activate: async (id: string): Promise<User> => {
+    const raw = await apiClient.patch<Record<string, unknown>>(`/users/${id}/activate`, {})
+    return normalizeUser(raw)
+  },
 
-  deactivate: (id: string) =>
-    apiClient.patch<User>(`/users/${id}/deactivate`, {}),
+  deactivate: async (id: string): Promise<User> => {
+    const raw = await apiClient.patch<Record<string, unknown>>(`/users/${id}/deactivate`, {})
+    return normalizeUser(raw)
+  },
 }
 
 export const userService = USE_MOCKS ? mockService : realService

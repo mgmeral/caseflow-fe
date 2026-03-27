@@ -52,6 +52,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'pool',
+            // supervisor is mock-only; in real mode this gate is admin-only
             element: (
               <ProtectedRoute requiredRoles={['admin', 'supervisor']}>
                 <AdminPoolPage />
@@ -60,8 +61,9 @@ export const router = createBrowserRouter([
           },
           {
             path: 'reports',
+            // agent covers real backend AGENT; ProtectedRoute normalizes mock equivalents
             element: (
-              <ProtectedRoute requiredRoles={['admin', 'supervisor', 'trade_agent', 'operation_agent']}>
+              <ProtectedRoute requiredRoles={['admin', 'supervisor', 'agent']}>
                 <ReportsPage />
               </ProtectedRoute>
             ),

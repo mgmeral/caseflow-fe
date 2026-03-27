@@ -65,4 +65,20 @@ describe('ProtectedRoute', () => {
     )
     expect(screen.getByText('Dashboard')).toBeTruthy()
   })
+
+  it('agent role is accepted where trade_agent is listed (backend role normalization)', () => {
+    renderWithRouter(
+      { isAuthenticated: true, currentUser: { role: 'agent' } },
+      ['trade_agent', 'operation_agent'],
+    )
+    expect(screen.getByText('Protected Content')).toBeTruthy()
+  })
+
+  it('trade_agent is accepted where agent is listed (backward compat)', () => {
+    renderWithRouter(
+      { isAuthenticated: true, currentUser: { role: 'trade_agent' } },
+      ['agent'],
+    )
+    expect(screen.getByText('Protected Content')).toBeTruthy()
+  })
 })

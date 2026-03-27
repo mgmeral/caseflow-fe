@@ -20,11 +20,52 @@ export interface ErrorResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Auth DTOs
+// ---------------------------------------------------------------------------
+
+export interface LoginRequest {
+  username: string
+  password: string
+}
+
+/** Backend response for POST /auth/login */
+export interface LoginResponse {
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  expiresIn: number
+}
+
+/** Backend roles as returned by the API — always uppercase */
+export type BackendRole = 'ADMIN' | 'AGENT' | 'VIEWER'
+
+/** Backend response for GET /auth/me */
+export interface AuthMeResponse {
+  id: string
+  username?: string
+  firstName: string
+  lastName: string
+  fullName: string
+  email: string
+  role: BackendRole
+  isActive: boolean
+}
+
+/** Normalized PagedResponse from backend list endpoints */
+export interface PagedResponse<T> {
+  items: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+}
+
+// ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
 
-/** Matches backend NoteType enum */
-export type NoteType = 'public_reply' | 'internal_note' | 'system_event'
+/** Matches backend NoteType enum — uppercase values as returned/expected by the API */
+export type NoteType = 'INTERNAL' | 'INFO' | 'INVESTIGATION' | 'ESCALATION'
 
 /** Matches backend GroupType enum — values TBD per backend implementation */
 export type GroupType = string
@@ -248,18 +289,21 @@ export interface AddNoteRequest {
   ticketId: string
   content: string
   type: NoteType
-  authorId: string
+  /** Optional in real mode — backend derives author from the authenticated session */
+  authorId?: string
 }
 
 export interface AssignTicketRequest {
   ticketId: string
-  assigneeId: string
+  /** Backend field name */
+  assignedUserId: string
   note?: string
 }
 
 export interface ReassignTicketRequest {
   ticketId: string
-  newAssigneeId: string
+  /** Backend field name */
+  newUserId: string
   note?: string
 }
 
@@ -270,9 +314,10 @@ export interface UnassignTicketRequest {
 
 export interface TransferTicketRequest {
   ticketId: string
-  targetGroupId: string
+  fromGroupId: string
+  toGroupId: string
   reason: string
-  note?: string
+  clearAssignee?: boolean
 }
 
 export interface CreateUserRequest {

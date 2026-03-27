@@ -7,6 +7,8 @@ import { apiClient } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockTransferRecords, getMockDelay } from '@/mock'
 
+export type { TransferTicketRequest }
+
 // ---------------------------------------------------------------------------
 // Helper: map TransferResponse → TransferRecord view model
 // ---------------------------------------------------------------------------
@@ -43,13 +45,13 @@ const mockService = {
     const record: TransferRecord = {
       id: `tr-${Date.now()}`,
       ticketId: req.ticketId,
-      fromGroupId: '',
-      fromGroupName: 'Previous Group',
-      toGroupId: req.targetGroupId,
-      toGroupName: req.targetGroupId,
+      fromGroupId: req.fromGroupId,
+      fromGroupName: req.fromGroupId,
+      toGroupId: req.toGroupId,
+      toGroupName: req.toGroupId,
       transferredByName: 'System',
       reason: req.reason,
-      note: req.note ?? null,
+      note: null,
       createdAt: new Date().toISOString(),
     }
     mockTransferRecords.push(record)

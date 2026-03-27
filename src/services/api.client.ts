@@ -24,8 +24,8 @@ function getAuthHeader(): Record<string, string> {
   try {
     const raw = localStorage.getItem('csm-auth')
     if (!raw) return {}
-    const parsed = JSON.parse(raw) as { state?: { currentUser?: { token?: string } } }
-    const token = parsed?.state?.currentUser?.token
+    const parsed = JSON.parse(raw) as { state?: { accessToken?: string | null } }
+    const token = parsed?.state?.accessToken
     return token ? { Authorization: `Bearer ${token}` } : {}
   } catch {
     return {}
@@ -72,6 +72,11 @@ async function request<T>(
         violations = errBody.violations
       } catch {
         // ignore parse error, use defaults
+      }
+      // Signal token expiry/revocation so the auth layer can clear session.
+      // Skipped for /auth/login to avoid interfering with credential-error handling.
+      if (response.status === 401 && !path.includes('/auth/login')) {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'))
       }
       throw new ApiError(response.status, code, message, violations)
     }

@@ -13,10 +13,12 @@ import { mockMessages, getMockDelay } from '@/mock'
 // ---------------------------------------------------------------------------
 
 function noteToMessage(n: NoteResponse): TicketMessage {
+  // Map backend NoteType (INTERNAL/INFO/INVESTIGATION/ESCALATION) → FE MessageType
   const typeMap: Record<string, TicketMessage['type']> = {
-    public_reply: 'public_outbound',
-    internal_note: 'internal_note',
-    system_event: 'system_event',
+    INTERNAL: 'internal_note',
+    INFO: 'system_event',
+    INVESTIGATION: 'internal_note',
+    ESCALATION: 'internal_note',
   }
   return {
     id: n.id,
@@ -51,12 +53,18 @@ const mockService = {
 
   create: async (req: AddNoteRequest): Promise<TicketMessage> => {
     await getMockDelay()
+    const mockTypeMap: Record<string, TicketMessage['type']> = {
+      INTERNAL: 'internal_note',
+      INFO: 'system_event',
+      INVESTIGATION: 'internal_note',
+      ESCALATION: 'internal_note',
+    }
     const msg: TicketMessage = {
       id: `note-${++_mockNoteIdCounter}`,
       ticketId: req.ticketId,
-      type: req.type === 'public_reply' ? 'public_outbound' : (req.type as TicketMessage['type']),
-      authorId: req.authorId,
-      authorName: req.authorId,
+      type: mockTypeMap[req.type] ?? 'internal_note',
+      authorId: req.authorId ?? null,
+      authorName: req.authorId ?? 'Unknown',
       content: req.content,
       createdAt: new Date().toISOString(),
       attachments: [],
@@ -82,7 +90,9 @@ const realService = {
   },
 
   create: async (req: AddNoteRequest): Promise<TicketMessage> => {
-    const note = await apiClient.post<NoteResponse>('/notes', req)
+    // authorId is NOT sent to the backend — the API derives the author from the session token
+    const { authorId: _authorId, ...body } = req
+    const note = await apiClient.post<NoteResponse>('/notes', body)
     return noteToMessage(note)
   },
 }

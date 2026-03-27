@@ -28,8 +28,8 @@ describe('apiClient', () => {
   })
 
   it('POST: sends body and returns response', async () => {
-    const spy = mockFetch(201, { token: 'abc', user: { id: 'u1' } })
-    await apiClient.post('/auth/login', { email: 'a@b.com', password: 'pw' })
+    const spy = mockFetch(201, { accessToken: 'abc', refreshToken: 'ref', tokenType: 'Bearer', expiresIn: 3600 })
+    await apiClient.post('/auth/login', { username: 'a@b.com', password: 'pw' })
     expect(spy).toHaveBeenCalledWith(
       expect.stringContaining('/auth/login'),
       expect.objectContaining({ method: 'POST' }),

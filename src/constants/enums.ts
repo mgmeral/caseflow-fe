@@ -25,6 +25,7 @@ export const CUSTOMER_SEGMENT_LABELS: Record<string, string> = {
 
 export const USER_ROLE_LABELS: Record<string, string> = {
   admin: 'Admin',
+  agent: 'Agent',
   supervisor: 'Supervisor',
   trade_agent: 'Trade Agent',
   operation_agent: 'Operations Agent',

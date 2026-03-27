@@ -18,10 +18,12 @@ function emailToMessage(e: EmailDocumentResponse): TicketMessage {
     ticketId: e.ticketId,
     type: e.direction === 'INBOUND' ? 'public_inbound' : 'public_outbound',
     authorId: null,
-    authorName: e.fromAddress,
-    content: e.content,
+    authorName: e.fromAddress ?? '',
+    // content may be absent on list-endpoint summaries; use empty string as placeholder.
+    // The detail endpoint (GET /emails/{id}) always includes full content.
+    content: e.content ?? '',
     createdAt: e.sentAt ?? e.receivedAt ?? new Date().toISOString(),
-    attachments: e.attachments.map((a) => a.filename),
+    attachments: (e.attachments ?? []).map((a) => a.filename),
   }
 }
 

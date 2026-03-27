@@ -1,7 +1,7 @@
 /**
  * Assignment service — aligned to backend /api/assignments endpoints.
  */
-import type { AssignmentResponse, AssignTicketRequest, ReassignTicketRequest, UnassignTicketRequest } from '@/types/api.types'
+import type { AssignmentResponse } from '@/types/api.types'
 import { apiClient } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockTickets, getMockDelay } from '@/mock'
@@ -30,41 +30,41 @@ const mockService = {
     ]
   },
 
-  assign: async (req: AssignTicketRequest): Promise<AssignmentResponse> => {
+  assign: async (req: { ticketId: string; assignedUserId: string; note?: string }): Promise<AssignmentResponse> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === req.ticketId)
     if (!ticket) throw new Error('Ticket not found')
-    ticket.assignedUserId = req.assigneeId
+    ticket.assignedUserId = req.assignedUserId
     ticket.updatedAt = new Date().toISOString()
     return {
       id: `asgn-${++_mockAssignmentIdCounter}`,
       ticketId: req.ticketId,
-      assigneeId: req.assigneeId,
-      assigneeName: req.assigneeId,
+      assigneeId: req.assignedUserId,
+      assigneeName: req.assignedUserId,
       assignedById: null,
       assignedByName: null,
       createdAt: new Date().toISOString(),
     }
   },
 
-  reassign: async (req: ReassignTicketRequest): Promise<AssignmentResponse> => {
+  reassign: async (req: { ticketId: string; newUserId: string; note?: string }): Promise<AssignmentResponse> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === req.ticketId)
     if (!ticket) throw new Error('Ticket not found')
-    ticket.assignedUserId = req.newAssigneeId
+    ticket.assignedUserId = req.newUserId
     ticket.updatedAt = new Date().toISOString()
     return {
       id: `asgn-${++_mockAssignmentIdCounter}`,
       ticketId: req.ticketId,
-      assigneeId: req.newAssigneeId,
-      assigneeName: req.newAssigneeId,
+      assigneeId: req.newUserId,
+      assigneeName: req.newUserId,
       assignedById: null,
       assignedByName: null,
       createdAt: new Date().toISOString(),
     }
   },
 
-  unassign: async (req: UnassignTicketRequest): Promise<void> => {
+  unassign: async (req: { ticketId: string; reason?: string }): Promise<void> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === req.ticketId)
     if (!ticket) throw new Error('Ticket not found')
@@ -75,20 +75,20 @@ const mockService = {
 }
 
 // ---------------------------------------------------------------------------
-// Real API implementation
+// Real API implementation — field names match backend contract exactly
 // ---------------------------------------------------------------------------
 
 const realService = {
   getByTicket: (ticketId: string) =>
     apiClient.get<AssignmentResponse[]>(`/assignments/by-ticket/${ticketId}`),
 
-  assign: (req: AssignTicketRequest) =>
+  assign: (req: { ticketId: string; assignedUserId: string; note?: string }) =>
     apiClient.post<AssignmentResponse>('/assignments/assign', req),
 
-  reassign: (req: ReassignTicketRequest) =>
+  reassign: (req: { ticketId: string; newUserId: string; note?: string }) =>
     apiClient.post<AssignmentResponse>('/assignments/reassign', req),
 
-  unassign: (req: UnassignTicketRequest) =>
+  unassign: (req: { ticketId: string; reason?: string }) =>
     apiClient.post<void>('/assignments/unassign', req),
 }
 

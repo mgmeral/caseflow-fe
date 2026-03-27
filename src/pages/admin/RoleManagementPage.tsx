@@ -40,7 +40,11 @@ const PERM_LABELS: Record<PermKey, { label: string; description: string }> = {
 
 const PERM_KEYS = Object.keys(PERM_LABELS) as PermKey[]
 
-const ALL_SYSTEM_ROLES: UserRole[] = ['admin', 'supervisor', 'trade_agent', 'operation_agent', 'viewer']
+// In real mode only backend roles exist: admin, agent, viewer.
+// Mock-only roles (supervisor, trade_agent, operation_agent) are hidden in real mode.
+const ALL_SYSTEM_ROLES: UserRole[] = USE_MOCKS
+  ? ['admin', 'supervisor', 'trade_agent', 'operation_agent', 'viewer']
+  : ['admin', 'agent', 'viewer']
 
 const DEFAULT_MATRIX: Record<UserRole, Record<PermKey, boolean>> = {
   admin: {
@@ -52,6 +56,12 @@ const DEFAULT_MATRIX: Record<UserRole, Record<PermKey, boolean>> = {
     canManageUsers: false, canViewAdminPool: true, canAssignTickets: true,
     canTransferTickets: true, canCloseTickets: true, canChangePriority: true,
     canAddPublicReply: true, canAddInternalNote: true, canViewReports: true, canExport: true,
+  },
+  // Real backend AGENT role — same capabilities as trade_agent/operation_agent
+  agent: {
+    canManageUsers: false, canViewAdminPool: false, canAssignTickets: false,
+    canTransferTickets: true, canCloseTickets: true, canChangePriority: false,
+    canAddPublicReply: true, canAddInternalNote: true, canViewReports: true, canExport: false,
   },
   trade_agent: {
     canManageUsers: false, canViewAdminPool: false, canAssignTickets: false,
@@ -90,6 +100,7 @@ export function RoleManagementPage() {
   const [descriptions, setDescriptions] = useState<Record<UserRole, string>>({
     admin:           'Full system access. Can manage users, groups, roles and all operations.',
     supervisor:      'Team oversight and administration. Can assign, transfer and view reports.',
+    agent:           'Real backend agent role. Can reply, close and transfer tickets.',
     trade_agent:     'Handles trade-related tickets. Can reply, close and transfer tickets.',
     operation_agent: 'Handles operations tickets. Can reply, close and transfer tickets.',
     viewer:          'Read-only access. Can view tickets and reports but cannot take actions.',

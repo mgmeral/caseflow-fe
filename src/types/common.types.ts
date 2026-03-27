@@ -1,9 +1,15 @@
+/**
+ * Internal frontend role enum.
+ * Real backend returns ADMIN/AGENT/VIEWER (see BackendRole in api.types.ts) which are
+ * normalized to admin/agent/viewer. supervisor/trade_agent/operation_agent are mock-only.
+ */
 export type UserRole =
   | 'admin'
-  | 'supervisor'
-  | 'trade_agent'
-  | 'operation_agent'
-  | 'viewer'
+  | 'agent'           // normalized from backend AGENT
+  | 'viewer'          // normalized from backend VIEWER
+  | 'supervisor'      // mock-only
+  | 'trade_agent'     // mock-only
+  | 'operation_agent' // mock-only
 
 export interface SelectOption {
   value: string

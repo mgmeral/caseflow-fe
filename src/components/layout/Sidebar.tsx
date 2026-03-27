@@ -30,17 +30,12 @@ interface NavItem {
 export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { isAdmin, isSupervisor } = usePermissions()
+  const { isAdmin, canViewAdminPool, canViewReports } = usePermissions()
 
   const mainNav: NavItem[] = [
     { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
     { to: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     { to: '/customers', icon: <Users size={18} />, label: 'Customers' },
-  ]
-
-  const supervisorNav: NavItem[] = [
-    { to: '/pool', icon: <Inbox size={18} />, label: 'Admin Pool' },
-    { to: '/reports', icon: <BarChart2 size={18} />, label: 'Reports' },
   ]
 
   const adminNav: NavItem[] = [
@@ -79,7 +74,7 @@ export function Sidebar() {
           <SidebarLink key={item.to} item={item} collapsed={sidebarCollapsed} />
         ))}
 
-        {(isSupervisor || isAdmin) && (
+        {(canViewAdminPool || canViewReports) && (
           <>
             {!sidebarCollapsed && (
               <div className="pt-4 pb-1 px-2">
@@ -88,9 +83,18 @@ export function Sidebar() {
                 </span>
               </div>
             )}
-            {supervisorNav.map((item) => (
-              <SidebarLink key={item.to} item={item} collapsed={sidebarCollapsed} />
-            ))}
+            {canViewAdminPool && (
+              <SidebarLink
+                item={{ to: '/pool', icon: <Inbox size={18} />, label: 'Admin Pool' }}
+                collapsed={sidebarCollapsed}
+              />
+            )}
+            {canViewReports && (
+              <SidebarLink
+                item={{ to: '/reports', icon: <BarChart2 size={18} />, label: 'Reports' }}
+                collapsed={sidebarCollapsed}
+              />
+            )}
           </>
         )}
 
