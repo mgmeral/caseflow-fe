@@ -11,3 +11,11 @@ export const USE_MOCKS =
  * Backend API base URL. Required in production; optional in mock mode.
  */
 export const API_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+
+// Warn developers when running real mode without an API URL configured.
+if (!USE_MOCKS && !API_URL) {
+  console.warn(
+    '[env] VITE_USE_MOCKS is false but VITE_API_URL is not set. ' +
+      'All API calls will fail. Set VITE_API_URL in .env.local or enable mock mode.',
+  )
+}

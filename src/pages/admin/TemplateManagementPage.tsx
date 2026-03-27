@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { useTemplates, useCreateTemplate, useUpdateTemplate, useDeleteTemplate } from '@/hooks/useTemplates'
 import { useGroupsQuery } from '@/hooks/useUsers'
 import type { TicketTemplate } from '@/types/user.types'
+import { USE_MOCKS } from '@/lib/env'
 
 type TemplateType = 'public_reply' | 'internal_note'
 type Language = 'tr' | 'en'
@@ -71,6 +72,20 @@ export function TemplateManagementPage() {
           icon={<ShieldOff className="w-8 h-8 text-gray-400" />}
           title="Access Denied"
           description="You don't have permission to manage templates."
+        />
+      </div>
+    )
+  }
+
+  // Template management is not supported by the current backend.
+  // In real mode, return a clear "not available" screen instead of a broken UI.
+  if (!USE_MOCKS) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={<FileText className="w-8 h-8 text-gray-400" />}
+          title="Templates — Not Available in Real Mode"
+          description="Template management requires mock mode. Set VITE_USE_MOCKS=true in .env.local to use this feature."
         />
       </div>
     )

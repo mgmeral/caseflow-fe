@@ -1,6 +1,7 @@
 ﻿import type { Ticket, TicketFilters, TicketMessage, TicketStatus, TicketPriority, TransferRecord } from '@/types/ticket.types'
 import type { SortState } from '@/types/common.types'
-import { apiClient } from './api.client'
+import type { NoteResponse, EmailDocumentResponse, TransferResponse } from '@/types/api.types'
+import { apiClient, ApiError } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockTickets, mockMessages, mockTransferRecords, getMockDelay } from '@/mock'
 
@@ -246,29 +247,65 @@ const mockService = {
 }
 
 // ---------------------------------------------------------------------------
-// Real API implementation
+// Helpers: map backend DTOs → TicketMessage view model
 // ---------------------------------------------------------------------------
 
-interface TicketListResponse {
-  data: Ticket[]
-  total: number
-  page: number
-  pageSize: number
+function noteToMessage(n: NoteResponse): TicketMessage {
+  // Backend NoteType 'public_reply' → outbound message
+  const typeMap: Record<string, TicketMessage['type']> = {
+    public_reply: 'public_outbound',
+    internal_note: 'internal_note',
+    system_event: 'system_event',
+  }
+  return {
+    id: n.id,
+    ticketId: n.ticketId,
+    type: typeMap[n.type] ?? 'internal_note',
+    authorId: n.authorId,
+    authorName: n.authorName,
+    content: n.content,
+    createdAt: n.createdAt,
+    attachments: [],
+  }
 }
+
+function emailToMessage(e: EmailDocumentResponse): TicketMessage {
+  return {
+    id: e.id,
+    ticketId: e.ticketId,
+    type: e.direction === 'INBOUND' ? 'public_inbound' : 'public_outbound',
+    authorId: null,
+    authorName: e.fromAddress,
+    content: e.content,
+    createdAt: e.sentAt ?? e.receivedAt ?? new Date().toISOString(),
+    attachments: e.attachments.map((a) => a.filename),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Real API implementation — aligned to backend contract
+// ---------------------------------------------------------------------------
+
+// Backend may return a plain array (pagination deferred) or paginated shape.
+type TicketListResponse = Ticket[] | { data: Ticket[]; total: number; page?: number; pageSize?: number }
 
 const realService = {
   getAll: async (
     filters: TicketFilters,
-    sort: SortState,
+    _sort: SortState,  // sort is client-side only — backend sort contract not yet confirmed
     page: number,
     pageSize: number,
   ): Promise<{ data: Ticket[]; total: number }> => {
+    // Only send params that the backend is likely to support.
+    // sortField/sortDir are omitted — their backend support is unconfirmed and they would
+    // be silently ignored if unsupported, but kept out to reduce noise.
+    // page/pageSize are included as hints; if the backend returns a flat array,
+    // the normalisation below treats the full list as "page 1".
     const params = new URLSearchParams({
       page: String(page),
       pageSize: String(pageSize),
-      sortField: sort.field,
-      sortDir: sort.direction,
     })
+    // Filters are sent best-effort. Unsupported ones are typically ignored by REST backends.
     if (filters.search) params.set('search', filters.search)
     if (filters.statuses.length) params.set('statuses', filters.statuses.join(','))
     if (filters.priorities.length) params.set('priorities', filters.priorities.join(','))
@@ -282,67 +319,132 @@ const realService = {
     if (filters.transferredOnly) params.set('transferredOnly', 'true')
 
     const res = await apiClient.get<TicketListResponse>(`/tickets?${params.toString()}`)
+    // Normalize: handle both plain array (backend returns everything) and paginated response.
+    // If plain array, total = full list length and UI shows all records on "page 1".
+    if (Array.isArray(res)) return { data: res, total: res.length }
     return { data: res.data, total: res.total }
   },
 
-  getById: (id: string) => apiClient.get<Ticket | null>(`/tickets/${id}`),
+  getById: (id: string) => apiClient.get<Ticket>(`/tickets/${id}`),
 
-  getMessages: (ticketId: string) =>
-    apiClient.get<TicketMessage[]>(`/tickets/${ticketId}/messages`),
+  getByTicketNo: (ticketNo: string) =>
+    apiClient.get<Ticket>(`/tickets/by-ticketNo?ticketNo=${encodeURIComponent(ticketNo)}`),
 
-  getTransferHistory: (ticketId: string) =>
-    apiClient.get<TransferRecord[]>(`/tickets/${ticketId}/transfers`),
+  create: (data: { subject: string; customerId: string; groupId: string; priority: TicketPriority }) =>
+    apiClient.post<Ticket>('/tickets', data),
 
-  assign: (ticketId: string, userId: string | null, userName: string | null, note?: string) =>
-    apiClient.post<Ticket>(`/tickets/${ticketId}/assign`, { userId, userName, note }),
+  update: (id: string, data: { subject?: string; priority?: TicketPriority; groupId?: string }) =>
+    apiClient.put<Ticket>(`/tickets/${id}`, data),
 
-  changeStatus: (ticketId: string, status: TicketStatus, reason?: string) =>
-    apiClient.post<Ticket>(`/tickets/${ticketId}/status`, { status, reason }),
+  /** Combines /notes/by-ticket + /emails/by-ticket into a unified TicketMessage view model */
+  getMessages: async (ticketId: string): Promise<TicketMessage[]> => {
+    const [notes, emails] = await Promise.all([
+      apiClient.get<NoteResponse[]>(`/notes/by-ticket/${ticketId}`),
+      apiClient.get<EmailDocumentResponse[]>(`/emails/by-ticket/${ticketId}`),
+    ])
+    return [
+      ...notes.map(noteToMessage),
+      ...emails.map(emailToMessage),
+    ].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  },
 
-  changePriority: (ticketId: string, priority: TicketPriority) =>
-    apiClient.post<Ticket>(`/tickets/${ticketId}/priority`, { priority }),
+  getTransferHistory: async (ticketId: string): Promise<TransferRecord[]> => {
+    const res = await apiClient.get<TransferResponse[]>(`/transfers/by-ticket/${ticketId}`)
+    // Map TransferResponse → TransferRecord view model
+    return res
+      .map((t) => ({
+        id: t.id,
+        ticketId: t.ticketId,
+        fromGroupId: t.fromGroupId,
+        fromGroupName: t.fromGroupName,
+        toGroupId: t.toGroupId,
+        toGroupName: t.toGroupName,
+        transferredByName: t.transferredByName,
+        reason: t.reason,
+        note: t.note,
+        createdAt: t.createdAt,
+      }))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  },
 
-  addPublicReply: (ticketId: string, content: string, authorId: string, authorName: string) =>
-    apiClient.post<TicketMessage>(`/tickets/${ticketId}/messages`, {
-      type: 'public_outbound',
+  /** Routes to /assignments/assign or /assignments/unassign, returns refreshed ticket */
+  assign: async (
+    ticketId: string,
+    userId: string | null,
+    _userName: string | null,
+    note?: string,
+  ): Promise<Ticket> => {
+    if (userId === null) {
+      await apiClient.post('/assignments/unassign', { ticketId })
+    } else {
+      await apiClient.post('/assignments/assign', { ticketId, assigneeId: userId, note })
+    }
+    return apiClient.get<Ticket>(`/tickets/${ticketId}`)
+  },
+
+  /** POST /tickets/status with ChangeTicketStatusRequest body */
+  changeStatus: (ticketId: string, status: TicketStatus, reason?: string): Promise<Ticket> =>
+    apiClient.post<Ticket>('/tickets/status', { ticketId, status, reason }),
+
+  /** PUT /tickets/{id} with priority field */
+  changePriority: (ticketId: string, priority: TicketPriority): Promise<Ticket> =>
+    apiClient.put<Ticket>(`/tickets/${ticketId}`, { priority }),
+
+  /** POST /notes with type=internal_note, returns mapped TicketMessage */
+  addInternalNote: async (
+    ticketId: string,
+    content: string,
+    authorId: string,
+    _authorName: string,
+  ): Promise<TicketMessage> => {
+    const note = await apiClient.post<NoteResponse>('/notes', {
+      ticketId,
       content,
-      authorId,
-      authorName,
-    }),
-
-  addInternalNote: (ticketId: string, content: string, authorId: string, authorName: string) =>
-    apiClient.post<TicketMessage>(`/tickets/${ticketId}/messages`, {
       type: 'internal_note',
-      content,
       authorId,
-      authorName,
-    }),
+    })
+    return noteToMessage(note)
+  },
 
-  transfer: (
+  /**
+   * Public reply via email is NOT supported by the current backend (no POST /emails).
+   * Deferred to V2. Throws a 501 in real mode so the caller can show a graceful error.
+   */
+  addPublicReply: async (
+    _ticketId: string,
+    _content: string,
+    _authorId: string,
+    _authorName: string,
+  ): Promise<TicketMessage> => {
+    throw new ApiError(
+      501,
+      'not_implemented',
+      'Sending email replies is not supported in this backend version. Use mock mode for this feature.',
+    )
+  },
+
+  /** POST /transfers then returns refreshed ticket */
+  transfer: async (
     ticketId: string,
     toGroupId: string,
-    toGroupName: string,
-    fromGroupId: string,
-    fromGroupName: string,
-    byName: string,
+    _toGroupName: string,
+    _fromGroupId: string,
+    _fromGroupName: string,
+    _byName: string,
     reason: string,
     note?: string,
-  ) =>
-    apiClient.post<Ticket>(`/tickets/${ticketId}/transfer`, {
-      toGroupId,
-      toGroupName,
-      fromGroupId,
-      fromGroupName,
-      byName,
-      reason,
-      note,
-    }),
+  ): Promise<Ticket> => {
+    await apiClient.post('/transfers', { ticketId, targetGroupId: toGroupId, reason, note })
+    return apiClient.get<Ticket>(`/tickets/${ticketId}`)
+  },
 
-  close: (ticketId: string, sendNotification: boolean) =>
-    apiClient.post<Ticket>(`/tickets/${ticketId}/close`, { sendNotification }),
+  /** POST /tickets/close with CloseTicketRequest body */
+  close: (ticketId: string, sendNotification: boolean): Promise<Ticket> =>
+    apiClient.post<Ticket>('/tickets/close', { ticketId, sendNotification }),
 
-  reopen: (ticketId: string) =>
-    apiClient.post<Ticket>(`/tickets/${ticketId}/reopen`, {}),
+  /** POST /tickets/reopen with ReopenTicketRequest body */
+  reopen: (ticketId: string): Promise<Ticket> =>
+    apiClient.post<Ticket>('/tickets/reopen', { ticketId }),
 }
 
 // ---------------------------------------------------------------------------

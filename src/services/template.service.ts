@@ -1,5 +1,5 @@
 import type { TicketTemplate } from '@/types/user.types'
-import { apiClient } from './api.client'
+import { ApiError } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockTemplates, getMockDelay } from '@/mock'
 
@@ -37,13 +37,30 @@ const mockService = {
   },
 }
 
+/**
+ * Templates are not in the current backend contract.
+ * Real mode returns empty list for reads and throws 501 for writes.
+ * This feature is deferred to V2.
+ */
 const realService = {
-  getAll: () => apiClient.get<TicketTemplate[]>('/templates'),
-  getById: (id: string) => apiClient.get<TicketTemplate | null>(`/templates/${id}`),
-  create: (data: Omit<TicketTemplate, 'id'>) => apiClient.post<TicketTemplate>('/templates', data),
-  update: (id: string, data: Partial<TicketTemplate>) =>
-    apiClient.put<TicketTemplate>(`/templates/${id}`, data),
-  delete: (id: string) => apiClient.delete<void>(`/templates/${id}`),
+  getAll: async (): Promise<TicketTemplate[]> => {
+    // Return empty array — no backend endpoint for templates in current version
+    return []
+  },
+
+  getById: async (_id: string): Promise<TicketTemplate | null> => null,
+
+  create: async (_data: Omit<TicketTemplate, 'id'>): Promise<TicketTemplate> => {
+    throw new ApiError(501, 'not_implemented', 'Template management is not supported by the current backend. Enable mock mode (VITE_USE_MOCKS=true) to use this feature.')
+  },
+
+  update: async (_id: string, _data: Partial<TicketTemplate>): Promise<TicketTemplate> => {
+    throw new ApiError(501, 'not_implemented', 'Template management is not supported by the current backend. Enable mock mode (VITE_USE_MOCKS=true) to use this feature.')
+  },
+
+  delete: async (_id: string): Promise<void> => {
+    throw new ApiError(501, 'not_implemented', 'Template management is not supported by the current backend. Enable mock mode (VITE_USE_MOCKS=true) to use this feature.')
+  },
 }
 
 export const templateService = USE_MOCKS ? mockService : realService

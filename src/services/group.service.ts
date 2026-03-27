@@ -31,18 +31,45 @@ const mockService = {
     return { ..._mockGroups[idx] }
   },
 
-  delete: async (id: string): Promise<void> => {
+  activate: async (id: string): Promise<Group> => {
     await getMockDelay()
-    _mockGroups = _mockGroups.filter((g) => g.id !== id)
+    const idx = _mockGroups.findIndex((g) => g.id === id)
+    if (idx === -1) throw new Error('Group not found')
+    _mockGroups[idx] = { ..._mockGroups[idx], isActive: true }
+    return { ..._mockGroups[idx] }
+  },
+
+  deactivate: async (id: string): Promise<Group> => {
+    await getMockDelay()
+    const idx = _mockGroups.findIndex((g) => g.id === id)
+    if (idx === -1) throw new Error('Group not found')
+    _mockGroups[idx] = { ..._mockGroups[idx], isActive: false }
+    return { ..._mockGroups[idx] }
   },
 }
 
+// Backend may return a plain array or paginated shape (pagination deferred)
+type GroupListResponse = Group[] | { data: Group[] }
+
 const realService = {
-  getAll: () => apiClient.get<Group[]>('/groups'),
+  getAll: async (): Promise<Group[]> => {
+    const res = await apiClient.get<GroupListResponse>('/groups')
+    return Array.isArray(res) ? res : res.data
+  },
+
   getById: (id: string) => apiClient.get<Group | null>(`/groups/${id}`),
-  create: (data: Omit<Group, 'id' | 'openTicketCount'>) => apiClient.post<Group>('/groups', data),
-  update: (id: string, data: Partial<Group>) => apiClient.put<Group>(`/groups/${id}`, data),
-  delete: (id: string) => apiClient.delete<void>(`/groups/${id}`),
+
+  create: (data: Omit<Group, 'id' | 'openTicketCount'>) =>
+    apiClient.post<Group>('/groups', data),
+
+  update: (id: string, data: Partial<Group>) =>
+    apiClient.put<Group>(`/groups/${id}`, data),
+
+  activate: (id: string) =>
+    apiClient.patch<Group>(`/groups/${id}/activate`, {}),
+
+  deactivate: (id: string) =>
+    apiClient.patch<Group>(`/groups/${id}/deactivate`, {}),
 }
 
 export const groupService = USE_MOCKS ? mockService : realService

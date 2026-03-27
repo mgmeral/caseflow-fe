@@ -31,6 +31,19 @@ const mockService = {
     return mockTickets.filter((t) => t.customerId === customerId)
   },
 
+  create: async (data: Omit<Customer, 'id' | 'totalTickets' | 'openTickets' | 'createdAt'>): Promise<Customer> => {
+    await getMockDelay()
+    const newCustomer: Customer = {
+      ...data,
+      id: `c-${Date.now()}`,
+      totalTickets: 0,
+      openTickets: 0,
+      createdAt: new Date().toISOString(),
+    }
+    _mockCustomers.push(newCustomer)
+    return { ...newCustomer }
+  },
+
   update: async (id: string, data: Partial<Customer>): Promise<Customer> => {
     await getMockDelay()
     const idx = _mockCustomers.findIndex((c) => c.id === id)
@@ -38,12 +51,26 @@ const mockService = {
     _mockCustomers[idx] = { ..._mockCustomers[idx], ...data }
     return { ..._mockCustomers[idx] }
   },
+
+  activate: async (id: string): Promise<Customer> => {
+    await getMockDelay()
+    const idx = _mockCustomers.findIndex((c) => c.id === id)
+    if (idx === -1) throw new Error('Customer not found')
+    _mockCustomers[idx] = { ..._mockCustomers[idx], isActive: true }
+    return { ..._mockCustomers[idx] }
+  },
+
+  deactivate: async (id: string): Promise<Customer> => {
+    await getMockDelay()
+    const idx = _mockCustomers.findIndex((c) => c.id === id)
+    if (idx === -1) throw new Error('Customer not found')
+    _mockCustomers[idx] = { ..._mockCustomers[idx], isActive: false }
+    return { ..._mockCustomers[idx] }
+  },
 }
 
-interface CustomerListResponse {
-  data: Customer[]
-  total: number
-}
+// Backend may return a plain array (pagination deferred) or paginated shape.
+type CustomerListResponse = Customer[] | { data: Customer[]; total: number }
 
 const realService = {
   getAll: async (search = '', segment?: string, isActive?: boolean): Promise<Customer[]> => {
@@ -52,16 +79,33 @@ const realService = {
     if (segment) params.set('segment', segment)
     if (isActive !== undefined) params.set('isActive', String(isActive))
     const res = await apiClient.get<CustomerListResponse>(`/customers?${params.toString()}`)
-    return res.data
+    return Array.isArray(res) ? res : res.data
   },
 
   getById: (id: string) => apiClient.get<Customer | null>(`/customers/${id}`),
 
-  getTickets: (customerId: string) =>
-    apiClient.get<Ticket[]>(`/customers/${customerId}/tickets`),
+  /**
+   * GET /tickets?customerId={id} — returns tickets for this customer.
+   * If the backend does not support the customerId filter, it may return all tickets.
+   * Response is normalised to an array regardless of shape.
+   */
+  getTickets: async (customerId: string): Promise<Ticket[]> => {
+    type TicketListRes = Ticket[] | { data: Ticket[] }
+    const res = await apiClient.get<TicketListRes>(`/tickets?customerId=${encodeURIComponent(customerId)}`)
+    return Array.isArray(res) ? res : res.data
+  },
+
+  create: (data: Omit<Customer, 'id' | 'totalTickets' | 'openTickets' | 'createdAt'>) =>
+    apiClient.post<Customer>('/customers', data),
 
   update: (id: string, data: Partial<Customer>) =>
     apiClient.put<Customer>(`/customers/${id}`, data),
+
+  activate: (id: string) =>
+    apiClient.patch<Customer>(`/customers/${id}/activate`, {}),
+
+  deactivate: (id: string) =>
+    apiClient.patch<Customer>(`/customers/${id}/deactivate`, {}),
 }
 
 export const customerService = USE_MOCKS ? mockService : realService

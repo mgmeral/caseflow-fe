@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/useToast'
 import { ShieldOff, Shield, Pencil, Check, X, Plus, Trash2 } from 'lucide-react'
 import { ROLE_LABELS } from '@/constants/enums'
 import type { UserRole } from '@/types/common.types'
+import { USE_MOCKS } from '@/lib/env'
 
 type PermKey =
   | 'canManageUsers'
@@ -205,6 +206,17 @@ export function RoleManagementPage() {
           Yeni Rol
         </Button>
       </div>
+
+      {/* Real-mode limitation notice */}
+      {!USE_MOCKS && (
+        <div className="rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
+          <p className="text-sm text-amber-800">
+            <strong>Note:</strong> Role permissions shown here are illustrative only.
+            Edits made on this page are <strong>not persisted</strong> — they reset on page reload.
+            Actual role configuration is managed server-side.
+          </p>
+        </div>
+      )}
 
       {/* System role cards */}
       {visibleSystemRoles.length > 0 && (

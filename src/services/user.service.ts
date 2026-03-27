@@ -31,6 +31,14 @@ const mockService = {
     return { ..._mockUsers[idx] }
   },
 
+  activate: async (id: string): Promise<User> => {
+    await getMockDelay()
+    const idx = _mockUsers.findIndex((u) => u.id === id)
+    if (idx === -1) throw new Error('User not found')
+    _mockUsers[idx] = { ..._mockUsers[idx], isActive: true }
+    return { ..._mockUsers[idx] }
+  },
+
   deactivate: async (id: string): Promise<User> => {
     await getMockDelay()
     const idx = _mockUsers.findIndex((u) => u.id === id)
@@ -38,20 +46,30 @@ const mockService = {
     _mockUsers[idx] = { ..._mockUsers[idx], isActive: false }
     return { ..._mockUsers[idx] }
   },
-
-  delete: async (id: string): Promise<void> => {
-    await getMockDelay()
-    _mockUsers = _mockUsers.filter((u) => u.id !== id)
-  },
 }
 
+// Backend may return a plain array or paginated shape (pagination deferred)
+type UserListResponse = User[] | { data: User[] }
+
 const realService = {
-  getAll: () => apiClient.get<User[]>('/users'),
+  getAll: async (): Promise<User[]> => {
+    const res = await apiClient.get<UserListResponse>('/users')
+    return Array.isArray(res) ? res : res.data
+  },
+
   getById: (id: string) => apiClient.get<User | null>(`/users/${id}`),
-  create: (data: Omit<User, 'id' | 'openTicketCount'>) => apiClient.post<User>('/users', data),
-  update: (id: string, data: Partial<User>) => apiClient.put<User>(`/users/${id}`, data),
-  deactivate: (id: string) => apiClient.post<User>(`/users/${id}/deactivate`, {}),
-  delete: (id: string) => apiClient.delete<void>(`/users/${id}`),
+
+  create: (data: Omit<User, 'id' | 'openTicketCount'>) =>
+    apiClient.post<User>('/users', data),
+
+  update: (id: string, data: Partial<User>) =>
+    apiClient.put<User>(`/users/${id}`, data),
+
+  activate: (id: string) =>
+    apiClient.patch<User>(`/users/${id}/activate`, {}),
+
+  deactivate: (id: string) =>
+    apiClient.patch<User>(`/users/${id}/deactivate`, {}),
 }
 
 export const userService = USE_MOCKS ? mockService : realService

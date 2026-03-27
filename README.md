@@ -39,18 +39,28 @@ See `.env.example` for all available values.
 
 ## Running modes
 
-### Mock mode (no backend)
-```env
-VITE_USE_MOCKS=true
-```
-All services will use in-memory fixtures from `src/mock/`. This is useful for local UI development. Login works with any email from the mock users list (e.g. `ali.yilmaz@csm.com`).
-
-### Real API mode
+### Real API mode (default)
 ```env
 VITE_USE_MOCKS=false
 VITE_API_URL=http://localhost:8080/api
 ```
-All services will call the real backend. The dev server proxies `/api` requests to `VITE_API_URL`.
+All services call the real backend. The dev server proxies `/api/*` requests to the origin in `VITE_API_URL`, stripping the `/api` prefix before forwarding.
+
+**Auth note**: Login calls `POST /auth/login → { token, user }`. If that endpoint is not yet deployed on the backend, the login form will show a 404 error — switch to mock mode until the endpoint is available.
+
+### Mock mode (no backend)
+```env
+VITE_USE_MOCKS=true
+```
+All services use in-memory fixtures from `src/mock/`. Useful for UI development without a running backend.
+
+Login works with any active user from the mock list, e.g.:
+- `ali.yilmaz@csm.com` (admin)
+- any any password is accepted as long as `isActive: true`
+
+**Mock-only features** (always empty / 501 in real mode):
+- Template management (`/admin/templates`)
+- Outbound email sending
 
 ## Project structure
 
@@ -79,24 +89,70 @@ src/
 | `npm run test:watch` | Watch mode |
 | `npm run test:coverage` | Coverage report |
 
-## API contract assumptions
+## API contract
 
-The frontend expects a REST backend at `VITE_API_URL` with:
+The frontend expects a REST backend at `VITE_API_URL` with the following endpoints:
 
+### Auth
 - `POST /auth/login` — `{ email, password }` → `{ token, user: User }`
-- `GET  /tickets?{filters}` → `{ data: Ticket[], total: number, page, pageSize }`
-- `GET  /tickets/:id` → `Ticket`
-- `GET  /tickets/:id/messages` → `TicketMessage[]`
-- `POST /tickets/:id/assign` — `{ userId, userName, note? }` → `Ticket`
-- `POST /tickets/:id/status` — `{ status, reason? }` → `Ticket`
-- `POST /tickets/:id/transfer` — transfer payload → `Ticket`
-- `POST /tickets/:id/close` — `{ sendNotification }` → `Ticket`
-- `GET  /customers?{filters}` → `{ data: Customer[], total }`
-- `GET  /customers/:id` → `Customer`
-- `GET  /customers/:id/tickets` → `Ticket[]`
-- `GET  /users` → `User[]`
+
+### Tickets
+- `GET  /tickets?{filters}` → `Ticket[]` or `{ data: Ticket[], total, page, pageSize }`
+- `GET  /tickets/{id}` → `Ticket`
+- `GET  /tickets/by-ticketNo?ticketNo={n}` → `Ticket`
+- `PUT  /tickets/{id}` — update ticket fields → `Ticket`
+- `POST /tickets/status` — `{ ticketId, status, reason? }` → `Ticket`
+- `POST /tickets/close` — `{ ticketId, sendNotification }` → `Ticket`
+- `POST /tickets/reopen` — `{ ticketId }` → `Ticket`
+
+### Notes
+- `GET  /notes/by-ticket/{ticketId}` → `NoteResponse[]`
+- `GET  /notes/{id}` → `NoteResponse`
+- `POST /notes` — `{ ticketId, content, isInternal }` → `NoteResponse`
+
+### Emails (read-only)
+- `GET  /emails/by-ticket/{ticketId}` → `EmailDocumentResponse[]`
+- `GET  /emails/{id}` → `EmailDocumentResponse`
+- `GET  /emails/by-thread/{threadKey}` → `EmailDocumentResponse[]`
+
+### Assignments
+- `POST /assignments/assign` — `{ ticketId, userId }` → `AssignmentResponse`
+- `POST /assignments/reassign` — `{ ticketId, userId }` → `AssignmentResponse`
+- `POST /assignments/unassign` — `{ ticketId }` → void
+- `GET  /assignments/by-ticket/{ticketId}` → `AssignmentResponse[]`
+
+### Transfers
+- `POST /transfers` — `{ ticketId, toGroupId, reason? }` → `TransferResponse`
+- `GET  /transfers/by-ticket/{ticketId}` → `TransferResponse[]`
+
+### Customers
+- `GET  /customers?{filters}` → `Customer[]` or `{ data: Customer[], total }`
+- `GET  /customers/{id}` → `Customer`
+- `PATCH /customers/{id}/activate` → `Customer`
+- `PATCH /customers/{id}/deactivate` → `Customer`
+
+### Contacts
+- `GET  /contacts?{filters}` → `ContactResponse[]`
+- `GET  /contacts/{id}` → `ContactResponse`
+- `GET  /contacts/by-customer/{customerId}` → `ContactResponse[]`
+- `GET  /contacts/by-email?email={e}` → `ContactResponse`
+- `POST /contacts` → `ContactResponse`
+- `PUT  /contacts/{id}` → `ContactResponse`
+- `DELETE /contacts/{id}` → void
+
+### Users
+- `GET  /users?{filters}` → `User[]` or `{ data: User[], total }`
+- `GET  /users/{id}` → `User`
+- `PATCH /users/{id}/activate` → `User`
+- `PATCH /users/{id}/deactivate` → `User`
+
+### Groups
 - `GET  /groups` → `Group[]`
-- `GET  /templates` → `TicketTemplate[]`
+- `POST /groups` → `Group`
+- `PUT  /groups/{id}` → `Group`
+- `PATCH /groups/{id}/activate` → `Group`
+- `PATCH /groups/{id}/deactivate` → `Group`
+
 
 Auth token is sent as `Authorization: Bearer <token>` on all requests.
 Token is stored in `localStorage` via Zustand `persist`.
@@ -106,6 +162,8 @@ Token is stored in `localStorage` via Zustand `persist`.
 Login calls `POST /auth/login`. On success, the returned user + token are stored in `localStorage` under the key `csm-auth`. All subsequent API requests automatically include the Bearer token.
 
 A 401 response from any query/mutation automatically clears auth state and redirects to `/login`.
+
+**Deferred (V2):** If the `/auth/login` endpoint is not yet implemented on the backend, login will fail with a visible error in the login form. Switch to mock mode (`VITE_USE_MOCKS=true`) until the endpoint is available.
 
 ## Role-based access
 
@@ -117,3 +175,15 @@ A 401 response from any query/mutation automatically clears auth state and redir
 | `viewer` | Tickets, customers, dashboard (read-only) |
 
 Route protection is enforced in `src/router/index.tsx` via `ProtectedRoute`.
+
+## Known limitations (V2 deferred)
+
+| Feature | Real-mode status | Notes |
+|---------|-----------------|-------|
+| Auth (`/auth/login`) | May not be deployed | Login form shows explicit error if endpoint missing. Use mock mode for development. |
+| Template management | Not available | Route exists but shows "not available" screen. Requires `VITE_USE_MOCKS=true`. |
+| Role management edits | Session-local only | Edits on `/admin/roles` are not persisted — they reset on reload. Role config is server-side. |
+| Pagination | Degraded | If backend returns a flat array, all records appear on "page 1". Client-side pagination does not apply. |
+| Ticket filter/sort | Best-effort | Filter params are sent. If backend ignores them, all records are returned. Sort is client-side only. |
+| Outbound email replies | Not available | Sending email replies returns 501. Notes (`/notes`) work. |
+| Customer ticket lookup | Best-effort | `GET /tickets?customerId=` may not be supported — backend determines response. |

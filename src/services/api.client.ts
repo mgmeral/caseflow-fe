@@ -3,11 +3,17 @@
 const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
 const DEFAULT_TIMEOUT_MS = 30_000
 
+export interface FieldViolation {
+  field: string
+  message: string
+}
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     public readonly code: string,
     message: string,
+    public readonly violations?: FieldViolation[],
   ) {
     super(message)
     this.name = 'ApiError'
@@ -53,14 +59,21 @@ async function request<T>(
     if (!response.ok) {
       let code = 'api_error'
       let message = `Request failed with status ${response.status}`
+      let violations: FieldViolation[] | undefined
       try {
-        const errBody = await response.json() as { code?: string; message?: string; error?: string }
+        const errBody = await response.json() as {
+          code?: string
+          message?: string
+          error?: string
+          violations?: FieldViolation[]
+        }
         code = errBody.code ?? code
         message = errBody.message ?? errBody.error ?? message
+        violations = errBody.violations
       } catch {
         // ignore parse error, use defaults
       }
-      throw new ApiError(response.status, code, message)
+      throw new ApiError(response.status, code, message, violations)
     }
 
     if (response.status === 204) {

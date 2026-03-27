@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/shared/Button'
 import { LogIn } from 'lucide-react'
+import { USE_MOCKS, API_URL } from '@/lib/env'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -73,6 +74,14 @@ export function LoginPage() {
           <Button type="submit" variant="primary" isLoading={isLoading} fullWidth>
             Sign In
           </Button>
+
+          {!USE_MOCKS && (
+            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-relaxed">
+              <strong>Real mode:</strong> backend must be running at{' '}
+              <span className="font-mono break-all">{API_URL || 'VITE_API_URL (not set)'}</span>.
+              {' '}Set <span className="font-mono">VITE_USE_MOCKS=true</span> for local dev without a backend.
+            </p>
+          )}
         </form>
       </div>
     </div>

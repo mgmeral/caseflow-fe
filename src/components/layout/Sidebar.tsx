@@ -19,6 +19,7 @@ import { Avatar } from '@/components/shared/Avatar'
 import { useAuthStore } from '@/store/auth.store'
 import { useUIStore } from '@/store/ui.store'
 import { usePermissions } from '@/hooks/usePermissions'
+import { USE_MOCKS } from '@/lib/env'
 
 interface NavItem {
   to: string
@@ -46,7 +47,8 @@ export function Sidebar() {
     { to: '/admin/users',     icon: <UserCog size={18} />,    label: 'Users' },
     { to: '/admin/roles',     icon: <Shield size={18} />,     label: 'Roles' },
     { to: '/admin/groups',    icon: <UsersRound size={18} />, label: 'Groups' },
-    { to: '/admin/templates', icon: <FileText size={18} />,   label: 'Templates' },
+    // Templates are mock-only — only show the link when mock mode is active
+    ...(USE_MOCKS ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }] : []),
     { to: '/admin/settings',  icon: <Settings size={18} />,   label: 'Settings' },
   ]
 

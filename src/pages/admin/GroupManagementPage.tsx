@@ -10,7 +10,7 @@ import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { useToast } from '@/hooks/useToast'
 import { groupService } from '@/services/group.service'
 import type { Group } from '@/types/user.types'
-import { ShieldOff, Plus, Pencil, Trash2, Users } from 'lucide-react'
+import { ShieldOff, Plus, Pencil, ToggleLeft, Users } from 'lucide-react'
 
 interface GroupFormState {
   name: string
@@ -85,11 +85,11 @@ export function GroupManagementPage() {
 
   const handleDelete = async (id: string) => {
     try {
-      await groupService.delete(id)
-      success('Group deleted')
+      await groupService.deactivate(id)
+      success('Group deactivated')
       refetch()
     } catch {
-      error('Failed to delete group')
+      error('Failed to deactivate group')
     } finally {
       setDeletingId(null)
     }
@@ -198,10 +198,10 @@ export function GroupManagementPage() {
                     <button
                       type="button"
                       onClick={() => setDeletingId(g.id)}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                      title="Delete group"
+                      className="p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                      title="Deactivate group"
                     >
-                      <Trash2 size={14} />
+                      <ToggleLeft size={14} />
                     </button>
                   </div>
                 </div>
@@ -287,9 +287,9 @@ export function GroupManagementPage() {
         isOpen={!!deletingId}
         onClose={() => setDeletingId(null)}
         onConfirm={() => deletingId && handleDelete(deletingId)}
-        title="Delete Group"
-        message="Are you sure you want to delete this group? This action cannot be undone."
-        confirmLabel="Delete"
+        title="Deactivate Group"
+        message="This group will be deactivated and hidden from assignment flows. You can reactivate it later."
+        confirmLabel="Deactivate"
         isDestructive
       />
     </div>

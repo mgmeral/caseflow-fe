@@ -9,6 +9,10 @@ export type TicketStatus =
 
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low'
 
+/** Backend NoteType enum — also re-exported from api.types.ts */
+export type NoteType = 'public_reply' | 'internal_note' | 'system_event'
+
+/** FE view model for conversation thread (combines notes + emails) */
 export type MessageType =
   | 'public_inbound'
   | 'public_outbound'

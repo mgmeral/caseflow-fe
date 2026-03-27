@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/useToast'
 import { userService } from '@/services/user.service'
 import type { User } from '@/types/user.types'
 import type { UserRole } from '@/types/common.types'
-import { ShieldOff, UserPlus, Pencil, UserX, UserCheck, Trash2 } from 'lucide-react'
+import { ShieldOff, UserPlus, Pencil, UserX, UserCheck } from 'lucide-react'
 import { ROLE_LABELS, AVATAR_COLORS } from '@/constants/enums'
 
 const ROLES: UserRole[] = ['admin', 'supervisor', 'trade_agent', 'operation_agent', 'viewer']
@@ -44,7 +44,6 @@ export function UserManagementPage() {
   const [saving, setSaving] = useState(false)
 
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   const openCreate = () => {
     setForm(EMPTY_FORM)
@@ -125,23 +124,11 @@ export function UserManagementPage() {
 
   const handleReactivate = async (userId: string) => {
     try {
-      await userService.update(userId, { isActive: true })
+      await userService.activate(userId)
       success('User reactivated')
       refetch()
     } catch {
       error('Failed to reactivate user')
-    }
-  }
-
-  const handleDelete = async (userId: string) => {
-    try {
-      await userService.delete(userId)
-      success('User deleted')
-      refetch()
-    } catch {
-      error('Failed to delete user')
-    } finally {
-      setDeletingId(null)
     }
   }
 
@@ -254,14 +241,7 @@ export function UserManagementPage() {
                           <UserCheck size={14} />
                         </button>
                       )}
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(u.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+
                     </div>
                   </td>
                 </tr>
@@ -371,15 +351,6 @@ export function UserManagementPage() {
         isDestructive
       />
 
-      <ConfirmModal
-        isOpen={!!deletingId}
-        onClose={() => setDeletingId(null)}
-        onConfirm={() => deletingId && handleDelete(deletingId)}
-        title="Delete User"
-        message="This action is permanent and cannot be undone."
-        confirmLabel="Delete"
-        isDestructive
-      />
     </div>
   )
 }

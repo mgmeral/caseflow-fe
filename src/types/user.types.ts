@@ -1,5 +1,8 @@
 import type { UserRole } from './common.types'
 
+/** Matches backend GroupType enum — exact string values are backend-defined */
+export type GroupType = string
+
 export interface User {
   id: string
   firstName: string

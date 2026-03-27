@@ -58,4 +58,26 @@ describe('apiClient', () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Network failure'))
     await expect(apiClient.get('/tickets')).rejects.toMatchObject({ code: 'network_error' })
   })
+
+  it('parses FieldViolation array from 422 validation error', async () => {
+    mockFetch(422, {
+      code: 'validation_error',
+      message: 'Request validation failed',
+      violations: [
+        { field: 'subject', message: 'must not be blank' },
+        { field: 'customerId', message: 'must not be null' },
+      ],
+    })
+    try {
+      await apiClient.post('/tickets', {})
+      expect.fail('should have thrown')
+    } catch (err) {
+      expect(err).toBeInstanceOf(ApiError)
+      const e = err as InstanceType<typeof ApiError>
+      expect(e.status).toBe(422)
+      expect(e.code).toBe('validation_error')
+      expect(e.violations).toHaveLength(2)
+      expect(e.violations?.[0]).toEqual({ field: 'subject', message: 'must not be blank' })
+    }
+  })
 })
