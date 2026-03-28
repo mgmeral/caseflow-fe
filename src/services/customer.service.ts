@@ -69,36 +69,47 @@ const mockService = {
   },
 }
 
-// Backend may return a plain array (pagination deferred) or paginated shape.
-type CustomerListResponse = Customer[] | { data: Customer[]; total: number }
+// ---------------------------------------------------------------------------
+// Real API implementation
+// ---------------------------------------------------------------------------
 
 const realService = {
-  getAll: async (search = '', segment?: string, isActive?: boolean): Promise<Customer[]> => {
+  /**
+   * GET /api/customers
+   * Spec: bare array { id, name, code }[]
+   * Query: search only (segment is not a spec filter param)
+   */
+  getAll: async (search = ''): Promise<Customer[]> => {
     const params = new URLSearchParams()
     if (search) params.set('search', search)
-    if (segment) params.set('segment', segment)
-    if (isActive !== undefined) params.set('isActive', String(isActive))
-    const res = await apiClient.get<CustomerListResponse>(`/customers?${params.toString()}`)
-    return Array.isArray(res) ? res : res.data
+    const qs = params.toString()
+    const res = await apiClient.get<Customer[]>(`/customers${qs ? `?${qs}` : ''}`)
+    return Array.isArray(res) ? res : (res as { data: Customer[] }).data ?? []
   },
 
   getById: (id: string) => apiClient.get<Customer | null>(`/customers/${id}`),
 
   /**
-   * GET /tickets?customerId={id} — returns tickets for this customer.
-   * If the backend does not support the customerId filter, it may return all tickets.
-   * Response is normalised to an array regardless of shape.
+   * GET /api/tickets?customerId={id} — paged response { items, totalElements }
    */
   getTickets: async (customerId: string): Promise<Ticket[]> => {
-    type TicketListRes = Ticket[] | { data: Ticket[] }
-    const res = await apiClient.get<TicketListRes>(`/tickets?customerId=${encodeURIComponent(customerId)}`)
-    return Array.isArray(res) ? res : res.data
+    type TicketPagedRes = { items: Ticket[]; totalElements: number } | Ticket[]
+    const res = await apiClient.get<TicketPagedRes>(`/tickets?customerId=${encodeURIComponent(customerId)}`)
+    return Array.isArray(res) ? res : (res as { items: Ticket[] }).items ?? []
   },
 
-  create: (data: Omit<Customer, 'id' | 'totalTickets' | 'openTickets' | 'createdAt'>) =>
+  /**
+   * POST /api/customers
+   * Spec body: { name, code }
+   */
+  create: (data: { name: string; code: string }) =>
     apiClient.post<Customer>('/customers', data),
 
-  update: (id: string, data: Partial<Customer>) =>
+  /**
+   * PUT /api/customers/{id}
+   * Spec body: { name, code }
+   */
+  update: (id: string, data: { name: string; code: string }) =>
     apiClient.put<Customer>(`/customers/${id}`, data),
 
   activate: (id: string) =>

@@ -16,6 +16,65 @@ import type { BackendRole } from '@/types/api.types'
 import type { Ticket, TicketStatus, TicketPriority, SourceType } from '@/types/ticket.types'
 
 // ---------------------------------------------------------------------------
+// Status / priority normalization (backend uppercase → FE lowercase enum)
+// ---------------------------------------------------------------------------
+
+/**
+ * Map backend uppercase status values to FE TicketStatus.
+ * Backend: NEW, TRIAGED, ASSIGNED, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED, REOPENED
+ * FE:      new, open,    open,     in_progress, pending,          resolved, closed, open
+ */
+export function normalizeStatus(raw: unknown): TicketStatus {
+  switch (String(raw).toUpperCase()) {
+    case 'NEW': return 'new'
+    case 'TRIAGED':
+    case 'ASSIGNED':
+    case 'REOPENED': return 'open'
+    case 'IN_PROGRESS': return 'in_progress'
+    case 'WAITING_CUSTOMER': return 'pending'
+    case 'RESOLVED': return 'resolved'
+    case 'CLOSED': return 'closed'
+    default: return 'open'
+  }
+}
+
+/**
+ * Map backend uppercase priority values to FE TicketPriority.
+ * Backend: LOW, MEDIUM, HIGH, CRITICAL → FE: low, medium, high, critical
+ */
+export function normalizePriority(raw: unknown): TicketPriority {
+  switch (String(raw).toUpperCase()) {
+    case 'LOW': return 'low'
+    case 'MEDIUM': return 'medium'
+    case 'HIGH': return 'high'
+    case 'CRITICAL': return 'critical'
+    default: return 'medium'
+  }
+}
+
+/**
+ * Map FE TicketStatus (lowercase) → backend enum (uppercase).
+ * Used when building query params or request bodies sent to the backend.
+ */
+export function toBackendStatus(status: TicketStatus | string): string {
+  switch (status) {
+    case 'new': return 'NEW'
+    case 'open': return 'ASSIGNED'
+    case 'in_progress': return 'IN_PROGRESS'
+    case 'pending': return 'WAITING_CUSTOMER'
+    case 'resolved': return 'RESOLVED'
+    case 'closed': return 'CLOSED'
+    case 'transferred': return 'ASSIGNED'
+    default: return String(status).toUpperCase()
+  }
+}
+
+/** Map FE TicketPriority (lowercase) → backend enum (uppercase). */
+export function toBackendPriority(priority: TicketPriority | string): string {
+  return String(priority).toUpperCase()
+}
+
+// ---------------------------------------------------------------------------
 // Role normalization
 // ---------------------------------------------------------------------------
 
@@ -54,17 +113,20 @@ export function deriveAvatarColor(id: string): string {
  */
 export function normalizeUser(raw: Record<string, unknown>): User {
   const id = String(raw.id ?? '')
+  // Backend returns fullName; firstName/lastName may be absent — derive from fullName
+  const fullName = String(raw.fullName ?? `${raw.firstName ?? ''} ${raw.lastName ?? ''}`.trim())
+  const nameParts = fullName.trim().split(' ')
+  const firstName = String(raw.firstName ?? nameParts[0] ?? '')
+  const lastName = String(raw.lastName ?? nameParts.slice(1).join(' ') ?? '')
   return {
     id,
-    firstName: String(raw.firstName ?? ''),
-    lastName: String(raw.lastName ?? ''),
-    fullName: String(raw.fullName ?? `${raw.firstName ?? ''} ${raw.lastName ?? ''}`.trim()),
+    firstName,
+    lastName,
+    fullName,
     email: String(raw.email ?? ''),
     role: normalizeRole(raw.role as BackendRole | string | undefined),
-    // Backend may not expose group memberships on list endpoints
-    groupIds: Array.isArray(raw.groupIds) ? (raw.groupIds as string[]) : [],
+    groupIds: Array.isArray(raw.groupIds) ? (raw.groupIds as (string | number)[]).map(String) : [],
     groupNames: Array.isArray(raw.groupNames) ? (raw.groupNames as string[]) : [],
-    // UI-only / computed fields — not from backend
     adminLevel: 0,
     isActive: raw.isActive === true,
     lastLoginAt: raw.lastLoginAt ? String(raw.lastLoginAt) : null,
@@ -83,6 +145,9 @@ export function normalizeUser(raw: Record<string, unknown>): User {
  */
 export function normalizeTicket(raw: Record<string, unknown>): Ticket {
   const updatedAt = String(raw.updatedAt ?? new Date().toISOString())
+  // Backend returns assignedGroupId / assignedGroupName (spec field names)
+  const groupId = String(raw.assignedGroupId ?? raw.groupId ?? '')
+  const groupName = String(raw.assignedGroupName ?? raw.groupName ?? '')
   return {
     id: String(raw.id ?? ''),
     ticketNo: String(raw.ticketNo ?? ''),
@@ -90,12 +155,12 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
     customerId: String(raw.customerId ?? ''),
     customerName: String(raw.customerName ?? ''),
     customerSegment: String(raw.customerSegment ?? ''),
-    groupId: String(raw.groupId ?? ''),
-    groupName: String(raw.groupName ?? ''),
-    assignedUserId: raw.assignedUserId ? String(raw.assignedUserId) : null,
+    groupId,
+    groupName,
+    assignedUserId: raw.assignedUserId != null ? String(raw.assignedUserId) : null,
     assignedUserName: raw.assignedUserName ? String(raw.assignedUserName) : null,
-    status: (raw.status as TicketStatus) ?? 'open',
-    priority: (raw.priority as TicketPriority) ?? 'medium',
+    status: normalizeStatus(raw.status),
+    priority: normalizePriority(raw.priority),
     sourceType: (raw.sourceType as SourceType) ?? 'manual',
     isUnread: raw.isUnread === true,
     isTransferred: raw.isTransferred === true,
@@ -125,14 +190,13 @@ export function normalizeGroup(raw: Record<string, unknown>): Group {
   return {
     id: String(raw.id ?? ''),
     name: String(raw.name ?? ''),
+    groupTypeId: String(raw.groupTypeId ?? ''),
+    groupTypeCode: String(raw.groupTypeCode ?? ''),
+    groupTypeName: String(raw.groupTypeName ?? ''),
     description: String(raw.description ?? ''),
-    memberIds: Array.isArray(raw.memberIds) ? (raw.memberIds as string[]) : [],
-    memberNames: Array.isArray(raw.memberNames) ? (raw.memberNames as string[]) : [],
-    // Not provided by real backend — degrade gracefully (show all groups as transfer targets;
-    // backend will enforce actual transfer eligibility)
-    defaultTemplateIds: [],
-    transferableToGroupIds: [],
-    isActive: raw.isActive === true,
-    openTicketCount: typeof raw.openTicketCount === 'number' ? raw.openTicketCount : 0,
+    isActive: raw.isActive !== false,
+    memberCount: typeof raw.memberCount === 'number' ? raw.memberCount : 0,
+    memberIds: Array.isArray(raw.memberIds) ? (raw.memberIds as (string | number)[]).map(String) : [],
+    ...(raw.createdAt ? { createdAt: String(raw.createdAt) } : {}),
   }
 }

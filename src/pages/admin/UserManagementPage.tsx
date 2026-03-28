@@ -20,7 +20,9 @@ const ROLES: UserRole[] = ['admin', 'supervisor', 'trade_agent', 'operation_agen
 interface UserFormState {
   firstName: string
   lastName: string
+  username: string
   email: string
+  password: string
   role: UserRole
   groupIds: string[]
 }
@@ -28,7 +30,9 @@ interface UserFormState {
 const EMPTY_FORM: UserFormState = {
   firstName: '',
   lastName: '',
+  username: '',
   email: '',
+  password: '',
   role: 'operation_agent',
   groupIds: [],
 }
@@ -55,7 +59,9 @@ export function UserManagementPage() {
     setForm({
       firstName: u.firstName,
       lastName: u.lastName,
+      username: '',
       email: u.email,
+      password: '',
       role: u.role,
       groupIds: [...u.groupIds],
     })
@@ -71,15 +77,18 @@ export function UserManagementPage() {
 
   const handleSave = async () => {
     if (!form.firstName.trim() || !form.email.trim()) return
+    if (modalMode === 'create' && (!form.username.trim() || form.password.length < 8)) return
     setSaving(true)
     try {
       const groupNames = form.groupIds.map((id) => groups.find((g) => g.id === id)?.name ?? id)
       if (modalMode === 'create') {
         await userService.create({
+          username: form.username.trim(),
           firstName: form.firstName.trim(),
           lastName: form.lastName.trim(),
           fullName: `${form.firstName.trim()} ${form.lastName.trim()}`,
           email: form.email.trim(),
+          password: form.password,
           role: form.role,
           groupIds: form.groupIds,
           groupNames,
@@ -98,6 +107,7 @@ export function UserManagementPage() {
           role: form.role,
           groupIds: form.groupIds,
           groupNames,
+          ...(form.password ? { password: form.password } : {}),
         })
         success('User updated')
       }
@@ -264,7 +274,11 @@ export function UserManagementPage() {
               variant="primary"
               size="sm"
               isLoading={saving}
-              disabled={!form.firstName.trim() || !form.email.trim()}
+              disabled={
+                !form.firstName.trim() ||
+                !form.email.trim() ||
+                (modalMode === 'create' && (!form.username.trim() || form.password.length < 8))
+              }
               onClick={handleSave}
             >
               {modalMode === 'create' ? 'Create User' : 'Save Changes'}
@@ -296,6 +310,20 @@ export function UserManagementPage() {
             </div>
           </div>
 
+          {modalMode === 'create' && (
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Username <span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={form.username}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                placeholder="ahmet.yilmaz"
+                autoComplete="off"
+              />
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
             <input
@@ -305,6 +333,24 @@ export function UserManagementPage() {
               className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
               placeholder="ahmet@firma.com"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">
+              {modalMode === 'create' ? <>Password <span className="text-red-500">*</span></> : 'New Password'}
+              {modalMode === 'edit' && <span className="text-gray-400 font-normal"> — leave blank to keep current</span>}
+            </label>
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder={modalMode === 'create' ? 'Min 8 characters' : '••••••••'}
+              autoComplete="new-password"
+            />
+            {modalMode === 'create' && form.password.length > 0 && form.password.length < 8 && (
+              <p className="text-xs text-red-500 mt-1">Password must be at least 8 characters.</p>
+            )}
           </div>
 
           <div>
@@ -332,7 +378,7 @@ export function UserManagementPage() {
                     className="rounded border-gray-300 text-indigo-600"
                   />
                   <span className="text-sm text-gray-700">{g.name}</span>
-                  {g.description && <span className="text-xs text-gray-400">— {g.description}</span>}
+                  <span className="text-xs text-gray-400">({g.groupTypeName})</span>
                 </label>
               ))}
               {groups.length === 0 && <p className="text-xs text-gray-400 px-2">No groups available</p>}

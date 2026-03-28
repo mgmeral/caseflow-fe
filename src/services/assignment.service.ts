@@ -1,5 +1,5 @@
 /**
- * Assignment service — aligned to backend /api/assignments endpoints.
+ * Assignment service — aligned to CaseFlow API v2.0.0 /api/assignments endpoints.
  */
 import type { AssignmentResponse } from '@/types/api.types'
 import { apiClient } from './api.client'
@@ -13,58 +13,70 @@ import { mockTickets, getMockDelay } from '@/mock'
 let _mockAssignmentIdCounter = 1
 
 const mockService = {
-  getByTicket: async (ticketId: string): Promise<AssignmentResponse[]> => {
+  getByTicket: async (ticketId: string): Promise<AssignmentResponse> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === ticketId)
-    if (!ticket?.assignedUserId) return []
-    return [
-      {
+    if (!ticket?.assignedUserId) {
+      return {
         id: `asgn-${ticketId}`,
         ticketId,
-        assigneeId: ticket.assignedUserId,
-        assigneeName: ticket.assignedUserName ?? 'Unknown',
-        assignedById: null,
-        assignedByName: null,
-        createdAt: ticket.updatedAt,
-      },
-    ]
+        assignedUserId: null,
+        assignedGroupId: null,
+        assignedBy: null,
+        assignedAt: ticket?.updatedAt ?? new Date().toISOString(),
+        unassignedAt: null,
+        active: false,
+      }
+    }
+    return {
+      id: `asgn-${ticketId}`,
+      ticketId,
+      assignedUserId: ticket.assignedUserId,
+      assignedGroupId: null,
+      assignedBy: null,
+      assignedAt: ticket.updatedAt,
+      unassignedAt: null,
+      active: true,
+    }
   },
 
-  assign: async (req: { ticketId: string; assignedUserId: string; note?: string }): Promise<AssignmentResponse> => {
+  assign: async (req: { ticketId: string; assignedUserId?: string; assignedGroupId?: string }): Promise<AssignmentResponse> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === req.ticketId)
     if (!ticket) throw new Error('Ticket not found')
-    ticket.assignedUserId = req.assignedUserId
+    if (req.assignedUserId) ticket.assignedUserId = req.assignedUserId
     ticket.updatedAt = new Date().toISOString()
     return {
       id: `asgn-${++_mockAssignmentIdCounter}`,
       ticketId: req.ticketId,
-      assigneeId: req.assignedUserId,
-      assigneeName: req.assignedUserId,
-      assignedById: null,
-      assignedByName: null,
-      createdAt: new Date().toISOString(),
+      assignedUserId: req.assignedUserId ?? null,
+      assignedGroupId: req.assignedGroupId ?? null,
+      assignedBy: null,
+      assignedAt: new Date().toISOString(),
+      unassignedAt: null,
+      active: true,
     }
   },
 
-  reassign: async (req: { ticketId: string; newUserId: string; note?: string }): Promise<AssignmentResponse> => {
+  reassign: async (req: { ticketId: string; newUserId?: string; newGroupId?: string }): Promise<AssignmentResponse> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === req.ticketId)
     if (!ticket) throw new Error('Ticket not found')
-    ticket.assignedUserId = req.newUserId
+    if (req.newUserId) ticket.assignedUserId = req.newUserId
     ticket.updatedAt = new Date().toISOString()
     return {
       id: `asgn-${++_mockAssignmentIdCounter}`,
       ticketId: req.ticketId,
-      assigneeId: req.newUserId,
-      assigneeName: req.newUserId,
-      assignedById: null,
-      assignedByName: null,
-      createdAt: new Date().toISOString(),
+      assignedUserId: req.newUserId ?? null,
+      assignedGroupId: req.newGroupId ?? null,
+      assignedBy: null,
+      assignedAt: new Date().toISOString(),
+      unassignedAt: null,
+      active: true,
     }
   },
 
-  unassign: async (req: { ticketId: string; reason?: string }): Promise<void> => {
+  unassign: async (req: { ticketId: string }): Promise<void> => {
     await getMockDelay()
     const ticket = mockTickets.find((t) => t.id === req.ticketId)
     if (!ticket) throw new Error('Ticket not found')
@@ -75,21 +87,46 @@ const mockService = {
 }
 
 // ---------------------------------------------------------------------------
-// Real API implementation — field names match backend contract exactly
+// Real API implementation — field names and body shapes per spec
 // ---------------------------------------------------------------------------
 
 const realService = {
+  /**
+   * GET /api/assignments/by-ticket/{ticketId}
+   * Spec response: { id, ticketId, assignedUserId, assignedGroupId, assignedBy, assignedAt, unassignedAt, active }
+   */
   getByTicket: (ticketId: string) =>
-    apiClient.get<AssignmentResponse[]>(`/assignments/by-ticket/${ticketId}`),
+    apiClient.get<AssignmentResponse>(`/assignments/by-ticket/${ticketId}`),
 
-  assign: (req: { ticketId: string; assignedUserId: string; note?: string }) =>
-    apiClient.post<AssignmentResponse>('/assignments/assign', req),
+  /**
+   * POST /api/assignments/assign
+   * Body: { ticketId: int64, assignedUserId?: int64, assignedGroupId?: int64 }
+   * IDs are converted from FE string convention to int64 before sending.
+   */
+  assign: (req: { ticketId: string; assignedUserId?: string; assignedGroupId?: string }) =>
+    apiClient.post<AssignmentResponse>('/assignments/assign', {
+      ticketId: Number(req.ticketId),
+      ...(req.assignedUserId !== undefined ? { assignedUserId: Number(req.assignedUserId) } : {}),
+      ...(req.assignedGroupId !== undefined ? { assignedGroupId: Number(req.assignedGroupId) } : {}),
+    }),
 
-  reassign: (req: { ticketId: string; newUserId: string; note?: string }) =>
-    apiClient.post<AssignmentResponse>('/assignments/reassign', req),
+  /**
+   * POST /api/assignments/reassign
+   * Body: { ticketId: int64, newUserId?: int64, newGroupId?: int64 }
+   */
+  reassign: (req: { ticketId: string; newUserId?: string; newGroupId?: string }) =>
+    apiClient.post<AssignmentResponse>('/assignments/reassign', {
+      ticketId: Number(req.ticketId),
+      ...(req.newUserId !== undefined ? { newUserId: Number(req.newUserId) } : {}),
+      ...(req.newGroupId !== undefined ? { newGroupId: Number(req.newGroupId) } : {}),
+    }),
 
-  unassign: (req: { ticketId: string; reason?: string }) =>
-    apiClient.post<void>('/assignments/unassign', req),
+  /**
+   * POST /api/assignments/unassign
+   * Body: { ticketId: int64 }
+   */
+  unassign: (req: { ticketId: string }) =>
+    apiClient.post<void>('/assignments/unassign', { ticketId: Number(req.ticketId) }),
 }
 
 export const assignmentService = USE_MOCKS ? mockService : realService

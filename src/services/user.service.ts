@@ -49,18 +49,11 @@ const mockService = {
   },
 }
 
-// Backend may return a plain array, PagedResponse { items }, or legacy { data }
-type UserListResponse = Record<string, unknown>[] | { items: Record<string, unknown>[] } | { data: Record<string, unknown>[] }
-
-function extractUserList(res: UserListResponse): User[] {
-  const raws = Array.isArray(res) ? res : ('items' in res ? res.items : res.data)
-  return raws.map(normalizeUser)
-}
-
+// Spec: GET /api/users returns bare array { id, username, fullName, role, isActive }[]
 const realService = {
   getAll: async (): Promise<User[]> => {
-    const res = await apiClient.get<UserListResponse>('/users')
-    return extractUserList(res)
+    const res = await apiClient.get<Record<string, unknown>[]>('/users')
+    return res.map(normalizeUser)
   },
 
   getById: async (id: string): Promise<User | null> => {
@@ -68,13 +61,40 @@ const realService = {
     return raw ? normalizeUser(raw) : null
   },
 
-  create: async (data: Omit<User, 'id' | 'openTicketCount'>): Promise<User> => {
-    const raw = await apiClient.post<Record<string, unknown>>('/users', data)
+  /**
+   * POST /api/users
+   * Spec body: { username, email, fullName, password, role, groupIds?, isActive? }
+   * Accepts any User-like object; only spec-required fields are forwarded.
+   */
+  create: async (data: Partial<User> & { username?: string; password?: string; email?: string; fullName?: string; role?: string }): Promise<User> => {
+    const body: Record<string, unknown> = {
+      username: data.username ?? data.email ?? '',
+      email: data.email ?? '',
+      fullName: data.fullName ?? `${(data as Record<string, unknown>).firstName ?? ''} ${(data as Record<string, unknown>).lastName ?? ''}`.trim(),
+      password: data.password ?? '',
+      role: String(data.role ?? 'AGENT').toUpperCase(),
+    }
+    if (data.groupIds?.length) body.groupIds = data.groupIds.map(Number)
+    if (data.isActive !== undefined) body.isActive = data.isActive
+    const raw = await apiClient.post<Record<string, unknown>>('/users', body)
     return normalizeUser(raw)
   },
 
-  update: async (id: string, data: Partial<User>): Promise<User> => {
-    const raw = await apiClient.put<Record<string, unknown>>(`/users/${id}`, data)
+  /**
+   * PUT /api/users/{id}
+   * Spec body: { email, fullName, role, isActive, groupIds?, password? }
+   * Accepts any User-like partial; only spec-required fields are forwarded.
+   */
+  update: async (id: string, data: Partial<User> & { password?: string; email?: string; fullName?: string; role?: string }): Promise<User> => {
+    const body: Record<string, unknown> = {
+      email: data.email ?? '',
+      fullName: data.fullName ?? `${(data as Record<string, unknown>).firstName ?? ''} ${(data as Record<string, unknown>).lastName ?? ''}`.trim(),
+      role: String(data.role ?? 'AGENT').toUpperCase(),
+      isActive: data.isActive ?? true,
+    }
+    if (data.groupIds?.length) body.groupIds = data.groupIds.map(Number)
+    if (data.password) body.password = data.password
+    const raw = await apiClient.put<Record<string, unknown>>(`/users/${id}`, body)
     return normalizeUser(raw)
   },
 

@@ -1,7 +1,11 @@
 import type { UserRole } from './common.types'
 
-/** Matches backend GroupType enum — exact string values are backend-defined */
-export type GroupType = string
+/** Frontend view model for a group type loaded from GET /api/group-types */
+export interface GroupType {
+  id: string
+  code: string
+  name: string
+}
 
 export interface User {
   id: string
@@ -22,13 +26,16 @@ export interface User {
 export interface Group {
   id: string
   name: string
+  groupTypeId: string
+  groupTypeCode: string
+  groupTypeName: string
   description: string
-  memberIds: string[]
-  memberNames: string[]
-  defaultTemplateIds: string[]
-  transferableToGroupIds: string[]
   isActive: boolean
-  openTicketCount: number
+  memberCount: number
+  /** Backend-provided member user IDs as strings */
+  memberIds: string[]
+  /** Returned by GET /api/groups/{id} only */
+  createdAt?: string
 }
 
 export interface TicketTemplate {

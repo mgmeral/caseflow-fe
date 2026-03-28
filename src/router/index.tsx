@@ -54,7 +54,7 @@ export const router = createBrowserRouter([
             path: 'pool',
             // supervisor is mock-only; in real mode this gate is admin-only
             element: (
-              <ProtectedRoute requiredRoles={['admin', 'supervisor']}>
+              <ProtectedRoute requiredRoles={['admin']}>
                 <AdminPoolPage />
               </ProtectedRoute>
             ),

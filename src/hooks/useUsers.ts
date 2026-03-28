@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { userService } from '@/services/user.service'
 import { groupService } from '@/services/group.service'
+import { groupTypeService } from '@/services/groupType.service'
 
 export function useUsersQuery() {
   return useQuery({
@@ -15,6 +16,14 @@ export function useGroupsQuery() {
     queryKey: ['groups'],
     queryFn: () => groupService.getAll(),
     staleTime: 120_000,
+  })
+}
+
+export function useGroupTypesQuery() {
+  return useQuery({
+    queryKey: ['group-types'],
+    queryFn: () => groupTypeService.getAll(),
+    staleTime: 300_000,
   })
 }
 

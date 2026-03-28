@@ -1,6 +1,5 @@
 /**
- * Contact service — aligned to backend /api/contacts endpoints.
- * Contacts are a new domain (no existing FE pages for this).
+ * Contact service — aligned to CaseFlow API v2.0.0 /api/contacts endpoints.
  */
 import type { Contact } from '@/types/customer.types'
 import type { ContactResponse, CreateContactRequest, UpdateContactRequest } from '@/types/api.types'
@@ -9,7 +8,7 @@ import { USE_MOCKS } from '@/lib/env'
 import { getMockDelay } from '@/mock'
 
 // ---------------------------------------------------------------------------
-// Mock data (contacts domain has no existing mock data — start empty)
+// Mock data
 // ---------------------------------------------------------------------------
 
 let _mockContacts: Contact[] = []
@@ -39,12 +38,12 @@ const mockService = {
     await getMockDelay()
     const contact: Contact = {
       id: `cnt-${Date.now()}`,
-      customerId: req.customerId,
-      firstName: req.firstName,
-      lastName: req.lastName,
-      fullName: `${req.firstName} ${req.lastName}`,
+      customerId: String(req.customerId),
+      firstName: '',
+      lastName: '',
+      fullName: req.name,
       email: req.email,
-      phone: req.phone ?? null,
+      phone: null,
       isActive: true,
       isPrimary: req.isPrimary ?? false,
     }
@@ -59,8 +58,9 @@ const mockService = {
     const c = _mockContacts[idx]
     _mockContacts[idx] = {
       ...c,
-      ...data,
-      fullName: `${data.firstName ?? c.firstName} ${data.lastName ?? c.lastName}`,
+      fullName: data.name,
+      isPrimary: data.isPrimary ?? c.isPrimary,
+      isActive: data.isActive ?? c.isActive,
     }
     return { ..._mockContacts[idx] }
   },
@@ -68,17 +68,19 @@ const mockService = {
 
 // ---------------------------------------------------------------------------
 // Helper: map ContactResponse → Contact view model
+// Spec ContactResponse: { id, customerId, email, name, isPrimary, isActive, createdAt }
 // ---------------------------------------------------------------------------
 
 function toContact(r: ContactResponse): Contact {
   return {
-    id: r.id,
-    customerId: r.customerId,
-    firstName: r.firstName,
-    lastName: r.lastName,
-    fullName: r.fullName,
+    id: String(r.id),
+    customerId: String(r.customerId),
+    // Backend returns single `name` field — derive firstName/lastName from it
+    firstName: '',
+    lastName: '',
+    fullName: r.name,
     email: r.email,
-    phone: r.phone,
+    phone: null,
     isActive: r.isActive,
     isPrimary: r.isPrimary,
   }
@@ -88,13 +90,10 @@ function toContact(r: ContactResponse): Contact {
 // Real API implementation
 // ---------------------------------------------------------------------------
 
-type ContactListResponse = ContactResponse[] | { data: ContactResponse[] }
-
 const realService = {
   getAll: async (): Promise<Contact[]> => {
-    const res = await apiClient.get<ContactListResponse>('/contacts')
-    const items = Array.isArray(res) ? res : res.data
-    return items.map(toContact)
+    const res = await apiClient.get<ContactResponse[]>('/contacts')
+    return res.map(toContact)
   },
 
   getById: async (id: string): Promise<Contact | null> => {
@@ -114,11 +113,24 @@ const realService = {
     return res ? toContact(res) : null
   },
 
+  /**
+   * POST /api/contacts
+   * Body: { customerId: int64, email, name, isPrimary? }
+   */
   create: async (req: CreateContactRequest): Promise<Contact> => {
-    const res = await apiClient.post<ContactResponse>('/contacts', req)
+    const res = await apiClient.post<ContactResponse>('/contacts', {
+      customerId: Number(req.customerId),
+      email: req.email,
+      name: req.name,
+      ...(req.isPrimary !== undefined ? { isPrimary: req.isPrimary } : {}),
+    })
     return toContact(res)
   },
 
+  /**
+   * PUT /api/contacts/{id}
+   * Body: { name, isPrimary?, isActive? }
+   */
   update: async (id: string, data: UpdateContactRequest): Promise<Contact> => {
     const res = await apiClient.put<ContactResponse>(`/contacts/${id}`, data)
     return toContact(res)

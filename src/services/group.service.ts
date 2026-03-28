@@ -17,18 +17,36 @@ const mockService = {
     return _mockGroups.find((g) => g.id === id) ?? null
   },
 
-  create: async (data: Omit<Group, 'id' | 'openTicketCount'>): Promise<Group> => {
+  create: async (data: { name: string; groupTypeId?: number; description?: string; userIds?: number[] }): Promise<Group> => {
     await getMockDelay()
-    const newGroup: Group = { ...data, id: `g-${Date.now()}`, openTicketCount: 0 }
+    const userIds: string[] = Array.isArray(data.userIds) ? data.userIds.map(String) : []
+    const newGroup: Group = {
+      id: `g-${Date.now()}`,
+      name: data.name,
+      groupTypeId: String(data.groupTypeId ?? ''),
+      groupTypeCode: '',
+      groupTypeName: '',
+      description: data.description ?? '',
+      isActive: true,
+      memberCount: userIds.length,
+      memberIds: userIds,
+    }
     _mockGroups.push(newGroup)
     return { ...newGroup }
   },
 
-  update: async (id: string, data: Partial<Group>): Promise<Group> => {
+  update: async (id: string, data: { name?: string; groupTypeId?: number; description?: string; userIds?: number[] }): Promise<Group> => {
     await getMockDelay()
     const idx = _mockGroups.findIndex((g) => g.id === id)
     if (idx === -1) throw new Error('Group not found')
-    _mockGroups[idx] = { ..._mockGroups[idx], ...data }
+    const userIds: string[] | undefined = Array.isArray(data.userIds) ? data.userIds.map(String) : undefined
+    _mockGroups[idx] = {
+      ..._mockGroups[idx],
+      ...(data.name ? { name: data.name } : {}),
+      ...(data.groupTypeId !== undefined ? { groupTypeId: String(data.groupTypeId) } : {}),
+      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(userIds !== undefined ? { memberIds: userIds, memberCount: userIds.length } : {}),
+    }
     return { ..._mockGroups[idx] }
   },
 
@@ -49,18 +67,11 @@ const mockService = {
   },
 }
 
-// Backend may return a plain array, PagedResponse { items }, or legacy { data }
-type GroupListResponse = Record<string, unknown>[] | { items: Record<string, unknown>[] } | { data: Record<string, unknown>[] }
-
-function extractGroupList(res: GroupListResponse): Group[] {
-  const raws = Array.isArray(res) ? res : ('items' in res ? res.items : res.data)
-  return raws.map(normalizeGroup)
-}
-
+// Spec: GET /api/groups returns bare array { id, name, type, isActive }[]
 const realService = {
   getAll: async (): Promise<Group[]> => {
-    const res = await apiClient.get<GroupListResponse>('/groups')
-    return extractGroupList(res)
+    const res = await apiClient.get<Record<string, unknown>[]>('/groups')
+    return res.map(normalizeGroup)
   },
 
   getById: async (id: string): Promise<Group | null> => {
@@ -68,13 +79,31 @@ const realService = {
     return raw ? normalizeGroup(raw) : null
   },
 
-  create: async (data: Omit<Group, 'id' | 'openTicketCount'>): Promise<Group> => {
-    const raw = await apiClient.post<Record<string, unknown>>('/groups', data)
+  /**
+   * POST /api/groups
+   * Body: { name, groupTypeId, description?, userIds? }
+   */
+  create: async (data: { name: string; groupTypeId: number; description?: string; userIds?: number[] }): Promise<Group> => {
+    const raw = await apiClient.post<Record<string, unknown>>('/groups', {
+      name: data.name,
+      groupTypeId: data.groupTypeId,
+      ...(data.description ? { description: data.description } : {}),
+      ...(data.userIds?.length ? { userIds: data.userIds } : {}),
+    })
     return normalizeGroup(raw)
   },
 
-  update: async (id: string, data: Partial<Group>): Promise<Group> => {
-    const raw = await apiClient.put<Record<string, unknown>>(`/groups/${id}`, data)
+  /**
+   * PUT /api/groups/{id}
+   * Body: { name, groupTypeId, description?, userIds? }
+   */
+  update: async (id: string, data: { name?: string; groupTypeId?: number; description?: string; userIds?: number[] }): Promise<Group> => {
+    const raw = await apiClient.put<Record<string, unknown>>(`/groups/${id}`, {
+      name: data.name,
+      groupTypeId: data.groupTypeId,
+      ...(data.description !== undefined ? { description: data.description } : {}),
+      ...(data.userIds !== undefined ? { userIds: data.userIds } : {}),
+    })
     return normalizeGroup(raw)
   },
 

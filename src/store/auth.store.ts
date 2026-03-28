@@ -21,21 +21,25 @@ function normalizeBackendRole(role: BackendRole | string): UserRole {
 }
 
 function meResponseToUser(me: AuthMeResponse): User {
+  // Spec: GET /auth/me returns { id, username, email, fullName, role }
+  // firstName/lastName not provided — derive from fullName
+  const nameParts = (me.fullName ?? '').trim().split(' ')
+  const firstName = nameParts[0] ?? ''
+  const lastName = nameParts.slice(1).join(' ')
   return {
-    id: me.id,
-    firstName: me.firstName,
-    lastName: me.lastName,
-    fullName: me.fullName,
+    id: String(me.id),
+    firstName,
+    lastName,
+    fullName: me.fullName ?? me.username ?? '',
     email: me.email,
     role: normalizeBackendRole(me.role),
-    // Fields not provided by backend — set safe defaults
     groupIds: [],
     groupNames: [],
     adminLevel: 0,
-    isActive: me.isActive,
+    isActive: true,
     lastLoginAt: null,
     openTicketCount: 0,
-    avatarColor: deriveAvatarColor(me.id),
+    avatarColor: deriveAvatarColor(String(me.id)),
   }
 }
 
@@ -104,6 +108,13 @@ export const useAuthStore = create<AuthState>()(
       },
 
       logout: () => {
+        // Call POST /api/auth/logout with the refreshToken if we have one (fire-and-forget)
+        const { refreshToken } = useAuthStore.getState()
+        if (!USE_MOCKS && refreshToken) {
+          apiClient
+            .post<void>('/auth/logout', { refreshToken })
+            .catch(() => {/* ignore — clear session regardless */})
+        }
         set({ currentUser: null, accessToken: null, refreshToken: null, isAuthenticated: false })
       },
     }),

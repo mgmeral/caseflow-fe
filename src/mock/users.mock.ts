@@ -1,27 +1,33 @@
-import type { User, Group, TicketTemplate } from '@/types/user.types'
+import type { User, Group, GroupType, TicketTemplate } from '@/types/user.types'
+
+export const mockGroupTypes: GroupType[] = [
+  { id: '1', code: 'TRADE', name: 'Trade' },
+  { id: '2', code: 'OPERATIONS', name: 'Operations' },
+  { id: '3', code: 'SUPPORT', name: 'Support' },
+]
 
 export const mockGroups: Group[] = [
   {
     id: 'g1',
     name: 'Trade',
-    description: 'Ticaret işlemleri ve finansal araçlar destek ekibi',
-    memberIds: ['u1', 'u3', 'u4', 'u5', 'u6'],
-    memberNames: ['Ali Yılmaz', 'Ayşe Kaya', 'Mehmet Demir', 'Zeynep Çelik', 'Emre Yıldız'],
-    defaultTemplateIds: ['t1', 't2'],
-    transferableToGroupIds: ['g2'],
+    groupTypeId: '1',
+    groupTypeCode: 'TRADE',
+    groupTypeName: 'Trade',
+    description: 'Trade desk and financial instruments support',
     isActive: true,
-    openTicketCount: 18,
+    memberCount: 3,
+    memberIds: ['u1', 'u3', 'u4'],
   },
   {
     id: 'g2',
     name: 'Operations',
-    description: 'Operasyonel süreçler ve teknik altyapı destek ekibi',
-    memberIds: ['u2', 'u7', 'u8', 'u9', 'u10'],
-    memberNames: ['Selin Öztürk', 'Fatma Şahin', 'Can Arslan', 'Burak Koç', 'Elif Doğan'],
-    defaultTemplateIds: ['t3'],
-    transferableToGroupIds: ['g1'],
+    groupTypeId: '2',
+    groupTypeCode: 'OPERATIONS',
+    groupTypeName: 'Operations',
+    description: 'Operational processes and technical infrastructure',
     isActive: true,
-    openTicketCount: 14,
+    memberCount: 2,
+    memberIds: ['u2', 'u5'],
   },
 ]
 

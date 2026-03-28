@@ -3,7 +3,7 @@
  * Backend only supports read operations for emails (no POST emails endpoint).
  */
 import type { TicketMessage } from '@/types/ticket.types'
-import type { EmailDocumentResponse } from '@/types/api.types'
+import type { EmailDocumentResponse, EmailDocumentSummaryResponse } from '@/types/api.types'
 import { apiClient } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockMessages, getMockDelay } from '@/mock'
@@ -12,18 +12,34 @@ import { mockMessages, getMockDelay } from '@/mock'
 // Helper: map EmailDocumentResponse → TicketMessage view model
 // ---------------------------------------------------------------------------
 
+// Maps full EmailDocumentResponse (detail endpoint) → TicketMessage
+// Spec fields: from, textBody, htmlBody, receivedAt, attachments[].fileName
 function emailToMessage(e: EmailDocumentResponse): TicketMessage {
   return {
     id: e.id,
     ticketId: e.ticketId,
-    type: e.direction === 'INBOUND' ? 'public_inbound' : 'public_outbound',
+    // Spec has no direction field — detail endpoint emails are inbound
+    type: 'public_inbound',
     authorId: null,
-    authorName: e.fromAddress ?? '',
-    // content may be absent on list-endpoint summaries; use empty string as placeholder.
-    // The detail endpoint (GET /emails/{id}) always includes full content.
-    content: e.content ?? '',
-    createdAt: e.sentAt ?? e.receivedAt ?? new Date().toISOString(),
-    attachments: (e.attachments ?? []).map((a) => a.filename),
+    authorName: e.from ?? '',
+    content: e.textBody ?? e.htmlBody ?? '',
+    createdAt: e.receivedAt ?? new Date().toISOString(),
+    attachments: (e.attachments ?? []).map((a) => a.fileName),
+  }
+}
+
+// Maps EmailDocumentSummaryResponse (list endpoints) → TicketMessage
+// Spec fields: from, receivedAt (no content/attachments in summary)
+function emailSummaryToMessage(e: EmailDocumentSummaryResponse): TicketMessage {
+  return {
+    id: e.id,
+    ticketId: e.ticketId,
+    type: 'public_inbound',
+    authorId: null,
+    authorName: e.from ?? '',
+    content: '',
+    createdAt: e.receivedAt ?? new Date().toISOString(),
+    attachments: [],
   }
 }
 
@@ -58,8 +74,8 @@ const mockService = {
 
 const realService = {
   getByTicket: async (ticketId: string): Promise<TicketMessage[]> => {
-    const emails = await apiClient.get<EmailDocumentResponse[]>(`/emails/by-ticket/${ticketId}`)
-    return emails.map(emailToMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    const emails = await apiClient.get<EmailDocumentSummaryResponse[]>(`/emails/by-ticket/${ticketId}`)
+    return emails.map(emailSummaryToMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   },
 
   getById: async (id: string): Promise<TicketMessage | null> => {
@@ -68,10 +84,10 @@ const realService = {
   },
 
   getByThread: async (threadKey: string): Promise<TicketMessage[]> => {
-    const emails = await apiClient.get<EmailDocumentResponse[]>(
+    const emails = await apiClient.get<EmailDocumentSummaryResponse[]>(
       `/emails/by-thread/${encodeURIComponent(threadKey)}`,
     )
-    return emails.map(emailToMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return emails.map(emailSummaryToMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   },
 }
 

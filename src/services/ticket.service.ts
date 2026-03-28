@@ -1,10 +1,10 @@
 ﻿import type { Ticket, TicketFilters, TicketMessage, TicketStatus, TicketPriority, TransferRecord } from '@/types/ticket.types'
 import type { SortState } from '@/types/common.types'
-import type { NoteResponse, EmailDocumentResponse, EmailDocumentSummaryResponse, TransferResponse, PagedResponse } from '@/types/api.types'
+import type { NoteResponse, EmailDocumentResponse, EmailDocumentSummaryResponse, TransferListItem, PagedResponse } from '@/types/api.types'
 import { apiClient, ApiError } from './api.client'
 import { USE_MOCKS } from '@/lib/env'
 import { mockTickets, mockMessages, mockTransferRecords, getMockDelay } from '@/mock'
-import { normalizeTicket } from './normalizers'
+import { normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
 
 // ---------------------------------------------------------------------------
 // Mock implementation (only used when VITE_USE_MOCKS=true)
@@ -252,7 +252,6 @@ const mockService = {
 // ---------------------------------------------------------------------------
 
 function noteToMessage(n: NoteResponse): TicketMessage {
-  // Map backend NoteType (INTERNAL/INFO/INVESTIGATION/ESCALATION) → FE MessageType
   const typeMap: Record<string, TicketMessage['type']> = {
     INTERNAL: 'internal_note',
     INFO: 'system_event',
@@ -263,8 +262,9 @@ function noteToMessage(n: NoteResponse): TicketMessage {
     id: n.id,
     ticketId: n.ticketId,
     type: typeMap[n.type] ?? 'internal_note',
-    authorId: n.authorId,
-    authorName: n.authorName,
+    authorId: null,
+    // Spec: NoteResponse has `createdBy` (username/display name), no authorId field
+    authorName: n.createdBy ?? '',
     content: n.content,
     createdAt: n.createdAt,
     attachments: [],
@@ -275,13 +275,16 @@ function emailToMessage(e: EmailDocumentResponse): TicketMessage {
   return {
     id: e.id,
     ticketId: e.ticketId,
-    type: e.direction === 'INBOUND' ? 'public_inbound' : 'public_outbound',
+    // Spec does not include direction — infer from presence of textBody/htmlBody (inbound)
+    type: 'public_inbound',
     authorId: null,
-    authorName: e.fromAddress ?? '',
-    // content and attachments come from the detail endpoint; guard against absent summary fields
-    content: e.content ?? '',
-    createdAt: e.sentAt ?? e.receivedAt ?? new Date().toISOString(),
-    attachments: (e.attachments ?? []).map((a) => a.filename),
+    // Spec field: `from` (sender address)
+    authorName: e.from ?? '',
+    // Prefer textBody; fall back to htmlBody
+    content: e.textBody ?? e.htmlBody ?? '',
+    // Spec: receivedAt (no sentAt in spec)
+    createdAt: e.receivedAt ?? new Date().toISOString(),
+    attachments: (e.attachments ?? []).map((a) => a.fileName),
   }
 }
 
@@ -309,9 +312,9 @@ const realService = {
     // Scalar search
     if (filters.search) params.set('search', filters.search)
 
-    // Array filters — send as repeated params (status=x&status=y)
-    for (const s of filters.statuses) params.append('status', s)
-    for (const p of filters.priorities) params.append('priority', p)
+    // Array filters — send as repeated params with UPPERCASE values (backend enum)
+    for (const s of filters.statuses) params.append('status', toBackendStatus(s))
+    for (const p of filters.priorities) params.append('priority', toBackendPriority(p))
     for (const uid of filters.assignedUserIds) params.append('userId', uid)
     for (const gid of filters.groupIds) params.append('groupId', gid)
 
@@ -340,13 +343,22 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  create: async (data: { subject: string; customerId: string; groupId: string; priority: TicketPriority }): Promise<Ticket> => {
-    const raw = await apiClient.post<Record<string, unknown>>('/tickets', data)
+  create: async (data: { subject: string; customerId?: string; priority: TicketPriority }): Promise<Ticket> => {
+    const body: Record<string, unknown> = {
+      subject: data.subject,
+      priority: toBackendPriority(data.priority),
+    }
+    if (data.customerId) body.customerId = Number(data.customerId)
+    const raw = await apiClient.post<Record<string, unknown>>('/tickets', body)
     return normalizeTicket(raw)
   },
 
-  update: async (id: string, data: { subject?: string; priority?: TicketPriority; groupId?: string }): Promise<Ticket> => {
-    const raw = await apiClient.put<Record<string, unknown>>(`/tickets/${id}`, data)
+  update: async (id: string, data: { subject: string; priority: TicketPriority; description?: string }): Promise<Ticket> => {
+    const raw = await apiClient.put<Record<string, unknown>>(`/tickets/${id}`, {
+      subject: data.subject,
+      priority: toBackendPriority(data.priority),
+      ...(data.description !== undefined ? { description: data.description } : {}),
+    })
     return normalizeTicket(raw)
   },
 
@@ -374,19 +386,19 @@ const realService = {
   },
 
   getTransferHistory: async (ticketId: string): Promise<TransferRecord[]> => {
-    const res = await apiClient.get<TransferResponse[]>(`/transfers/by-ticket/${ticketId}`)
+    const res = await apiClient.get<TransferListItem[]>(`/transfers/by-ticket/${ticketId}`)
     return res
       .map((t) => ({
         id: t.id,
-        ticketId: t.ticketId,
-        fromGroupId: t.fromGroupId,
-        fromGroupName: t.fromGroupName,
-        toGroupId: t.toGroupId,
-        toGroupName: t.toGroupName,
-        transferredByName: t.transferredByName,
-        reason: t.reason,
-        note: t.note,
-        createdAt: t.createdAt,
+        ticketId: String(t.ticketId),
+        fromGroupId: String(t.fromGroupId),
+        fromGroupName: '',
+        toGroupId: String(t.toGroupId),
+        toGroupName: '',
+        transferredByName: '',
+        reason: '',
+        note: null,
+        createdAt: t.transferredAt,
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   },
@@ -396,26 +408,37 @@ const realService = {
     ticketId: string,
     userId: string | null,
     _userName: string | null,
-    note?: string,
   ): Promise<Ticket> => {
     if (userId === null) {
-      await apiClient.post('/assignments/unassign', { ticketId })
+      await apiClient.post('/assignments/unassign', { ticketId: Number(ticketId) })
     } else {
-      await apiClient.post('/assignments/assign', { ticketId, assignedUserId: userId, note })
+      await apiClient.post('/assignments/assign', {
+        ticketId: Number(ticketId),
+        assignedUserId: Number(userId),
+      })
     }
     const raw = await apiClient.get<Record<string, unknown>>(`/tickets/${ticketId}`)
     return normalizeTicket(raw)
   },
 
-  /** POST /tickets/{id}/status */
-  changeStatus: async (ticketId: string, status: TicketStatus, reason?: string): Promise<Ticket> => {
-    const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/status`, { status, reason })
+  /** POST /tickets/{id}/status — body: { status } only (no reason field in spec) */
+  changeStatus: async (ticketId: string, status: TicketStatus): Promise<Ticket> => {
+    const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/status`, {
+      status: toBackendStatus(status),
+    })
     return normalizeTicket(raw)
   },
 
-  /** PUT /tickets/{id} with priority field */
+  /**
+   * Priority change requires a full PUT — spec requires subject + priority.
+   * Fetch current ticket to get subject, then PUT with updated priority.
+   */
   changePriority: async (ticketId: string, priority: TicketPriority): Promise<Ticket> => {
-    const raw = await apiClient.put<Record<string, unknown>>(`/tickets/${ticketId}`, { priority })
+    const current = await apiClient.get<Record<string, unknown>>(`/tickets/${ticketId}`)
+    const raw = await apiClient.put<Record<string, unknown>>(`/tickets/${ticketId}`, {
+      subject: String(current.subject ?? ''),
+      priority: toBackendPriority(priority),
+    })
     return normalizeTicket(raw)
   },
 
@@ -427,10 +450,9 @@ const realService = {
     _authorName: string,
   ): Promise<TicketMessage> => {
     const note = await apiClient.post<NoteResponse>('/notes', {
-      ticketId,
+      ticketId: Number(ticketId),
       content,
       type: 'INTERNAL',
-      // authorId intentionally omitted — backend derives author from session token
     })
     return noteToMessage(note)
   },
@@ -464,9 +486,9 @@ const realService = {
     _note?: string,
   ): Promise<Ticket> => {
     await apiClient.post('/transfers', {
-      ticketId,
-      fromGroupId,
-      toGroupId,
+      ticketId: Number(ticketId),
+      fromGroupId: Number(fromGroupId),
+      toGroupId: Number(toGroupId),
       reason,
       clearAssignee: true,
     })
@@ -474,9 +496,9 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  /** POST /tickets/{id}/close */
-  close: async (ticketId: string, sendNotification: boolean): Promise<Ticket> => {
-    const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/close`, { sendNotification })
+  /** POST /tickets/{id}/close — spec requires empty body {} */
+  close: async (ticketId: string): Promise<Ticket> => {
+    const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/close`, {})
     return normalizeTicket(raw)
   },
 
