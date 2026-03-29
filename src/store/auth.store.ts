@@ -21,8 +21,7 @@ function normalizeBackendRole(role: BackendRole | string): UserRole {
 }
 
 function meResponseToUser(me: AuthMeResponse): User {
-  // Spec: GET /auth/me returns { id, username, email, fullName, role }
-  // firstName/lastName not provided — derive from fullName
+  // Spec: GET /auth/me returns { id, username, email, fullName, role, roleId?, roleCode?, roleName?, permissionCodes?, ticketScope?, groupIds? }
   const nameParts = (me.fullName ?? '').trim().split(' ')
   const firstName = nameParts[0] ?? ''
   const lastName = nameParts.slice(1).join(' ')
@@ -33,7 +32,12 @@ function meResponseToUser(me: AuthMeResponse): User {
     fullName: me.fullName ?? me.username ?? '',
     email: me.email,
     role: normalizeBackendRole(me.role),
-    groupIds: [],
+    roleId: me.roleId != null ? String(me.roleId) : undefined,
+    roleCode: me.roleCode,
+    roleName: me.roleName,
+    permissionCodes: me.permissionCodes ?? [],
+    ticketScope: me.ticketScope ?? 'OWN',
+    groupIds: me.groupIds ? me.groupIds.map(String) : [],
     groupNames: [],
     adminLevel: 0,
     isActive: true,

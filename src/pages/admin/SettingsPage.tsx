@@ -3,15 +3,15 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ShieldOff } from 'lucide-react'
 
 export function SettingsPage() {
-  const { isAdmin } = usePermissions()
+  const { canManageUsers } = usePermissions()
 
-  if (!isAdmin) {
+  if (!canManageUsers) {
     return (
       <div className="p-6">
         <EmptyState
           icon={<ShieldOff className="w-8 h-8 text-gray-400" />}
           title="Access Denied"
-          description="Only admins can access settings."
+          description="You don't have permission to access settings."
         />
       </div>
     )

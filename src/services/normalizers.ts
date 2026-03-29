@@ -120,11 +120,19 @@ export function normalizeUser(raw: Record<string, unknown>): User {
   const lastName = String(raw.lastName ?? nameParts.slice(1).join(' ') ?? '')
   return {
     id,
+    username: raw.username ? String(raw.username) : undefined,
     firstName,
     lastName,
     fullName,
     email: String(raw.email ?? ''),
     role: normalizeRole(raw.role as BackendRole | string | undefined),
+    roleId: raw.roleId != null ? String(raw.roleId) : undefined,
+    roleCode: raw.roleCode ? String(raw.roleCode) : undefined,
+    roleName: raw.roleName ? String(raw.roleName) : undefined,
+    permissionCodes: Array.isArray(raw.permissionCodes) ? (raw.permissionCodes as string[]) : [],
+    ticketScope: (raw.ticketScope === 'ALL' || raw.ticketScope === 'GROUP' || raw.ticketScope === 'OWN')
+      ? raw.ticketScope
+      : 'OWN',
     groupIds: Array.isArray(raw.groupIds) ? (raw.groupIds as (string | number)[]).map(String) : [],
     groupNames: Array.isArray(raw.groupNames) ? (raw.groupNames as string[]) : [],
     adminLevel: 0,

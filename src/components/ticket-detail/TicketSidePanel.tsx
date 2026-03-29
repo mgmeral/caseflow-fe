@@ -33,7 +33,12 @@ export function TicketSidePanel({
   onReopenTicket,
   onTransfer,
 }: TicketSidePanelProps) {
-  const { canAssignTickets, canCloseTickets, canChangePriority, canTransferTickets } = usePermissions()
+  const {
+    canAssignTickets,
+    canCloseTickets,
+    canChangePriority,
+    canChangeStatus,
+  } = usePermissions()
 
   const hasHistory = transfers.length > 0 || systemEvents.length > 0
 
@@ -49,12 +54,14 @@ export function TicketSidePanel({
             <button
               key={s}
               type="button"
-              onClick={() => onChangeStatus(s)}
+              onClick={() => canChangeStatus && onChangeStatus(s)}
+              disabled={!canChangeStatus}
               className={clsx(
                 'text-xs px-2.5 py-1 rounded-full border transition-colors',
                 ticket.status === s
                   ? 'bg-indigo-600 text-white border-indigo-600'
                   : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
+                !canChangeStatus && 'opacity-50 cursor-not-allowed',
               )}
             >
               {TICKET_STATUS_LABELS[s]}
@@ -161,7 +168,7 @@ export function TicketSidePanel({
             Close Ticket
           </Button>
         )}
-        {ticket.status === 'closed' && (
+        {canCloseTickets && ticket.status === 'closed' && (
           <Button
             variant="secondary"
             size="sm"
@@ -172,7 +179,7 @@ export function TicketSidePanel({
             Reopen Ticket
           </Button>
         )}
-        {ticket.status === 'in_progress' && (
+        {canChangeStatus && ticket.status === 'in_progress' && (
           <Button
             variant="secondary"
             size="sm"

@@ -8,7 +8,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 // Mock the auth store — support both selector and no-selector call patterns
 const mockAuthState = vi.hoisted(() => ({
   isAuthenticated: false,
-  currentUser: null as { role: string } | null,
+  currentUser: null as { role: string; permissionCodes?: string[] } | null,
 }))
 
 vi.mock('@/store/auth.store', () => ({
@@ -18,7 +18,11 @@ vi.mock('@/store/auth.store', () => ({
 
 const { ProtectedRoute } = await import('@/router/ProtectedRoute')
 
-function renderWithRouter(authState: Partial<typeof mockAuthState>, requiredRoles?: string[]) {
+function renderWithRouter(
+  authState: Partial<typeof mockAuthState>,
+  requiredRoles?: string[],
+  requiredPermissions?: string[],
+) {
   Object.assign(mockAuthState, authState)
 
   return render(
@@ -29,7 +33,10 @@ function renderWithRouter(authState: Partial<typeof mockAuthState>, requiredRole
         <Route
           path="/protected"
           element={
-            <ProtectedRoute requiredRoles={requiredRoles as never}>
+            <ProtectedRoute
+              requiredRoles={requiredRoles as never}
+              requiredPermissions={requiredPermissions}
+            >
               <div>Protected Content</div>
             </ProtectedRoute>
           }
@@ -80,5 +87,23 @@ describe('ProtectedRoute', () => {
       ['agent'],
     )
     expect(screen.getByText('Protected Content')).toBeTruthy()
+  })
+
+  it('renders children when user has required permission', () => {
+    renderWithRouter(
+      { isAuthenticated: true, currentUser: { role: 'viewer', permissionCodes: ['REPORT_VIEW'] } },
+      undefined,
+      ['REPORT_VIEW'],
+    )
+    expect(screen.getByText('Protected Content')).toBeTruthy()
+  })
+
+  it('redirects to /dashboard when user lacks required permission', () => {
+    renderWithRouter(
+      { isAuthenticated: true, currentUser: { role: 'viewer', permissionCodes: ['NOTE_INTERNAL'] } },
+      undefined,
+      ['REPORT_VIEW'],
+    )
+    expect(screen.getByText('Dashboard')).toBeTruthy()
   })
 })

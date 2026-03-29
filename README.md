@@ -89,6 +89,28 @@ src/
 | `npm run test:watch` | Watch mode |
 | `npm run test:coverage` | Coverage report |
 
+## Docker
+
+Build the production image:
+
+```bash
+docker build \
+  --build-arg VITE_API_URL=http://localhost:8080/api \
+  --build-arg VITE_USE_MOCKS=false \
+  -t csm-crm-fe .
+```
+
+Run the container:
+
+```bash
+docker run --rm -p 8081:80 csm-crm-fe
+```
+
+Notes:
+- This frontend is built with Vite, so `VITE_API_URL` and `VITE_USE_MOCKS` are embedded at image build time.
+- The container serves the built app with Nginx on port `80`.
+- Client-side routes are handled with an SPA fallback to `index.html`.
+
 ## API contract
 
 The frontend expects a REST backend at `VITE_API_URL` with the following endpoints:

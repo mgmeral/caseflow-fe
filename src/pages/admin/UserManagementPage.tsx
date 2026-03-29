@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useUsers } from '@/hooks/useUsers'
+import { useRolesQuery } from '@/hooks/useUsers'
 import { usePermissions } from '@/hooks/usePermissions'
 import { Avatar } from '@/components/shared/Avatar'
 import { Badge } from '@/components/shared/Badge'
@@ -11,11 +12,8 @@ import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { useToast } from '@/hooks/useToast'
 import { userService } from '@/services/user.service'
 import type { User } from '@/types/user.types'
-import type { UserRole } from '@/types/common.types'
 import { ShieldOff, UserPlus, Pencil, UserX, UserCheck } from 'lucide-react'
-import { ROLE_LABELS, AVATAR_COLORS } from '@/constants/enums'
-
-const ROLES: UserRole[] = ['admin', 'supervisor', 'trade_agent', 'operation_agent', 'viewer']
+import { ROLE_LABELS } from '@/constants/enums'
 
 interface UserFormState {
   firstName: string
@@ -23,7 +21,7 @@ interface UserFormState {
   username: string
   email: string
   password: string
-  role: UserRole
+  roleId: string
   groupIds: string[]
 }
 
@@ -33,13 +31,15 @@ const EMPTY_FORM: UserFormState = {
   username: '',
   email: '',
   password: '',
-  role: 'operation_agent',
+  roleId: '',
   groupIds: [],
 }
 
 export function UserManagementPage() {
   const { canManageUsers } = usePermissions()
   const { users, groups, isLoading, refetch } = useUsers()
+  const rolesQuery = useRolesQuery()
+  const roles = rolesQuery.data ?? []
   const { success, error } = useToast()
 
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
@@ -49,20 +49,30 @@ export function UserManagementPage() {
 
   const [deactivatingId, setDeactivatingId] = useState<string | null>(null)
 
+  const resolveRoleId = (u: User): string => {
+    if (u.roleId) return u.roleId
+    const byCode = roles.find((r) => r.code === u.roleCode)
+    if (byCode) return byCode.id
+    const byName = roles.find((r) => r.name === u.roleName)
+    if (byName) return byName.id
+    return roles[0]?.id ?? ''
+  }
+
   const openCreate = () => {
-    setForm(EMPTY_FORM)
+    setForm({ ...EMPTY_FORM, roleId: roles[0]?.id ?? '' })
     setEditingUser(null)
     setModalMode('create')
   }
 
   const openEdit = (u: User) => {
+    const fallbackUsername = u.email.includes('@') ? u.email.split('@')[0] : ''
     setForm({
       firstName: u.firstName,
       lastName: u.lastName,
-      username: '',
+      username: u.username ?? fallbackUsername,
       email: u.email,
       password: '',
-      role: u.role,
+      roleId: resolveRoleId(u),
       groupIds: [...u.groupIds],
     })
     setEditingUser(u)
@@ -76,37 +86,31 @@ export function UserManagementPage() {
   }
 
   const handleSave = async () => {
-    if (!form.firstName.trim() || !form.email.trim()) return
+    if (!form.firstName.trim() || !form.email.trim() || !form.roleId) return
     if (modalMode === 'create' && (!form.username.trim() || form.password.length < 8)) return
     setSaving(true)
     try {
-      const groupNames = form.groupIds.map((id) => groups.find((g) => g.id === id)?.name ?? id)
+      const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim()
+      const groupIdsNum = form.groupIds.map(Number).filter((n) => !Number.isNaN(n))
       if (modalMode === 'create') {
         await userService.create({
           username: form.username.trim(),
-          firstName: form.firstName.trim(),
-          lastName: form.lastName.trim(),
-          fullName: `${form.firstName.trim()} ${form.lastName.trim()}`,
+          fullName,
           email: form.email.trim(),
           password: form.password,
-          role: form.role,
-          groupIds: form.groupIds,
-          groupNames,
-          adminLevel: 0,
+          roleId: form.roleId,
+          groupIds: groupIdsNum,
           isActive: true,
-          lastLoginAt: null,
-          avatarColor: AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)],
         })
         success('User created')
       } else if (editingUser) {
         await userService.update(editingUser.id, {
-          firstName: form.firstName.trim(),
-          lastName: form.lastName.trim(),
-          fullName: `${form.firstName.trim()} ${form.lastName.trim()}`,
+          username: form.username.trim(),
+          fullName,
           email: form.email.trim(),
-          role: form.role,
-          groupIds: form.groupIds,
-          groupNames,
+          roleId: form.roleId,
+          groupIds: groupIdsNum,
+          isActive: editingUser.isActive,
           ...(form.password ? { password: form.password } : {}),
         })
         success('User updated')
@@ -212,7 +216,7 @@ export function UserManagementPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full font-medium">
-                      {ROLE_LABELS[u.role]}
+                      {u.roleName ?? u.roleCode ?? ROLE_LABELS[u.role]}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{u.groupNames.join(', ') || '—'}</td>
@@ -277,6 +281,8 @@ export function UserManagementPage() {
               disabled={
                 !form.firstName.trim() ||
                 !form.email.trim() ||
+                !form.roleId ||
+                !form.username.trim() ||
                 (modalMode === 'create' && (!form.username.trim() || form.password.length < 8))
               }
               onClick={handleSave}
@@ -310,19 +316,17 @@ export function UserManagementPage() {
             </div>
           </div>
 
-          {modalMode === 'create' && (
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">Username <span className="text-red-500">*</span></label>
-              <input
-                type="text"
-                value={form.username}
-                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                placeholder="ahmet.yilmaz"
-                autoComplete="off"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-xs font-medium text-gray-700 mb-1">Username <span className="text-red-500">*</span></label>
+            <input
+              type="text"
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder="ahmet.yilmaz"
+              autoComplete="off"
+            />
+          </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
@@ -356,14 +360,18 @@ export function UserManagementPage() {
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">Role</label>
             <select
-              value={form.role}
-              onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as UserRole }))}
+              value={form.roleId}
+              onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}
               className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              disabled={rolesQuery.isLoading || roles.length === 0}
             >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
               ))}
             </select>
+            {!rolesQuery.isLoading && roles.length === 0 && (
+              <p className="text-xs text-red-500 mt-1">No roles available from backend.</p>
+            )}
           </div>
 
           <div>

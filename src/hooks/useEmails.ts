@@ -1,13 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { emailService } from '@/services/email.service'
+import { useTicketEmailThread } from './useTicketEmails'
 
 export function useEmailsByTicket(ticketId: string) {
-  return useQuery({
-    queryKey: ['emails', 'by-ticket', ticketId],
-    queryFn: () => emailService.getByTicket(ticketId),
-    enabled: !!ticketId,
-    staleTime: 30_000,
-  })
+  return useTicketEmailThread(ticketId)
 }
 
 export function useEmailsByThread(threadKey: string) {

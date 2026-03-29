@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { userService } from '@/services/user.service'
 import { groupService } from '@/services/group.service'
 import { groupTypeService } from '@/services/groupType.service'
+import { roleService } from '@/services/role.service'
 
 export function useUsersQuery() {
   return useQuery({
@@ -24,6 +25,22 @@ export function useGroupTypesQuery() {
     queryKey: ['group-types'],
     queryFn: () => groupTypeService.getAll(),
     staleTime: 300_000,
+  })
+}
+
+export function useRolesQuery() {
+  return useQuery({
+    queryKey: ['roles'],
+    queryFn: () => roleService.getAll(),
+    staleTime: 120_000,
+  })
+}
+
+export function usePermissionDefsQuery() {
+  return useQuery({
+    queryKey: ['role-permissions'],
+    queryFn: () => roleService.getPermissions(),
+    staleTime: 600_000,
   })
 }
 

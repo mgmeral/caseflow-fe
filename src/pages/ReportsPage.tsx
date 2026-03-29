@@ -33,7 +33,7 @@ export function ReportsPage() {
 
   const agentStats = useMemo(() => {
     return users
-      .filter((u) => ['trade_agent', 'operation_agent'].includes(u.role) && u.isActive)
+      .filter((u) => u.isActive && u.permissionCodes.includes('REPLY_PUBLIC'))
       .map((u) => ({
         user: u,
         total: tickets.filter((t) => t.assignedUserId === u.id).length,

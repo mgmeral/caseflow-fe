@@ -13,6 +13,9 @@ import {
   UsersRound,
   Shield,
   FileText,
+  Mail,
+  AtSign,
+  Activity,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Avatar } from '@/components/shared/Avatar'
@@ -30,7 +33,9 @@ interface NavItem {
 export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { isAdmin, canViewAdminPool, canViewReports } = usePermissions()
+  const { canManageUsers, canManageRoles, canViewAdminPool, canViewReports, canManageMailboxes, canManageCustomerEmail, canViewIngressEvents, canAccessEmailAdmin } = usePermissions()
+
+  const canAccessAdminSection = canManageUsers || canManageRoles || canAccessEmailAdmin
 
   const mainNav: NavItem[] = [
     { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -39,12 +44,16 @@ export function Sidebar() {
   ]
 
   const adminNav: NavItem[] = [
-    { to: '/admin/users',     icon: <UserCog size={18} />,    label: 'Users' },
-    { to: '/admin/roles',     icon: <Shield size={18} />,     label: 'Roles' },
-    { to: '/admin/groups',    icon: <UsersRound size={18} />, label: 'Groups' },
-    // Templates are mock-only — only show the link when mock mode is active
-    ...(USE_MOCKS ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }] : []),
-    { to: '/admin/settings',  icon: <Settings size={18} />,   label: 'Settings' },
+    ...(canManageUsers ? [{ to: '/admin/users', icon: <UserCog size={18} />, label: 'Users' }] : []),
+    ...(canManageRoles ? [{ to: '/admin/roles', icon: <Shield size={18} />, label: 'Roles' }] : []),
+    ...(canManageUsers ? [{ to: '/admin/groups', icon: <UsersRound size={18} />, label: 'Groups' }] : []),
+    ...(canManageUsers && USE_MOCKS
+      ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }]
+      : []),
+    ...(canManageMailboxes ? [{ to: '/admin/email/mailboxes', icon: <Mail size={18} />, label: 'Mailboxes' }] : []),
+    ...(canManageCustomerEmail ? [{ to: '/admin/email/customers', icon: <AtSign size={18} />, label: 'Email Settings' }] : []),
+    ...(canViewIngressEvents ? [{ to: '/admin/email/ingress-events', icon: <Activity size={18} />, label: 'Ingress Events' }] : []),
+    ...(canManageUsers ? [{ to: '/admin/settings', icon: <Settings size={18} />, label: 'Settings' }] : []),
   ]
 
   return (
@@ -98,7 +107,7 @@ export function Sidebar() {
           </>
         )}
 
-        {isAdmin && (
+        {canAccessAdminSection && (
           <>
             {!sidebarCollapsed && (
               <div className="pt-4 pb-1 px-2">
@@ -127,7 +136,7 @@ export function Sidebar() {
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-white truncate">{currentUser.fullName}</div>
-                <div className="text-xs text-gray-400 truncate capitalize">{currentUser.role}</div>
+                <div className="text-xs text-gray-400 truncate capitalize">{currentUser.roleName ?? currentUser.role}</div>
               </div>
             )}
             <button

@@ -4,6 +4,7 @@ import type { UserRole } from '@/types/common.types'
 
 interface ProtectedRouteProps {
   requiredRoles?: UserRole[]
+  requiredPermissions?: string[]
   children?: React.ReactNode
 }
 
@@ -21,7 +22,7 @@ function roleAllowed(userRole: UserRole, requiredRoles: UserRole[]): boolean {
   return false
 }
 
-export function ProtectedRoute({ requiredRoles, children }: ProtectedRouteProps) {
+export function ProtectedRoute({ requiredRoles, requiredPermissions, children }: ProtectedRouteProps) {
   const { isAuthenticated, currentUser } = useAuthStore()
 
   if (!isAuthenticated || !currentUser) {
@@ -30,6 +31,14 @@ export function ProtectedRoute({ requiredRoles, children }: ProtectedRouteProps)
 
   if (requiredRoles && requiredRoles.length > 0 && !roleAllowed(currentUser.role, requiredRoles)) {
     return <Navigate to="/dashboard" replace />
+  }
+
+  if (requiredPermissions && requiredPermissions.length > 0) {
+    const permissionCodes = new Set(currentUser.permissionCodes ?? [])
+    const hasAnyRequiredPermission = requiredPermissions.some((code) => permissionCodes.has(code))
+    if (!hasAnyRequiredPermission) {
+      return <Navigate to="/dashboard" replace />
+    }
   }
 
   return children ? <>{children}</> : <Outlet />

@@ -14,6 +14,9 @@ import { RoleManagementPage } from '@/pages/admin/RoleManagementPage'
 import { GroupManagementPage } from '@/pages/admin/GroupManagementPage'
 import { TemplateManagementPage } from '@/pages/admin/TemplateManagementPage'
 import { SettingsPage } from '@/pages/admin/SettingsPage'
+import { MailboxManagementPage } from '@/pages/admin/MailboxManagementPage'
+import { CustomerEmailSettingsPage } from '@/pages/admin/CustomerEmailSettingsPage'
+import { IngressEventsPage } from '@/pages/admin/IngressEventsPage'
 
 export const router = createBrowserRouter([
   {
@@ -52,25 +55,23 @@ export const router = createBrowserRouter([
           },
           {
             path: 'pool',
-            // supervisor is mock-only; in real mode this gate is admin-only
             element: (
-              <ProtectedRoute requiredRoles={['admin']}>
+              <ProtectedRoute requiredPermissions={['ADMIN_POOL_VIEW']}>
                 <AdminPoolPage />
               </ProtectedRoute>
             ),
           },
           {
             path: 'reports',
-            // agent covers real backend AGENT; ProtectedRoute normalizes mock equivalents
             element: (
-              <ProtectedRoute requiredRoles={['admin', 'supervisor', 'agent']}>
+              <ProtectedRoute requiredPermissions={['REPORT_VIEW']}>
                 <ReportsPage />
               </ProtectedRoute>
             ),
           },
           {
             path: 'admin',
-            element: <ProtectedRoute requiredRoles={['admin']} />,
+            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'MAILBOX_MANAGE', 'CUSTOMER_EMAIL_MANAGE', 'INGRESS_EVENT_VIEW', 'INGRESS_EVENT_MANAGE']} />,
             children: [
               {
                 index: true,
@@ -95,6 +96,18 @@ export const router = createBrowserRouter([
               {
                 path: 'settings',
                 element: <SettingsPage />,
+              },
+              {
+                path: 'email/mailboxes',
+                element: <MailboxManagementPage />,
+              },
+              {
+                path: 'email/customers',
+                element: <CustomerEmailSettingsPage />,
+              },
+              {
+                path: 'email/ingress-events',
+                element: <IngressEventsPage />,
               },
             ],
           },

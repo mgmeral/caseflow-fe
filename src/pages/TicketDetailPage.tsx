@@ -1,21 +1,23 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTicketDetail } from '@/hooks/useTicketDetail'
+import { useTicketEmailThread } from '@/hooks/useTicketEmails'
 import { useUsers } from '@/hooks/useUsers'
-import { useTemplates } from '@/hooks/useTemplates'
 import { TicketDetailLayout } from '@/components/ticket-detail/TicketDetailLayout'
 import { ConversationThread } from '@/components/ticket-detail/ConversationThread'
+import { EmailThread } from '@/components/ticket-detail/EmailThread'
 import { ComposeArea } from '@/components/ticket-detail/ComposeArea'
 import { TicketSidePanel } from '@/components/ticket-detail/TicketSidePanel'
-import { ReplyComposerModal } from '@/components/ticket-detail/ReplyComposerModal'
+import { EmailReplyComposer } from '@/components/ticket-detail/EmailReplyComposer'
 import { AssignmentModal } from '@/components/modals/AssignmentModal'
 import { TransferModal } from '@/components/modals/TransferModal'
 import { CloseConfirmModal } from '@/components/modals/CloseConfirmModal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ArrowLeft, Paperclip, Ticket, Users, ArrowUpRight, Reply } from 'lucide-react'
+import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, Mail, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 import { useState } from 'react'
-import { format } from 'date-fns'
+import { usePermissions } from '@/hooks/usePermissions'
+import { clsx } from 'clsx'
 
 export function TicketDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -41,14 +43,19 @@ export function TicketDetailPage() {
     isClosing,
   } = useTicketDetail(id)
 
+  const { data: emailThread = [], isLoading: emailThreadLoading } = useTicketEmailThread(id)
+
   const { users, groups } = useUsers()
-  const templatesQuery = useTemplates()
-  const templates = templatesQuery.data ?? []
+  const { canAssignTickets, canTransferTickets, canSendTicketEmailReply, canViewTicketEmail } = usePermissions()
 
   const [showAssign, setShowAssign] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
   const [showClose, setShowClose] = useState(false)
   const [showReply, setShowReply] = useState(false)
+
+  type ThreadTab = 'email' | 'notes'
+  const hasEmailThread = emailThread.length > 0
+  const [activeTab, setActiveTab] = useState<ThreadTab>(hasEmailThread ? 'email' : 'notes')
 
   if (isLoading) {
     return (
@@ -85,10 +92,10 @@ export function TicketDetailPage() {
   const transferableGroups = groups.filter((g) => g.id !== ticket.groupId)
 
   const allMessages = messages ?? []
-  const firstInboundIdx = allMessages.findIndex((m) => m.type === 'public_inbound')
-  const firstInbound = firstInboundIdx >= 0 ? allMessages[firstInboundIdx] : null
   const systemEvents = allMessages.filter((m) => m.type === 'system_event')
-  const conversationMessages = allMessages.filter((m, i) => i !== firstInboundIdx && m.type !== 'system_event')
+  const conversationMessages = allMessages.filter((m) => m.type !== 'system_event')
+
+  const lastInboundEmail = [...emailThread].reverse().find((e) => e.direction === 'INBOUND') ?? null
 
   return (
     <>
@@ -108,70 +115,116 @@ export function TicketDetailPage() {
           <span className="text-gray-700 font-medium truncate">{ticket.subject}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
-          <Button
-            variant="primary"
-            size="sm"
-            leftIcon={<Reply size={14} />}
-            onClick={() => setShowReply(true)}
-          >
-            Reply
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<Users size={14} />}
-            onClick={() => setShowAssign(true)}
-          >
-            Assign
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            leftIcon={<ArrowUpRight size={14} />}
-            onClick={() => setShowTransfer(true)}
-          >
-            Transfer
-          </Button>
+          {canSendTicketEmailReply && (
+            <Button
+              variant="primary"
+              size="sm"
+              leftIcon={<Reply size={14} />}
+              onClick={() => setShowReply(true)}
+            >
+              Email Reply
+            </Button>
+          )}
+          {canAssignTickets && (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Users size={14} />}
+              onClick={() => setShowAssign(true)}
+            >
+              Assign
+            </Button>
+          )}
+          {canTransferTickets && (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<ArrowUpRight size={14} />}
+              onClick={() => setShowTransfer(true)}
+            >
+              Transfer
+            </Button>
+          )}
         </div>
       </div>
 
       <TicketDetailLayout
         left={
           <div>
-            {/* Mail Context box — original inbound email */}
-            <div className="p-6 pb-3">
-              <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                  <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Mail Context</span>
-                  <span className="text-xs text-gray-400">
-                    {ticket.customerName} · {format(new Date(ticket.createdAt), 'MMM d, yyyy HH:mm')}
-                  </span>
-                </div>
-                <div className="px-5 py-4 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap min-h-[140px]">
-                  {firstInbound?.content ?? ticket.subject}
-                </div>
-              </div>
-            </div>
-
-            {/* Attachment strip — visible only when the original email has attachments */}
-            {(firstInbound?.attachments.length ?? 0) > 0 && (
-              <div className="px-6 pb-3">
-                <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg px-4 py-2 flex items-center gap-2 text-xs text-gray-500 justify-center">
-                  <Paperclip size={12} className="text-gray-400 shrink-0" />
-                  <span>{firstInbound!.attachments.join(' · ')}</span>
-                </div>
+            {/* Tab bar: Email Thread vs Notes/Conversation */}
+            {canViewTicketEmail && (
+              <div className="flex bg-gray-50 border-b border-gray-200">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('email')}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'email'
+                      ? 'border-indigo-500 text-indigo-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  <Mail size={14} />
+                  Email Thread
+                  {emailThread.length > 0 && (
+                    <span className="ml-1 bg-indigo-100 text-indigo-600 text-xs font-semibold px-1.5 py-0.5 rounded-full">{emailThread.length}</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('notes')}
+                  className={clsx(
+                    'flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                    activeTab === 'notes'
+                      ? 'border-indigo-500 text-indigo-700'
+                      : 'border-transparent text-gray-500 hover:text-gray-700',
+                  )}
+                >
+                  <MessageSquare size={14} />
+                  Notes & Activity
+                  {conversationMessages.length > 0 && (
+                    <span className="ml-1 bg-gray-200 text-gray-600 text-xs font-semibold px-1.5 py-0.5 rounded-full">{conversationMessages.length}</span>
+                  )}
+                </button>
               </div>
             )}
 
-            {/* Conversation thread (all messages except first inbound) */}
-            <ConversationThread messages={conversationMessages} />
+            {/* Email thread tab */}
+            {activeTab === 'email' && canViewTicketEmail && (
+              emailThreadLoading ? (
+                <div className="p-6">
+                  <table className="w-full"><tbody><SkeletonRow colCount={3} /><SkeletonRow colCount={3} /></tbody></table>
+                </div>
+              ) : (
+                <EmailThread emails={emailThread} />
+              )
+            )}
 
-            <ComposeArea
-              onSendReply={(content) => addReply(content)}
-              onSendNote={(content) => addNote(content)}
-              isSendingReply={isAddingReply}
-              isSendingNote={isAddingNote}
-            />
+            {/* Notes/conversation tab */}
+            {activeTab === 'notes' && (
+              <>
+                <ConversationThread messages={conversationMessages} />
+                <ComposeArea
+                  onSendReply={(content) => addReply(content)}
+                  onSendNote={(content) => addNote(content)}
+                  isSendingReply={isAddingReply}
+                  isSendingNote={isAddingNote}
+                />
+              </>
+            )}
+
+            {/* Fallback when can't see email tab */}
+            {!canViewTicketEmail && (
+              <>
+                <ConversationThread messages={conversationMessages} />
+                <ComposeArea
+                  onSendReply={(content) => addReply(content)}
+                  onSendNote={(content) => addNote(content)}
+                  isSendingReply={isAddingReply}
+                  isSendingNote={isAddingNote}
+                />
+              </>
+            )}
           </div>
         }
         right={
@@ -227,13 +280,12 @@ export function TicketDetailPage() {
         isClosing={isClosing}
       />
 
-      <ReplyComposerModal
+      <EmailReplyComposer
         isOpen={showReply}
         onClose={() => setShowReply(false)}
-        templates={templates}
-        customerName={ticket.customerName}
-        onSend={(content) => addReply(content)}
-        isSending={isAddingReply}
+        ticketId={ticket.id}
+        lastInbound={lastInboundEmail}
+        ticketSubject={ticket.subject}
       />
     </>
   )
