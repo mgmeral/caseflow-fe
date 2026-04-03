@@ -4,7 +4,6 @@ import { useIngressEvents, useIngressEventDetail } from '@/hooks/useIngressEvent
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
 import { ingressEventService, type IngressEventListFilters } from '@/services/ingressEvent.service'
-import type { IngressEventDetail } from '@/types/email.types'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { Button } from '@/components/shared/Button'
@@ -12,22 +11,23 @@ import { Badge } from '@/components/shared/Badge'
 import { Drawer } from '@/components/shared/Drawer'
 import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import {
-  ShieldOff, Search, ChevronLeft, ChevronRight, RefreshCw, ShieldAlert,
-  Unlock, Mail, ExternalLink, AlertTriangle,
+  ShieldOff, Search, ChevronLeft, ChevronRight, RefreshCw,
+  Mail, ExternalLink, AlertTriangle, ShieldAlert, Play,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
 type StatusVariant = 'success' | 'error' | 'warning' | 'info' | 'default'
 
-function statusBadge(status: string): { variant: StatusVariant; label: string } {
+const PROCESSING_STATUSES = ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED', 'FAILED_RETRYABLE', 'QUARANTINED']
+
+function processingBadge(status: string): { variant: StatusVariant; label: string } {
   switch (status) {
-    case 'RECEIVED': return { variant: 'info', label: 'Received' }
-    case 'PARSED': return { variant: 'info', label: 'Parsed' }
-    case 'ROUTED': return { variant: 'success', label: 'Routed' }
+    case 'PENDING': return { variant: 'default', label: 'Pending' }
+    case 'PROCESSING': return { variant: 'info', label: 'Processing' }
+    case 'COMPLETED': return { variant: 'success', label: 'Completed' }
     case 'FAILED': return { variant: 'error', label: 'Failed' }
+    case 'FAILED_RETRYABLE': return { variant: 'warning', label: 'Failed (Retryable)' }
     case 'QUARANTINED': return { variant: 'warning', label: 'Quarantined' }
-    case 'REPLAYED': return { variant: 'info', label: 'Replayed' }
-    case 'RELEASED': return { variant: 'success', label: 'Released' }
     default: return { variant: 'default', label: status }
   }
 }
@@ -40,7 +40,7 @@ export function IngressEventsPage() {
   const [filters, setFilters] = useState<IngressEventListFilters>({ page: 0, size: 20 })
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const { data, isLoading } = useIngressEvents({ ...filters, search: search || undefined, status: statusFilter || undefined })
+  const { data, isLoading } = useIngressEvents({ ...filters, search: search || undefined, processingStatus: statusFilter || undefined })
 
   const events = data?.items ?? []
   const total = data?.total ?? 0
@@ -51,11 +51,11 @@ export function IngressEventsPage() {
   const [selectedId, setSelectedId] = useState('')
   const { data: detail, isLoading: loadingDetail } = useIngressEventDetail(selectedId)
 
-  // Action modals
-  const [replayingId, setReplayingId] = useState<string | null>(null)
+  // Actions
+  const [processId, setProcessId] = useState<string | null>(null)
+  const [releaseId, setReleaseId] = useState<string | null>(null)
   const [quarantineId, setQuarantineId] = useState<string | null>(null)
   const [quarantineReason, setQuarantineReason] = useState('')
-  const [releaseId, setReleaseId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
   if (!canViewIngressEvents) {
@@ -75,17 +75,31 @@ export function IngressEventsPage() {
     if (selectedId) queryClient.invalidateQueries({ queryKey: ['ingress-event', selectedId] })
   }
 
-  const handleReplay = async (id: string) => {
+  const handleProcess = async (id: string) => {
     setActionLoading(true)
     try {
-      await ingressEventService.replay(id)
-      success('Event replayed')
+      await ingressEventService.process(id)
+      success('Event queued for processing')
       invalidateEvents()
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Replay failed')
+      error(err instanceof Error ? err.message : 'Process failed')
     } finally {
       setActionLoading(false)
-      setReplayingId(null)
+      setProcessId(null)
+    }
+  }
+
+  const handleRelease = async (id: string) => {
+    setActionLoading(true)
+    try {
+      await ingressEventService.release(id)
+      success('Event released from quarantine')
+      invalidateEvents()
+    } catch (err) {
+      error(err instanceof Error ? err.message : 'Release failed')
+    } finally {
+      setActionLoading(false)
+      setReleaseId(null)
     }
   }
 
@@ -104,22 +118,6 @@ export function IngressEventsPage() {
       setQuarantineReason('')
     }
   }
-
-  const handleRelease = async (id: string) => {
-    setActionLoading(true)
-    try {
-      await ingressEventService.release(id)
-      success('Event released')
-      invalidateEvents()
-    } catch (err) {
-      error(err instanceof Error ? err.message : 'Release failed')
-    } finally {
-      setActionLoading(false)
-      setReleaseId(null)
-    }
-  }
-
-  const STATUSES = ['', 'RECEIVED', 'PARSED', 'ROUTED', 'FAILED', 'QUARANTINED', 'REPLAYED', 'RELEASED']
 
   return (
     <div className="p-6 space-y-6">
@@ -146,7 +144,7 @@ export function IngressEventsPage() {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
         >
           <option value="">All statuses</option>
-          {STATUSES.filter(Boolean).map((s) => (
+          {PROCESSING_STATUSES.map((s) => (
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
@@ -162,22 +160,23 @@ export function IngressEventsPage() {
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Mailbox</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Sender</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Subject</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Provider</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Source</th>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Received</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Error</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Attempts</th>
+                <th className="px-4 py-3 text-left font-semibold text-gray-600">Failure</th>
                 <th className="px-4 py-3 text-right font-semibold text-gray-600">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
                 <>
-                  <SkeletonRow colCount={8} />
-                  <SkeletonRow colCount={8} />
-                  <SkeletonRow colCount={8} />
+                  <SkeletonRow colCount={9} />
+                  <SkeletonRow colCount={9} />
+                  <SkeletonRow colCount={9} />
                 </>
               ) : events.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12">
+                  <td colSpan={9} className="py-12">
                     <EmptyState
                       icon={<Mail className="w-8 h-8 text-gray-400" />}
                       title="No ingress events"
@@ -187,36 +186,33 @@ export function IngressEventsPage() {
                 </tr>
               ) : (
                 events.map((evt) => {
-                  const badge = statusBadge(evt.status)
+                  const badge = processingBadge(evt.processingStatus)
                   return (
                     <tr key={evt.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setSelectedId(evt.id)}>
                       <td className="px-4 py-3"><Badge variant={badge.variant} size="sm">{badge.label}</Badge></td>
                       <td className="px-4 py-3 text-gray-600 text-xs">{evt.mailboxName ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-700 text-xs truncate max-w-[180px]">{evt.sender ?? '—'}</td>
                       <td className="px-4 py-3 text-gray-700 truncate max-w-[200px]">{evt.subject ?? '—'}</td>
-                      <td className="px-4 py-3"><Badge variant="info" size="sm">{evt.providerType ?? '—'}</Badge></td>
+                      <td className="px-4 py-3"><Badge variant="info" size="sm">{evt.sourceType ?? '—'}</Badge></td>
                       <td className="px-4 py-3 text-xs text-gray-500">{format(new Date(evt.receivedAt), 'MMM d, HH:mm')}</td>
-                      <td className="px-4 py-3 text-xs text-red-500 truncate max-w-[180px]">{evt.lastErrorSummary ?? ''}</td>
+                      <td className="px-4 py-3 text-xs text-gray-600">{evt.processingAttempts ?? 0}</td>
+                      <td className="px-4 py-3 text-xs text-red-500 truncate max-w-[180px]">{evt.failureReason ?? evt.lastError ?? ''}</td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                          {canManageIngressEvents && (
-                            <>
-                              {(evt.status === 'FAILED' || evt.status === 'QUARANTINED') && (
-                                <button onClick={() => setReplayingId(evt.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="Replay">
-                                  <RefreshCw size={13} />
-                                </button>
-                              )}
-                              {evt.status !== 'QUARANTINED' && evt.status !== 'ROUTED' && (
-                                <button onClick={() => setQuarantineId(evt.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-amber-600" title="Quarantine">
-                                  <ShieldAlert size={13} />
-                                </button>
-                              )}
-                              {evt.status === 'QUARANTINED' && (
-                                <button onClick={() => setReleaseId(evt.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-green-600" title="Release">
-                                  <Unlock size={13} />
-                                </button>
-                              )}
-                            </>
+                          {canManageIngressEvents && (evt.processingStatus === 'FAILED' || evt.processingStatus === 'FAILED_RETRYABLE') && (
+                            <button onClick={() => setProcessId(evt.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="Retry processing">
+                              <RefreshCw size={13} />
+                            </button>
+                          )}
+                          {canManageIngressEvents && evt.processingStatus === 'QUARANTINED' && (
+                            <button onClick={() => setReleaseId(evt.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-green-600" title="Release">
+                              <Play size={13} />
+                            </button>
+                          )}
+                          {canManageIngressEvents && evt.processingStatus !== 'COMPLETED' && (
+                            <button onClick={() => { setQuarantineId(evt.id); setQuarantineReason('') }} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-orange-600" title="Quarantine">
+                              <ShieldAlert size={13} />
+                            </button>
                           )}
                         </div>
                       </td>
@@ -257,40 +253,29 @@ export function IngressEventsPage() {
             <div className="space-y-3">
               <DetailRow label="ID" value={detail.id} mono />
               <DetailRow label="Status">
-                <Badge variant={statusBadge(detail.status).variant} size="sm">{statusBadge(detail.status).label}</Badge>
+                <Badge variant={processingBadge(detail.processingStatus).variant} size="sm">{processingBadge(detail.processingStatus).label}</Badge>
               </DetailRow>
-              <DetailRow label="Message ID" value={detail.messageId} mono />
+              <DetailRow label="Source Type" value={detail.sourceType ?? '—'} />
+              <DetailRow label="Source UID" value={detail.sourceUid ?? '—'} mono />
+              <DetailRow label="Internet Message ID" value={detail.internetMessageId ?? '—'} mono />
               <DetailRow label="Subject" value={detail.subject ?? '—'} />
               <DetailRow label="Sender" value={detail.sender ?? '—'} />
               <DetailRow label="Recipients" value={detail.recipients.join(', ') || '—'} />
               {detail.cc.length > 0 && <DetailRow label="CC" value={detail.cc.join(', ')} />}
-              <DetailRow label="Mailbox" value={`${detail.mailboxName ?? '—'} (${detail.mailboxAddress ?? '—'})`} />
-              <DetailRow label="Provider" value={detail.providerType ?? '—'} />
+              <DetailRow label="Mailbox" value={`${detail.mailboxName ?? '—'} (${detail.mailboxEmail ?? '—'})`} />
               <DetailRow label="Received" value={format(new Date(detail.receivedAt), 'yyyy-MM-dd HH:mm:ss')} />
               {detail.processedAt && <DetailRow label="Processed" value={format(new Date(detail.processedAt), 'yyyy-MM-dd HH:mm:ss')} />}
+              <DetailRow label="Attempts" value={String(detail.processingAttempts ?? detail.retryCount)} />
+              {detail.lastAttemptAt && <DetailRow label="Last Attempt" value={format(new Date(detail.lastAttemptAt), 'yyyy-MM-dd HH:mm:ss')} />}
             </div>
 
-            {detail.lastErrorSummary && (
+            {(detail.failureReason || detail.lastError) && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                 <div className="flex items-center gap-1.5 text-red-700 font-medium text-xs mb-1">
-                  <AlertTriangle size={12} /> Last Error
+                  <AlertTriangle size={12} /> Failure Reason
                 </div>
-                <p className="text-xs text-red-600">{detail.lastErrorSummary}</p>
+                <p className="text-xs text-red-600">{detail.failureReason ?? detail.lastError}</p>
               </div>
-            )}
-
-            {detail.quarantineReason && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div className="text-xs font-medium text-amber-700 mb-1">Quarantine Reason</div>
-                <p className="text-xs text-amber-600">{detail.quarantineReason}</p>
-                {detail.quarantinedAt && (
-                  <p className="text-xs text-amber-500 mt-1">Quarantined: {format(new Date(detail.quarantinedAt), 'yyyy-MM-dd HH:mm:ss')}</p>
-                )}
-              </div>
-            )}
-
-            {detail.replayedAt && (
-              <DetailRow label="Replayed At" value={format(new Date(detail.replayedAt), 'yyyy-MM-dd HH:mm:ss')} />
             )}
 
             {detail.relatedTicketId && (
@@ -320,23 +305,21 @@ export function IngressEventsPage() {
             )}
 
             {/* Actions */}
-            {canManageIngressEvents && (
+            {canManageIngressEvents && (detail.processingStatus === 'FAILED' || detail.processingStatus === 'FAILED_RETRYABLE') && (
               <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
-                {(detail.status === 'FAILED' || detail.status === 'QUARANTINED') && (
-                  <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={12} />} onClick={() => setReplayingId(detail.id)}>
-                    Replay
-                  </Button>
-                )}
-                {detail.status !== 'QUARANTINED' && detail.status !== 'ROUTED' && (
-                  <Button variant="secondary" size="sm" leftIcon={<ShieldAlert size={12} />} onClick={() => setQuarantineId(detail.id)}>
-                    Quarantine
-                  </Button>
-                )}
-                {detail.status === 'QUARANTINED' && (
-                  <Button variant="secondary" size="sm" leftIcon={<Unlock size={12} />} onClick={() => setReleaseId(detail.id)}>
-                    Release
-                  </Button>
-                )}
+                <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={12} />} onClick={() => setProcessId(detail.id)}>
+                  Retry Processing
+                </Button>
+                <Button variant="secondary" size="sm" leftIcon={<ShieldAlert size={12} />} onClick={() => { setQuarantineId(detail.id); setQuarantineReason('') }}>
+                  Quarantine
+                </Button>
+              </div>
+            )}
+            {canManageIngressEvents && detail.processingStatus === 'QUARANTINED' && (
+              <div className="flex items-center gap-2 pt-3 border-t border-gray-200">
+                <Button variant="secondary" size="sm" leftIcon={<Play size={12} />} onClick={() => setReleaseId(detail.id)}>
+                  Release
+                </Button>
               </div>
             )}
           </div>
@@ -349,59 +332,50 @@ export function IngressEventsPage() {
         )}
       </Drawer>
 
-      {/* Replay confirmation */}
+      {/* Process confirmation */}
       <ConfirmModal
-        isOpen={replayingId !== null}
-        onClose={() => setReplayingId(null)}
-        title="Replay Ingress Event"
-        message="This will re-process the ingress event through the routing pipeline. Continue?"
-        confirmLabel="Replay"
+        isOpen={processId !== null}
+        onClose={() => setProcessId(null)}
+        title="Process Ingress Event"
+        message="This will process the ingress event through the routing pipeline. Continue?"
+        confirmLabel="Process"
         isLoading={actionLoading}
-        onConfirm={() => replayingId && handleReplay(replayingId)}
+        onConfirm={() => processId && handleProcess(processId)}
       />
-
-      {/* Quarantine with reason */}
-      {quarantineId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 space-y-4">
-            <h3 className="text-sm font-semibold text-gray-900">Quarantine Ingress Event</h3>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Reason *</label>
-              <textarea
-                value={quarantineReason}
-                onChange={(e) => setQuarantineReason(e.target.value)}
-                rows={3}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
-                placeholder="Enter quarantine reason…"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => { setQuarantineId(null); setQuarantineReason('') }}>Cancel</Button>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => quarantineId && handleQuarantine(quarantineId)}
-                isLoading={actionLoading}
-                disabled={!quarantineReason.trim()}
-                className="bg-amber-500 hover:bg-amber-600"
-              >
-                Quarantine
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Release confirmation */}
       <ConfirmModal
         isOpen={releaseId !== null}
         onClose={() => setReleaseId(null)}
         title="Release Quarantined Event"
-        message="This will release the event from quarantine and re-process it. Continue?"
+        message="This will release the event from quarantine and allow it to be processed. Continue?"
         confirmLabel="Release"
         isLoading={actionLoading}
         onConfirm={() => releaseId && handleRelease(releaseId)}
       />
+
+      {/* Quarantine modal */}
+      <ConfirmModal
+        isOpen={quarantineId !== null}
+        onClose={() => { setQuarantineId(null); setQuarantineReason('') }}
+        title="Quarantine Ingress Event"
+        message=""
+        confirmLabel="Quarantine"
+        isDestructive
+        isLoading={actionLoading}
+        onConfirm={() => quarantineId && handleQuarantine(quarantineId)}
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600">This will quarantine the event. Please provide a reason:</p>
+          <textarea
+            value={quarantineReason}
+            onChange={(e) => setQuarantineReason(e.target.value)}
+            rows={3}
+            placeholder="Reason for quarantine…"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+        </div>
+      </ConfirmModal>
     </div>
   )
 }

@@ -4,9 +4,7 @@ import { Button } from '@/components/shared/Button'
 import { usePermissions } from '@/hooks/usePermissions'
 
 interface ComposeAreaProps {
-  onSendReply: (content: string) => void
   onSendNote: (content: string) => void
-  isSendingReply: boolean
   isSendingNote: boolean
 }
 

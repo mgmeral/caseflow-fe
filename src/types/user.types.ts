@@ -59,7 +59,7 @@ export interface User {
    */
   permissionCodes: string[]
   /** Ticket visibility scope */
-  ticketScope: 'ALL' | 'GROUP' | 'OWN'
+  ticketScope: 'ALL' | 'OWN_GROUPS' | 'OWN_AND_OWN_GROUPS' | 'ASSIGNED_ONLY'
   groupIds: string[]
   groupNames: string[]
   adminLevel: number

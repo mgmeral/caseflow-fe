@@ -95,7 +95,17 @@ async function request<T>(
       return undefined as unknown as T
     }
 
-    return response.json() as Promise<T>
+    const contentLength = response.headers?.get?.('content-length')
+    if (contentLength === '0') {
+      return undefined as unknown as T
+    }
+
+    try {
+      return await response.json() as T
+    } catch {
+      // Some successful endpoints (e.g., 202 Accepted) may return an empty body.
+      return undefined as unknown as T
+    }
   } catch (err) {
     clearTimeout(timeoutId)
     if (err instanceof ApiError) throw err

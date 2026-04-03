@@ -48,20 +48,14 @@ export interface AuthMeResponse {
   username: string
   email: string
   fullName: string
-  /** Legacy role enum — kept for backward compat; prefer roleCode for display */
-  role: BackendRole
-  /** Dynamic role record id */
-  roleId?: number | string
-  /** Dynamic role code (e.g. "SENIOR_AGENT") */
-  roleCode?: string
-  /** Human-readable role display name */
-  roleName?: string
-  /** Permission codes granted to this user (e.g. "TICKET_ASSIGN", "REPORT_VIEW") */
-  permissionCodes?: string[]
-  /** Ticket visibility scope: ALL = see all, OWN = own tickets, GROUP = own group */
-  ticketScope?: 'ALL' | 'GROUP' | 'OWN'
-  /** Group IDs the user belongs to */
-  groupIds?: (string | number)[]
+  /** Legacy enum may still appear in mixed environments, but is not the source of truth. */
+  role?: BackendRole
+  roleId: number | string
+  roleCode: string
+  roleName: string
+  permissionCodes: string[]
+  ticketScope: RoleTicketScope
+  groupIds: (string | number)[]
 }
 
 // ---------------------------------------------------------------------------
@@ -145,35 +139,52 @@ export type NoteType = 'INTERNAL' | 'INFO' | 'INVESTIGATION' | 'ESCALATION'
 type ExtensibleEnum<T extends string> = T | (string & {})
 
 export type UnknownSenderPolicy = ExtensibleEnum<
-  | 'ALLOW'
+  | 'MANUAL_REVIEW'
+  | 'CREATE_UNMATCHED_TICKET'
+  | 'IGNORE'
   | 'REJECT'
+  // Backward-compatible legacy values still accepted by FE state.
+  | 'ALLOW'
   | 'QUARANTINE'
   | 'ROUTE_TO_DEFAULT'
   | 'AUTO_CREATE_CONTACT'
 >
 
-export type MailboxProviderType = ExtensibleEnum<
-  | 'SMTP'
-  | 'MICROSOFT_365'
-  | 'GOOGLE_WORKSPACE'
-  | 'GENERIC'
+/** Phase 1 — only IMAP_POLLING is supported */
+export type MailboxSourceType = ExtensibleEnum<'IMAP' | 'WEBHOOK' | 'SMTP_RELAY' | 'IMAP_POLLING'>
+
+export type MailboxAuthType = ExtensibleEnum<'PLAIN' | 'OAUTH2' | 'APP_PASSWORD'>
+
+export type InboundMode = ExtensibleEnum<'POLLING' | 'WEBHOOK'>
+
+export type OutboundMode = ExtensibleEnum<'SMTP' | 'RELAY'>
+
+export type InitialSyncStrategy = ExtensibleEnum<
+  | 'NEW_MESSAGES_ONLY'
+  | 'SCAN_FROM_START'
+  | 'SCAN_LAST_1_DAY'
+  | 'SCAN_LAST_3_DAYS'
+  | 'SCAN_LAST_7_DAYS'
+  | 'START_FROM_LATEST'
+  | 'BACKFILL_ALL'
 >
 
-export type MailboxInboundMode = ExtensibleEnum<'PULL' | 'PUSH' | 'DISABLED'>
+export type PollingStatus = ExtensibleEnum<'IDLE' | 'RUNNING' | 'PAUSED' | 'ERROR'>
 
-export type MailboxOutboundMode = ExtensibleEnum<'SMTP' | 'API' | 'DISABLED'>
-
-export type IngressStatus = ExtensibleEnum<
-  | 'RECEIVED'
-  | 'PARSED'
-  | 'ROUTED'
+export type ProcessingStatus = ExtensibleEnum<
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'COMPLETED'
   | 'FAILED'
-  | 'QUARANTINED'
-  | 'REPLAYED'
-  | 'RELEASED'
+  | 'FAILED_RETRYABLE'
+  | 'REPROCESSING'
 >
 
 export type OutboundDispatchStatus = ExtensibleEnum<
+  | 'PENDING'
+  | 'SENDING'
+  | 'SENT'
+  | 'PERMANENTLY_FAILED'
   | 'QUEUED'
   | 'PROCESSING'
   | 'DISPATCHED'
@@ -181,7 +192,7 @@ export type OutboundDispatchStatus = ExtensibleEnum<
   | 'FAILED'
 >
 
-export type CustomerEmailRoutingRuleMatchType = 'EXACT_EMAIL' | 'DOMAIN_SUFFIX'
+export type SenderMatchType = 'EXACT_EMAIL' | 'DOMAIN' | 'DOMAIN_SUFFIX'
 
 export type TicketEmailDirection = 'INBOUND' | 'OUTBOUND'
 
@@ -347,141 +358,190 @@ export interface EmailDocumentSummaryResponse {
 // ---------------------------------------------------------------------------
 
 export interface MailboxResponse {
-  id: string
+  id: string | number
   name: string
-  emailAddress: string
-  displayName: string | null
-  providerType: MailboxProviderType
-  inboundMode: MailboxInboundMode
-  outboundMode: MailboxOutboundMode
+  displayName?: string | null
+  address?: string
+  providerType?: MailboxSourceType
+  inboundMode?: InboundMode
+  outboundMode?: OutboundMode
   isActive: boolean
-  inboundEnabled: boolean
-  outboundEnabled: boolean
-  defaultGroupId: string | null
-  defaultGroupName: string | null
+  defaultGroupId: string | number | null
   defaultPriority: string | null
-  defaultStatus: string | null
-  unknownSenderPolicy: UnknownSenderPolicy
-  lastInboundSuccessAt: string | null
-  lastOutboundSuccessAt: string | null
-  createdAt: string
-  updatedAt: string
+  smtpHost?: string | null
+  smtpPort?: number | null
+  smtpUsername?: string | null
+  smtpUseSsl?: boolean | null
+  imapHost?: string | null
+  imapPort?: number | null
+  imapUsername?: string | null
+  imapUseSsl?: boolean | null
+  imapFolder?: string | null
+  initialSyncStrategy?: InitialSyncStrategy | null
+  cursorInitStrategy?: InitialSyncStrategy | string | null
+  lastSeenUid?: string | number | null
+  activationState?: string | null
+  pollingEnabled?: boolean
+  pollIntervalSeconds?: number
+  lastPollAt?: string | null
+  lastPollError?: string | null
+  lastSuccessfulInboundAt?: string | null
+  lastSuccessfulOutboundAt?: string | null
+  createdAt?: string | null
+  updatedAt?: string | null
+  pollingStatus?: PollingStatus
 }
 
 export type MailboxListResponse = PagedResponse<MailboxResponse>
 
 export interface CreateMailboxRequest {
   name: string
-  emailAddress: string
   displayName?: string | null
-  providerType: MailboxProviderType
-  inboundMode: MailboxInboundMode
-  outboundMode: MailboxOutboundMode
-  inboundEnabled: boolean
-  outboundEnabled: boolean
-  defaultGroupId?: string | null
+  address: string
+  providerType: MailboxSourceType
+  inboundMode: InboundMode
+  outboundMode: OutboundMode
+  isActive?: boolean
+  defaultGroupId?: number | string | null
   defaultPriority?: string | null
-  defaultStatus?: string | null
-  unknownSenderPolicy: UnknownSenderPolicy
+  smtpHost?: string | null
+  smtpPort?: number | null
+  smtpUsername?: string | null
+  smtpPassword?: string | null
+  smtpUseSsl?: boolean | null
+  imapHost?: string | null
+  imapPort?: number | null
+  imapUsername?: string | null
+  imapPassword?: string | null
+  imapUseSsl?: boolean | null
+  imapFolder?: string | null
+  pollingEnabled?: boolean
+  pollIntervalSeconds?: number
+  initialSyncStrategy?: InitialSyncStrategy
 }
 
 export interface UpdateMailboxRequest extends CreateMailboxRequest {}
 
+export interface MailboxProtocolTestResult {
+  success: boolean
+  message: string
+  testedAt: string
+}
+
+export interface MailboxImapConnectionTestResponse extends MailboxProtocolTestResult {}
+
+export interface MailboxSmtpConnectionTestResponse extends MailboxProtocolTestResult {}
+
+export interface MailboxConnectionTestResponse extends MailboxProtocolTestResult {
+  imap?: MailboxImapConnectionTestResponse | null
+  smtp?: MailboxSmtpConnectionTestResponse | null
+}
+
 export interface CustomerEmailSettingsResponse {
   customerId: string
   customerName?: string | null
-  mailboxId: string | null
-  mailboxName: string | null
-  trustedContactsOnly: boolean
-  autoCreateContact: boolean
+  isActive?: boolean
+  isEnabled: boolean
   allowSubdomains: boolean
   unknownSenderPolicy: UnknownSenderPolicy
   defaultGroupId: string | null
   defaultGroupName: string | null
   defaultPriority: string | null
-  defaultStatus: string | null
   updatedAt: string | null
+  rules?: CustomerEmailRoutingRuleResponse[]
 }
 
 export interface UpsertCustomerEmailSettingsRequest {
-  mailboxId?: string | null
-  trustedContactsOnly: boolean
-  autoCreateContact: boolean
+  isActive?: boolean
+  isEnabled: boolean
   allowSubdomains: boolean
   unknownSenderPolicy: UnknownSenderPolicy
   defaultGroupId?: string | null
   defaultPriority?: string | null
-  defaultStatus?: string | null
 }
 
 export interface CustomerEmailRoutingRuleResponse {
   id: string
   customerId: string
-  matchType: CustomerEmailRoutingRuleMatchType
-  matchValue: string
-  mailboxId: string | null
-  mailboxName: string | null
-  groupId: string | null
-  groupName: string | null
-  priority: string | null
-  status: string | null
+  recipientMailboxId: string | null
+  recipientMailboxName: string | null
+  senderMatchType: SenderMatchType
+  matchValue?: string
+  senderMatchValue: string
+  priority: number
   isActive: boolean
+  notes: string | null
   createdAt: string
   updatedAt: string
 }
 
 export interface UpsertCustomerEmailRoutingRuleRequest {
-  matchType: CustomerEmailRoutingRuleMatchType
-  matchValue: string
-  mailboxId?: string | null
-  groupId?: string | null
-  priority?: string | null
-  status?: string | null
+  recipientMailboxId?: string | null
+  senderMatchType: SenderMatchType
+  matchValue?: string
+  senderMatchValue: string
+  priority: number
   isActive?: boolean
+  notes?: string | null
 }
 
 export interface IngressEventResponse {
-  id: string
-  mailboxId: string | null
-  mailboxName: string | null
-  mailboxAddress: string | null
-  providerType: MailboxProviderType | null
-  messageId: string
-  subject: string | null
-  sender: string | null
-  status: IngressStatus
+  id: string | number
+  publicId?: string
+  mailboxId: string | number | null
+  mailboxName?: string | null
+  mailboxEmail?: string | null
+  sourceType: MailboxSourceType | null
+  sourceUid: string | null
+  internetMessageId?: string | null
+  messageId?: string | null
+  subject?: string | null
+  rawSubject?: string | null
+  sender?: string | null
+  rawFrom?: string | null
+  inReplyTo?: string | null
+  rawReplyTo?: string | null
+  status?: string
+  processingStatus?: ProcessingStatus
   receivedAt: string
   processedAt: string | null
-  lastErrorSummary: string | null
+  failureReason?: string | null
+  lastError: string | null
+  processingAttempts?: number | null
+  lastAttemptAt?: string | null
+  documentId?: string | null
+  ticketId?: string | number | null
 }
 
 export interface IngressEventDetailResponse extends IngressEventResponse {
-  recipients: string[]
-  cc: string[]
-  rawHeaders: Record<string, string>
-  payloadExcerpt: string | null
-  quarantineReason: string | null
-  quarantinedAt: string | null
-  replayedAt: string | null
-  relatedTicketId: string | null
+  recipients?: string[]
+  cc?: string[]
+  rawHeaders?: Record<string, string>
+  payloadExcerpt?: string | null
+  retryCount?: number
+  relatedTicketId?: string | null
 }
 
 export interface TicketEmailAttachmentResponse {
   id: string | null
   fileName: string
   contentType: string | null
-  size: number | null
-  downloadUrl: string | null
+  size?: number | null
+  sizeBytes?: number | null
+  downloadUrl?: string | null
 }
 
 export interface TicketEmailMessageResponse {
-  id: string
-  ticketId: string
+  id: string | number
+  ticketId: string | number
   threadKey: string | null
   messageId: string
   providerMessageId: string | null
   mailboxId: string | null
   mailboxName: string | null
+  sourceEventId?: string | number | null
+  sourceEmailEventId?: string | number | null
+  ingressEventId?: string | number | null
   direction: TicketEmailDirection
   subject: string | null
   from: string | null
@@ -490,11 +550,63 @@ export interface TicketEmailMessageResponse {
   bcc: string[]
   bodyText: string | null
   bodyHtml: string | null
+  sanitizedHtmlBody?: string | null
+  rawHtmlBody?: string | null
   bodyPreview: string | null
   sentAt: string | null
   receivedAt: string | null
+  processingStatus?: ProcessingStatus | null
   dispatchStatus: OutboundDispatchStatus | null
+  attachmentCount?: number | null
   attachments: TicketEmailAttachmentResponse[]
+
+  // Backend thread/detail aliases.
+  fromAddress?: string | null
+  toAddress?: string | null
+  status?: string | null
+  timestamp?: string | null
+}
+
+export interface DispatchResponse {
+  id: string | number
+  ticketId: string | number
+  messageId: string | null
+  mailboxId?: string | number | null
+  mailboxName?: string | null
+  fromAddress: string | null
+  toAddress: string | null
+  subject: string | null
+  status: OutboundDispatchStatus | string
+  attempts?: number | null
+  lastAttemptAt?: string | null
+  sentAt?: string | null
+  failureReason?: string | null
+  scheduledAt?: string | null
+  createdAt?: string | null
+  bodyText?: string | null
+  bodyHtml?: string | null
+  sanitizedHtmlBody?: string | null
+  rawHtmlBody?: string | null
+  bodyPreview?: string | null
+  attachments?: TicketEmailAttachmentResponse[]
+}
+
+export interface EmailThreadItemResponse {
+  direction: 'INBOUND' | 'OUTBOUND'
+  id: string | number
+  mailboxId?: string | number | null
+  mailboxName?: string | null
+  sourceEventId?: string | number | null
+  sourceEmailEventId?: string | number | null
+  ingressEventId?: string | number | null
+  messageId: string | null
+  fromAddress: string | null
+  toAddress: string | null
+  subject: string | null
+  status: string | null
+  timestamp: string | null
+  bodyPreview: string | null
+  attachmentCount?: number | null
 }
 
 export interface SendTicketReplyResponse {
@@ -502,9 +614,69 @@ export interface SendTicketReplyResponse {
   ticketId: string
   outboundEmailId: string | null
   mailboxId: string | null
+  sourceEventId?: string | null
   status: OutboundDispatchStatus
   acceptedAt: string | null
   message: string | null
+}
+
+export interface TicketStatusTransitionListResponse {
+  currentStatus?: string | null
+  allowedTransitions?: string[]
+}
+
+export interface MailTemplateResponse {
+  id: string | number
+  name?: string | null
+  code?: string | null
+  subjectTemplate?: string | null
+  htmlTemplate?: string | null
+  plainTextTemplate?: string | null
+  isActive?: boolean | null
+  isBuiltIn?: boolean | null
+  canEdit?: boolean | null
+  canDelete?: boolean | null
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface MailTemplateRequest {
+  name: string
+  code: string
+  subjectTemplate: string
+  htmlTemplate: string
+  plainTextTemplate: string
+  isActive: boolean
+}
+
+export interface MailTemplatePreviewRequest {
+  variables?: Record<string, string>
+}
+
+export interface MailTemplatePreviewResponse {
+  subject?: string | null
+  renderedSubject?: string | null
+  html?: string | null
+  renderedHtml?: string | null
+  plainText?: string | null
+  renderedPlainText?: string | null
+}
+
+export interface NotificationResponse {
+  id: string | number
+  title?: string | null
+  message?: string | null
+  content?: string | null
+  type?: string | null
+  isRead?: boolean | null
+  createdAt?: string | null
+  ticketId?: string | number | null
+  ticketNo?: string | null
+}
+
+export interface UnreadCountResponse {
+  unreadCount?: number | null
+  count?: number | null
 }
 
 // ---------------------------------------------------------------------------

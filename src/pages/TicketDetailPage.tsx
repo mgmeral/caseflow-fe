@@ -1,10 +1,11 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTicketDetail } from '@/hooks/useTicketDetail'
-import { useTicketEmailThread } from '@/hooks/useTicketEmails'
+import { useTicketEmailDetailByDirection, useTicketEmailThread } from '@/hooks/useTicketEmails'
 import { useUsers } from '@/hooks/useUsers'
 import { TicketDetailLayout } from '@/components/ticket-detail/TicketDetailLayout'
 import { ConversationThread } from '@/components/ticket-detail/ConversationThread'
 import { EmailThread } from '@/components/ticket-detail/EmailThread'
+import { EmailDetailDrawer } from '@/components/ticket-detail/EmailDetailDrawer'
 import { ComposeArea } from '@/components/ticket-detail/ComposeArea'
 import { TicketSidePanel } from '@/components/ticket-detail/TicketSidePanel'
 import { EmailReplyComposer } from '@/components/ticket-detail/EmailReplyComposer'
@@ -13,11 +14,14 @@ import { TransferModal } from '@/components/modals/TransferModal'
 import { CloseConfirmModal } from '@/components/modals/CloseConfirmModal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, Mail, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, Mail, MessageSquare, Paperclip } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { clsx } from 'clsx'
+import type { TicketEmailMessage } from '@/types/email.types'
+import { AttachmentViewerModal } from '@/components/ticket-detail/AttachmentViewerModal'
+import { buildTicketActivityItems } from '@/lib/ticketActivity'
 
 export function TicketDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -27,8 +31,8 @@ export function TicketDetailPage() {
     ticket,
     messages,
     transfers,
+    allowedStatusTransitions,
     isLoading,
-    addReply,
     addNote,
     assign,
     changeStatus,
@@ -36,7 +40,6 @@ export function TicketDetailPage() {
     transfer,
     close,
     reopen,
-    isAddingReply,
     isAddingNote,
     isAssigning,
     isTransferring,
@@ -52,10 +55,25 @@ export function TicketDetailPage() {
   const [showTransfer, setShowTransfer] = useState(false)
   const [showClose, setShowClose] = useState(false)
   const [showReply, setShowReply] = useState(false)
+  const [selectedEmail, setSelectedEmail] = useState<TicketEmailMessage | null>(null)
+  const [showTicketAttachments, setShowTicketAttachments] = useState(false)
+
+  const { data: selectedEmailDetail, isLoading: selectedEmailLoading } = useTicketEmailDetailByDirection(
+    id,
+    selectedEmail?.id ?? '',
+    selectedEmail?.direction,
+  )
 
   type ThreadTab = 'email' | 'notes'
   const hasEmailThread = emailThread.length > 0
   const [activeTab, setActiveTab] = useState<ThreadTab>(hasEmailThread ? 'email' : 'notes')
+
+  const allMessages = messages ?? []
+  const conversationMessages = allMessages.filter((message) => message.type !== 'system_event')
+  const activityItems = useMemo(
+    () => ticket ? buildTicketActivityItems({ ticket, messages: allMessages, transfers: transfers ?? [], emailThread }) : [],
+    [allMessages, emailThread, ticket, transfers],
+  )
 
   if (isLoading) {
     return (
@@ -91,11 +109,11 @@ export function TicketDetailPage() {
   const fromGroup = groups.find((g) => g.id === ticket.groupId)
   const transferableGroups = groups.filter((g) => g.id !== ticket.groupId)
 
-  const allMessages = messages ?? []
-  const systemEvents = allMessages.filter((m) => m.type === 'system_event')
-  const conversationMessages = allMessages.filter((m) => m.type !== 'system_event')
-
   const lastInboundEmail = [...emailThread].reverse().find((e) => e.direction === 'INBOUND') ?? null
+  const selectedInboundEmail = (selectedEmailDetail ?? selectedEmail)?.direction === 'INBOUND'
+    ? (selectedEmailDetail ?? selectedEmail)
+    : null
+  const replySourceEmail = selectedInboundEmail ?? lastInboundEmail
 
   return (
     <>
@@ -112,6 +130,15 @@ export function TicketDetailPage() {
           <span className="text-gray-300">/</span>
           <span className="text-gray-400 shrink-0">{ticket.ticketNo}</span>
           <span className="text-gray-300">/</span>
+          {ticket.isUnread && (
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700 shrink-0"
+              aria-label="Unread ticket"
+            >
+              <span className="h-2 w-2 rounded-full bg-indigo-500" aria-hidden="true" />
+              Unread
+            </span>
+          )}
           <span className="text-gray-700 font-medium truncate">{ticket.subject}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-4">
@@ -189,6 +216,34 @@ export function TicketDetailPage() {
               </div>
             )}
 
+            {ticket.attachments.length > 0 && (
+              <div className="border-b border-gray-200 bg-gray-50/70 px-5 py-4">
+                <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-700">
+                  <div className="flex items-center gap-2">
+                    <Paperclip size={14} className="text-gray-500" />
+                    Ticket Attachments
+                  </div>
+                  <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800" onClick={() => setShowTicketAttachments(true)}>
+                    <Paperclip size={12} />
+                    View Attachments
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ticket.attachments.slice(0, 3).map((attachment) => (
+                    <span key={attachment.id} className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700">
+                      <Paperclip size={10} className="text-gray-400" />
+                      {attachment.fileName}
+                    </span>
+                  ))}
+                  {ticket.attachments.length > 3 && (
+                    <span className="inline-flex items-center rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-500">
+                      +{ticket.attachments.length - 3} more
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Email thread tab */}
             {activeTab === 'email' && canViewTicketEmail && (
               emailThreadLoading ? (
@@ -196,7 +251,7 @@ export function TicketDetailPage() {
                   <table className="w-full"><tbody><SkeletonRow colCount={3} /><SkeletonRow colCount={3} /></tbody></table>
                 </div>
               ) : (
-                <EmailThread emails={emailThread} />
+                <EmailThread emails={emailThread} onSelectEmail={(email) => setSelectedEmail(email)} />
               )
             )}
 
@@ -205,9 +260,7 @@ export function TicketDetailPage() {
               <>
                 <ConversationThread messages={conversationMessages} />
                 <ComposeArea
-                  onSendReply={(content) => addReply(content)}
                   onSendNote={(content) => addNote(content)}
-                  isSendingReply={isAddingReply}
                   isSendingNote={isAddingNote}
                 />
               </>
@@ -218,9 +271,7 @@ export function TicketDetailPage() {
               <>
                 <ConversationThread messages={conversationMessages} />
                 <ComposeArea
-                  onSendReply={(content) => addReply(content)}
                   onSendNote={(content) => addNote(content)}
-                  isSendingReply={isAddingReply}
                   isSendingNote={isAddingNote}
                 />
               </>
@@ -230,8 +281,8 @@ export function TicketDetailPage() {
         right={
           <TicketSidePanel
             ticket={ticket}
-            transfers={transfers ?? []}
-            systemEvents={systemEvents}
+            allowedTransitions={allowedStatusTransitions}
+            activities={activityItems}
             onChangeStatus={(status) => changeStatus({ status })}
             onChangePriority={(priority) => changePriority(priority)}
             onAssign={() => setShowAssign(true)}
@@ -276,7 +327,7 @@ export function TicketDetailPage() {
         isOpen={showClose}
         onClose={() => setShowClose(false)}
         ticketNo={ticket.ticketNo}
-        onConfirm={(sendNotification) => close(sendNotification)}
+        onConfirm={close}
         isClosing={isClosing}
       />
 
@@ -284,8 +335,28 @@ export function TicketDetailPage() {
         isOpen={showReply}
         onClose={() => setShowReply(false)}
         ticketId={ticket.id}
-        lastInbound={lastInboundEmail}
+        lastInbound={replySourceEmail}
         ticketSubject={ticket.subject}
+      />
+
+      <EmailDetailDrawer
+        isOpen={selectedEmail !== null}
+        onClose={() => setSelectedEmail(null)}
+        email={selectedEmailDetail ?? selectedEmail}
+        isLoading={selectedEmailLoading}
+      />
+
+      <AttachmentViewerModal
+        isOpen={showTicketAttachments}
+        onClose={() => setShowTicketAttachments(false)}
+        title="Ticket Attachments"
+        attachments={ticket.attachments.map((attachment) => ({
+          id: attachment.id,
+          fileName: attachment.fileName,
+          contentType: attachment.contentType,
+          size: attachment.size,
+          downloadUrl: attachment.downloadUrl,
+        }))}
       />
     </>
   )

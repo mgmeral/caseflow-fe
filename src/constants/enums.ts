@@ -1,11 +1,21 @@
 export const TICKET_STATUS_LABELS: Record<string, string> = {
+  NEW: 'New',
+  TRIAGED: 'Triaged',
+  ASSIGNED: 'Assigned',
+  IN_PROGRESS: 'In Progress',
+  WAITING_CUSTOMER: 'Waiting Customer',
+  RESOLVED: 'Resolved',
+  CLOSED: 'Closed',
+  REOPENED: 'Reopened',
+
+  // Legacy aliases
   new: 'New',
-  open: 'Open',
+  open: 'Assigned',
   in_progress: 'In Progress',
-  pending: 'Pending',
+  pending: 'Waiting Customer',
   resolved: 'Resolved',
   closed: 'Closed',
-  transferred: 'Transferred',
+  transferred: 'Assigned',
 }
 
 export const TICKET_PRIORITY_LABELS: Record<string, string> = {
@@ -13,14 +23,6 @@ export const TICKET_PRIORITY_LABELS: Record<string, string> = {
   high: 'High',
   medium: 'Medium',
   low: 'Low',
-}
-
-export const CUSTOMER_SEGMENT_LABELS: Record<string, string> = {
-  bank: 'Bank',
-  insurance: 'Insurance',
-  leasing: 'Leasing',
-  corporate: 'Corporate',
-  other: 'Other',
 }
 
 export const USER_ROLE_LABELS: Record<string, string> = {
@@ -33,7 +35,6 @@ export const USER_ROLE_LABELS: Record<string, string> = {
 }
 
 // Convenient aliases
-export const SEGMENT_LABELS = CUSTOMER_SEGMENT_LABELS
 export const ROLE_LABELS = USER_ROLE_LABELS
 
 export const PAGE_SIZE_OPTIONS = [10, 25, 50, 100]

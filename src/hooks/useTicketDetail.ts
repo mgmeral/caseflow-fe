@@ -1,13 +1,17 @@
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ticketService } from '@/services/ticket.service'
 import { useAuthStore } from '@/store/auth.store'
 import { useToast } from './useToast'
+import { useMarkTicketNotificationsRead } from './useNotifications'
 import type { TicketStatus, TicketPriority } from '@/types/ticket.types'
 
 export function useTicketDetail(id: string) {
   const queryClient = useQueryClient()
   const currentUser = useAuthStore((s) => s.currentUser)
   const { success, error: toastError } = useToast()
+  const [hasMarkedNotificationsRead, setHasMarkedNotificationsRead] = useState(false)
+  const markTicketNotificationsReadMutation = useMarkTicketNotificationsRead()
 
   const ticketQuery = useQuery({
     queryKey: ['ticket', id],
@@ -28,10 +32,19 @@ export function useTicketDetail(id: string) {
     enabled: !!id,
   })
 
+  const transitionsQuery = useQuery({
+    queryKey: ['ticket-status-transitions', id],
+    queryFn: () => ticketService.getAllowedTransitions(id),
+    enabled: !!id,
+    staleTime: 15_000,
+    retry: false,
+  })
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', id] })
     queryClient.invalidateQueries({ queryKey: ['ticket-messages', id] })
     queryClient.invalidateQueries({ queryKey: ['ticket-transfers', id] })
+    queryClient.invalidateQueries({ queryKey: ['ticket-status-transitions', id] })
     queryClient.invalidateQueries({ queryKey: ['tickets'] })
   }
 
@@ -106,7 +119,7 @@ export function useTicketDetail(id: string) {
   })
 
   const closeMutation = useMutation({
-    mutationFn: (sendNotification: boolean) => ticketService.close(id, sendNotification),
+    mutationFn: () => ticketService.close(id),
     onSuccess: () => {
       success('Ticket kapatıldı')
       invalidate()
@@ -123,10 +136,24 @@ export function useTicketDetail(id: string) {
     onError: () => toastError('Ticket yeniden açılamadı'),
   })
 
+  useEffect(() => {
+    setHasMarkedNotificationsRead(false)
+  }, [id])
+
+  useEffect(() => {
+    if (!ticketQuery.data?.isUnread || hasMarkedNotificationsRead || markTicketNotificationsReadMutation.isPending) {
+      return
+    }
+
+    setHasMarkedNotificationsRead(true)
+    markTicketNotificationsReadMutation.mutate(id)
+  }, [hasMarkedNotificationsRead, id, markTicketNotificationsReadMutation, ticketQuery.data?.isUnread])
+
   return {
     ticket: ticketQuery.data,
     messages: messagesQuery.data ?? [],
     transfers: transfersQuery.data ?? [],
+    allowedStatusTransitions: ticketQuery.data?.allowedTransitions ?? transitionsQuery.data ?? [],
     isLoading: ticketQuery.isLoading,
     isError: ticketQuery.isError,
     assign: assignMutation.mutate,
@@ -139,7 +166,7 @@ export function useTicketDetail(id: string) {
     isAddingNote: addNoteMutation.isPending,
     transfer: transferMutation.mutate,
     isTransferring: transferMutation.isPending,
-    close: closeMutation.mutate,
+    close: () => closeMutation.mutate(),
     isClosing: closeMutation.isPending,
     reopen: reopenMutation.mutate,
     isReopening: reopenMutation.isPending,

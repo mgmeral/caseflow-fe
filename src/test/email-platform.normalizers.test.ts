@@ -26,21 +26,34 @@ describe('email-platform normalizers', () => {
       const response: MailboxResponse = {
         id: 'mb-1',
         name: 'Support',
-        emailAddress: 'support@example.com',
+        address: 'support@example.com',
         displayName: 'Support Team',
-        providerType: 'SMTP',
+        providerType: 'IMAP',
         inboundMode: 'POLLING',
-        outboundMode: 'DIRECT',
+        outboundMode: 'SMTP',
+        imapHost: 'imap.example.com',
+        imapPort: 993,
+        imapUsername: 'support@example.com',
+        imapUseSsl: true,
+        imapFolder: 'INBOX',
+        smtpHost: null,
+        smtpPort: null,
+        smtpUsername: null,
+        smtpUseSsl: null,
+        initialSyncStrategy: 'START_FROM_LATEST',
+        cursorInitStrategy: 'BACKFILL_ALL',
+        lastSeenUid: 42,
+        activationState: 'ACTIVE',
+        pollingEnabled: true,
+        pollIntervalSeconds: 60,
+        pollingStatus: 'RUNNING',
+        lastPollAt: '2025-01-15T10:00:00Z',
+        lastPollError: null,
         isActive: true,
-        inboundEnabled: true,
-        outboundEnabled: true,
         defaultGroupId: 'grp-1',
-        defaultGroupName: 'Tier 1',
         defaultPriority: 'MEDIUM',
-        defaultStatus: 'OPEN',
-        unknownSenderPolicy: 'CREATE_CONTACT',
-        lastInboundSuccessAt: '2025-01-15T10:00:00Z',
-        lastOutboundSuccessAt: null,
+        lastSuccessfulInboundAt: '2025-01-15T10:00:00Z',
+        lastSuccessfulOutboundAt: null,
         createdAt: '2024-12-01T00:00:00Z',
         updatedAt: '2025-01-15T10:00:00Z',
       }
@@ -49,34 +62,47 @@ describe('email-platform normalizers', () => {
 
       expect(result.id).toBe('mb-1')
       expect(result.name).toBe('Support')
-      expect(result.emailAddress).toBe('support@example.com')
+      expect(result.address).toBe('support@example.com')
       expect(result.displayName).toBe('Support Team')
-      expect(result.providerType).toBe('SMTP')
+      expect(result.providerType).toBe('IMAP')
       expect(result.isActive).toBe(true)
       expect(result.defaultGroupId).toBe('grp-1')
-      expect(result.unknownSenderPolicy).toBe('CREATE_CONTACT')
-      expect(result.lastOutboundSuccessAt).toBeNull()
+      expect(result.pollingStatus).toBe('RUNNING')
+      expect(result.initialSyncStrategy).toBe('NEW_MESSAGES_ONLY')
+      expect(result.cursorInitStrategy).toBe('SCAN_FROM_START')
+      expect(result.lastSeenUid).toBe('42')
+      expect(result.activationState).toBe('ACTIVE')
     })
 
     it('normalizes null optionals to null', () => {
       const response: MailboxResponse = {
         id: 'mb-2',
         name: 'Billing',
-        emailAddress: 'billing@example.com',
+        address: 'billing@example.com',
         displayName: null,
-        providerType: 'GRAPH_API',
-        inboundMode: 'WEBHOOK',
-        outboundMode: 'QUEUED',
+        providerType: 'IMAP',
+        inboundMode: 'POLLING',
+        outboundMode: 'SMTP',
+        imapHost: 'imap.example.com',
+        imapPort: 993,
+        imapUsername: 'billing@example.com',
+        imapUseSsl: true,
+        imapFolder: 'INBOX',
+        smtpHost: null,
+        smtpPort: null,
+        smtpUsername: null,
+        smtpUseSsl: null,
+        initialSyncStrategy: null,
+        pollingEnabled: false,
+        pollIntervalSeconds: 120,
+        pollingStatus: 'IDLE',
+        lastPollAt: null,
+        lastPollError: null,
         isActive: false,
-        inboundEnabled: false,
-        outboundEnabled: false,
         defaultGroupId: null,
-        defaultGroupName: null,
         defaultPriority: null,
-        defaultStatus: null,
-        unknownSenderPolicy: 'REJECT',
-        lastInboundSuccessAt: null,
-        lastOutboundSuccessAt: null,
+        lastSuccessfulInboundAt: null,
+        lastSuccessfulOutboundAt: null,
         createdAt: '2024-12-01T00:00:00Z',
         updatedAt: '2024-12-01T00:00:00Z',
       }
@@ -85,9 +111,8 @@ describe('email-platform normalizers', () => {
 
       expect(result.displayName).toBeNull()
       expect(result.defaultGroupId).toBeNull()
-      expect(result.defaultGroupName).toBeNull()
       expect(result.defaultPriority).toBeNull()
-      expect(result.lastInboundSuccessAt).toBeNull()
+      expect(result.lastPollAt).toBeNull()
     })
   })
 
@@ -96,12 +121,15 @@ describe('email-platform normalizers', () => {
       const response = {
         items: [
           {
-            id: 'mb-1', name: 'A', emailAddress: 'a@test.com', displayName: null,
-            providerType: 'SMTP' as const, inboundMode: 'POLLING' as const, outboundMode: 'DIRECT' as const,
-            isActive: true, inboundEnabled: true, outboundEnabled: true,
-            defaultGroupId: null, defaultGroupName: null, defaultPriority: null, defaultStatus: null,
-            unknownSenderPolicy: 'REJECT' as const,
-            lastInboundSuccessAt: null, lastOutboundSuccessAt: null,
+            id: 'mb-1', name: 'A', address: 'a@test.com', displayName: null,
+            providerType: 'IMAP' as const, inboundMode: 'POLLING' as const, outboundMode: 'SMTP' as const,
+            imapHost: 'imap.test.com', imapPort: 993, imapUsername: 'a@test.com', imapUseSsl: true, imapFolder: 'INBOX',
+            smtpHost: null, smtpPort: null, smtpUsername: null, smtpUseSsl: null, initialSyncStrategy: 'START_FROM_LATEST' as const,
+            pollingEnabled: true, pollIntervalSeconds: 60,
+            pollingStatus: 'IDLE' as const, lastPollAt: null, lastPollError: null,
+            isActive: true,
+            defaultGroupId: null, defaultPriority: null,
+            lastSuccessfulInboundAt: null, lastSuccessfulOutboundAt: null,
             createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
           },
         ],
@@ -124,12 +152,15 @@ describe('email-platform normalizers', () => {
     it('handles plain array response', () => {
       const response: MailboxResponse[] = [
         {
-          id: 'mb-1', name: 'A', emailAddress: 'a@test.com', displayName: null,
-          providerType: 'SMTP', inboundMode: 'POLLING', outboundMode: 'DIRECT',
-          isActive: true, inboundEnabled: true, outboundEnabled: true,
-          defaultGroupId: null, defaultGroupName: null, defaultPriority: null, defaultStatus: null,
-          unknownSenderPolicy: 'REJECT',
-          lastInboundSuccessAt: null, lastOutboundSuccessAt: null,
+          id: 'mb-1', name: 'A', address: 'a@test.com', displayName: null,
+          providerType: 'IMAP', inboundMode: 'POLLING', outboundMode: 'SMTP',
+          imapHost: 'imap.test.com', imapPort: 993, imapUsername: 'a@test.com', imapUseSsl: true, imapFolder: 'INBOX',
+          smtpHost: null, smtpPort: null, smtpUsername: null, smtpUseSsl: null, initialSyncStrategy: 'START_FROM_LATEST',
+          pollingEnabled: true, pollIntervalSeconds: 60,
+          pollingStatus: 'IDLE', lastPollAt: null, lastPollError: null,
+          isActive: true,
+          defaultGroupId: null, defaultPriority: null,
+          lastSuccessfulInboundAt: null, lastSuccessfulOutboundAt: null,
           createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
         },
       ]
@@ -154,16 +185,12 @@ describe('email-platform normalizers', () => {
       const response: CustomerEmailSettingsResponse = {
         customerId: 'cust-1',
         customerName: 'Acme Corp',
-        mailboxId: 'mb-1',
-        mailboxName: 'Support',
-        trustedContactsOnly: true,
-        autoCreateContact: false,
+        isEnabled: true,
         allowSubdomains: true,
         unknownSenderPolicy: 'QUARANTINE',
         defaultGroupId: 'grp-1',
         defaultGroupName: 'Tier 1',
         defaultPriority: 'HIGH',
-        defaultStatus: 'OPEN',
         updatedAt: '2025-01-01T00:00:00Z',
       }
 
@@ -171,8 +198,8 @@ describe('email-platform normalizers', () => {
 
       expect(result.customerId).toBe('cust-1')
       expect(result.customerName).toBe('Acme Corp')
-      expect(result.trustedContactsOnly).toBe(true)
-      expect(result.autoCreateContact).toBe(false)
+      expect(result.isEnabled).toBe(true)
+      expect(result.allowSubdomains).toBe(true)
       expect(result.unknownSenderPolicy).toBe('QUARANTINE')
     })
   })
@@ -182,15 +209,13 @@ describe('email-platform normalizers', () => {
       const response: CustomerEmailRoutingRuleResponse = {
         id: 'rule-1',
         customerId: 'cust-1',
-        matchType: 'EXACT_EMAIL',
-        matchValue: 'vip@acme.com',
-        mailboxId: 'mb-1',
-        mailboxName: 'VIP',
-        groupId: 'grp-2',
-        groupName: 'VIP Team',
-        priority: 'CRITICAL',
-        status: 'OPEN',
+        senderMatchType: 'EXACT_EMAIL',
+        senderMatchValue: 'vip@acme.com',
+        recipientMailboxId: 'mb-1',
+        recipientMailboxName: 'VIP',
+        priority: 10,
         isActive: true,
+        notes: 'High priority VIP rule',
         createdAt: '2025-01-01T00:00:00Z',
         updatedAt: '2025-01-01T00:00:00Z',
       }
@@ -198,9 +223,12 @@ describe('email-platform normalizers', () => {
       const result = normalizeCustomerEmailRoutingRule(response)
 
       expect(result.id).toBe('rule-1')
-      expect(result.matchType).toBe('EXACT_EMAIL')
-      expect(result.matchValue).toBe('vip@acme.com')
+      expect(result.senderMatchType).toBe('EXACT_EMAIL')
+      expect(result.senderMatchValue).toBe('vip@acme.com')
+      expect(result.recipientMailboxId).toBe('mb-1')
+      expect(result.priority).toBe(10)
       expect(result.isActive).toBe(true)
+      expect(result.notes).toBe('High priority VIP rule')
     })
   })
 
@@ -210,23 +238,26 @@ describe('email-platform normalizers', () => {
         id: 'ing-1',
         mailboxId: 'mb-1',
         mailboxName: 'Support',
-        mailboxAddress: 'support@test.com',
-        providerType: 'SMTP',
-        messageId: '<msg-123@mail.com>',
+        mailboxEmail: 'support@test.com',
+        sourceType: 'IMAP_POLLING',
+        sourceUid: '12345',
+        internetMessageId: '<msg-123@mail.com>',
         subject: 'Help needed',
         sender: 'user@test.com',
-        status: 'ROUTED',
+        processingStatus: 'COMPLETED',
         receivedAt: '2025-01-10T08:00:00Z',
         processedAt: '2025-01-10T08:00:05Z',
-        lastErrorSummary: null,
+        lastError: null,
       }
 
       const result = normalizeIngressEvent(response)
 
       expect(result.id).toBe('ing-1')
-      expect(result.status).toBe('ROUTED')
+      expect(result.processingStatus).toBe('COMPLETED')
+      expect(result.sourceType).toBe('IMAP_POLLING')
+      expect(result.internetMessageId).toBe('<msg-123@mail.com>')
       expect(result.sender).toBe('user@test.com')
-      expect(result.lastErrorSummary).toBeNull()
+      expect(result.lastError).toBeNull()
     })
   })
 
@@ -236,33 +267,32 @@ describe('email-platform normalizers', () => {
         id: 'ing-2',
         mailboxId: 'mb-1',
         mailboxName: 'Support',
-        mailboxAddress: 'support@test.com',
-        providerType: 'SMTP',
-        messageId: '<msg-456@mail.com>',
+        mailboxEmail: 'support@test.com',
+        sourceType: 'IMAP_POLLING',
+        sourceUid: '67890',
+        internetMessageId: '<msg-456@mail.com>',
         subject: 'Urgent',
         sender: 'boss@test.com',
-        status: 'QUARANTINED',
+        processingStatus: 'FAILED',
         receivedAt: '2025-01-11T09:00:00Z',
         processedAt: null,
-        lastErrorSummary: 'Spam detected',
+        lastError: 'Spam detected',
         recipients: ['support@test.com'],
         cc: ['admin@test.com'],
         rawHeaders: { 'X-Spam-Score': '9.5' },
         payloadExcerpt: 'Buy now...',
-        quarantineReason: 'High spam score',
-        quarantinedAt: '2025-01-11T09:00:01Z',
-        replayedAt: null,
         relatedTicketId: null,
+        retryCount: 2,
       }
 
       const result = normalizeIngressEventDetail(response)
 
-      expect(result.status).toBe('QUARANTINED')
+      expect(result.processingStatus).toBe('FAILED')
+      expect(result.sourceUid).toBe('67890')
       expect(result.recipients).toEqual(['support@test.com'])
       expect(result.cc).toEqual(['admin@test.com'])
       expect(result.rawHeaders).toEqual({ 'X-Spam-Score': '9.5' })
-      expect(result.quarantineReason).toBe('High spam score')
-      expect(result.replayedAt).toBeNull()
+      expect(result.retryCount).toBe(2)
       expect(result.relatedTicketId).toBeNull()
     })
   })
@@ -277,6 +307,7 @@ describe('email-platform normalizers', () => {
         providerMessageId: 'prov-123',
         mailboxId: 'mb-1',
         mailboxName: 'Support',
+        sourceEventId: 'evt-1',
         direction: 'INBOUND',
         subject: 'Issue report',
         from: 'customer@test.com',
@@ -303,6 +334,7 @@ describe('email-platform normalizers', () => {
       expect(result.attachments).toHaveLength(1)
       expect(result.attachments[0].fileName).toBe('screenshot.png')
       expect(result.attachments[0].downloadUrl).toBe('/api/attachments/att-1')
+      expect(result.sourceEventId).toBe('evt-1')
     })
 
     it('maps outbound message with dispatch status', () => {

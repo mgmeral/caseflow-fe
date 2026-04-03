@@ -1,4 +1,14 @@
 export type TicketStatus =
+  // Backend enum values (source of truth)
+  | 'NEW'
+  | 'TRIAGED'
+  | 'ASSIGNED'
+  | 'IN_PROGRESS'
+  | 'WAITING_CUSTOMER'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'REOPENED'
+  // Legacy FE aliases kept for backward compatibility
   | 'new'
   | 'open'
   | 'in_progress'
@@ -27,7 +37,6 @@ export interface Ticket {
   subject: string
   customerId: string
   customerName: string
-  customerSegment: string
   groupId: string
   groupName: string
   assignedUserId: string | null
@@ -48,6 +57,19 @@ export interface Ticket {
   messageCount: number
   internalNoteCount: number
   tags: string[]
+  allowedTransitions?: TicketStatus[]
+  attachments: TicketAttachment[]
+}
+
+export interface TicketAttachment {
+  id: string
+  ticketId: string | null
+  emailId: string | null
+  fileName: string
+  contentType: string | null
+  size: number | null
+  downloadUrl: string | null
+  uploadedAt: string | null
 }
 
 export interface TicketMessage {
@@ -72,6 +94,27 @@ export interface TransferRecord {
   reason: string
   note: string | null
   createdAt: string
+}
+
+export interface TicketActivityItem {
+  id: string
+  kind:
+    | 'created'
+    | 'status_changed'
+    | 'assigned'
+    | 'transferred'
+    | 'note_added'
+    | 'reply_queued'
+    | 'reply_sending'
+    | 'reply_sent'
+    | 'reply_failed'
+    | 'template_used'
+    | 'customer_reply'
+    | 'system'
+  actor: string | null
+  timestamp: string
+  summary: string
+  detail?: string | null
 }
 
 export interface TicketFilters {

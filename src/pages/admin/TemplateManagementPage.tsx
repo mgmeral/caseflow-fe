@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, FileText, ShieldOff, Search, ChevronDown } from 'lucide-react'
-import { clsx } from 'clsx'
+import { useMemo, useState } from 'react'
+import DOMPurify from 'dompurify'
+import { format } from 'date-fns'
+import { Plus, Pencil, Trash2, ToggleLeft, ToggleRight, FileText, ShieldOff, Search, Eye } from 'lucide-react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/shared/Button'
@@ -8,39 +9,32 @@ import { Badge } from '@/components/shared/Badge'
 import { Modal } from '@/components/shared/Modal'
 import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { useTemplates, useCreateTemplate, useUpdateTemplate, useDeleteTemplate } from '@/hooks/useTemplates'
-import { useGroupsQuery } from '@/hooks/useUsers'
-import type { TicketTemplate } from '@/types/user.types'
-import { USE_MOCKS } from '@/lib/env'
-
-type TemplateType = 'public_reply' | 'internal_note'
-type Language = 'tr' | 'en'
-type FilterType = 'all' | TemplateType
+import { useTemplates, useCreateTemplate, useUpdateTemplate, useDeleteTemplate, useTemplatePreview } from '@/hooks/useTemplates'
+import type { MailTemplate } from '@/types/template.types'
+import { getTemplateSaveErrorMessage } from '@/services/template.service'
 
 interface TemplateFormState {
   name: string
-  subject: string
-  content: string
-  type: TemplateType
-  groupId: string
-  language: Language
+  code: string
+  subjectTemplate: string
+  htmlTemplate: string
+  plainTextTemplate: string
+  isActive: boolean
 }
 
 const EMPTY_FORM: TemplateFormState = {
   name: '',
-  subject: '',
-  content: '',
-  type: 'public_reply',
-  groupId: '',
-  language: 'tr',
+  code: '',
+  subjectTemplate: '',
+  htmlTemplate: '',
+  plainTextTemplate: '',
+  isActive: true,
 }
 
-function TypeBadge({ type }: { type: TemplateType }) {
-  return type === 'public_reply' ? (
-    <Badge variant="info" size="sm">Müşteri Yanıtı</Badge>
-  ) : (
-    <Badge variant="warning" size="sm">İç Not</Badge>
-  )
+function formatTimestamp(value: string | null) {
+  if (!value) return '—'
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : format(date, 'MMM d, yyyy HH:mm')
 }
 
 export function TemplateManagementPage() {
@@ -48,19 +42,18 @@ export function TemplateManagementPage() {
   const { success, error } = useToast()
 
   const templatesQuery = useTemplates()
-  const groupsQuery = useGroupsQuery()
   const createMutation = useCreateTemplate()
   const updateMutation = useUpdateTemplate()
   const deleteMutation = useDeleteTemplate()
+  const [previewTemplateId, setPreviewTemplateId] = useState<string | null>(null)
+  const previewQuery = useTemplatePreview(previewTemplateId, !!previewTemplateId)
 
   const templates = templatesQuery.data ?? []
-  const groups = groupsQuery.data ?? []
 
   const [search, setSearch] = useState('')
-  const [filterType, setFilterType] = useState<FilterType>('all')
 
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
-  const [editingTemplate, setEditingTemplate] = useState<TicketTemplate | null>(null)
+  const [editingTemplate, setEditingTemplate] = useState<MailTemplate | null>(null)
   const [form, setForm] = useState<TemplateFormState>(EMPTY_FORM)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -77,29 +70,17 @@ export function TemplateManagementPage() {
     )
   }
 
-  // Template management is not supported by the current backend.
-  // In real mode, return a clear "not available" screen instead of a broken UI.
-  if (!USE_MOCKS) {
-    return (
-      <div className="p-6">
-        <EmptyState
-          icon={<FileText className="w-8 h-8 text-gray-400" />}
-          title="Templates — Not Available in Real Mode"
-          description="Template management requires mock mode. Set VITE_USE_MOCKS=true in .env.local to use this feature."
-        />
-      </div>
-    )
-  }
-
   // --- Derived ---
-  const filtered = templates.filter((t) => {
-    const matchSearch =
-      !search ||
-      t.name.toLowerCase().includes(search.toLowerCase()) ||
-      t.subject.toLowerCase().includes(search.toLowerCase())
-    const matchType = filterType === 'all' || t.type === filterType
-    return matchSearch && matchType
-  })
+  const filtered = useMemo(
+    () => templates.filter((template) => {
+      const value = search.trim().toLowerCase()
+      if (!value) return true
+
+      return template.code.toLowerCase().includes(value)
+        || template.subjectTemplate.toLowerCase().includes(value)
+    }),
+    [search, templates],
+  )
 
   // --- Handlers ---
   const openCreate = () => {
@@ -108,16 +89,16 @@ export function TemplateManagementPage() {
     setModalMode('create')
   }
 
-  const openEdit = (t: TicketTemplate) => {
+  const openEdit = (template: MailTemplate) => {
     setForm({
-      name: t.name,
-      subject: t.subject,
-      content: t.content,
-      type: t.type,
-      groupId: t.groupId ?? '',
-      language: t.language,
+      name: template.name,
+      code: template.code,
+      subjectTemplate: template.subjectTemplate,
+      htmlTemplate: template.htmlTemplate,
+      plainTextTemplate: template.plainTextTemplate,
+      isActive: template.isActive,
     })
-    setEditingTemplate(t)
+    setEditingTemplate(template)
     setModalMode('edit')
   }
 
@@ -128,36 +109,31 @@ export function TemplateManagementPage() {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.subject.trim() || !form.content.trim()) return
+    if (!form.name.trim() || !form.code.trim() || !form.subjectTemplate.trim() || !form.htmlTemplate.trim()) return
+
+    const payload = {
+      name: form.name.trim(),
+      code: form.code.trim(),
+      subjectTemplate: form.subjectTemplate.trim(),
+      htmlTemplate: form.htmlTemplate.trim(),
+      plainTextTemplate: form.plainTextTemplate.trim(),
+      isActive: form.isActive,
+    }
+
     try {
       if (modalMode === 'create') {
-        await createMutation.mutateAsync({
-          name: form.name.trim(),
-          subject: form.subject.trim(),
-          content: form.content.trim(),
-          type: form.type,
-          groupId: form.groupId || null,
-          language: form.language,
-          isActive: true,
-        })
+        await createMutation.mutateAsync(payload)
         success('Şablon oluşturuldu')
       } else if (editingTemplate) {
         await updateMutation.mutateAsync({
           id: editingTemplate.id,
-          data: {
-            name: form.name.trim(),
-            subject: form.subject.trim(),
-            content: form.content.trim(),
-            type: form.type,
-            groupId: form.groupId || null,
-            language: form.language,
-          },
+          data: payload,
         })
         success('Şablon güncellendi')
       }
       closeModal()
-    } catch {
-      error('Şablon kaydedilemedi')
+    } catch (cause) {
+      error(getTemplateSaveErrorMessage(cause))
     }
   }
 
@@ -165,10 +141,20 @@ export function TemplateManagementPage() {
     const tpl = templates.find((t) => t.id === id)
     if (!tpl) return
     try {
-      await updateMutation.mutateAsync({ id, data: { isActive: !tpl.isActive } })
+      await updateMutation.mutateAsync({
+        id,
+        data: {
+          name: tpl.name,
+          code: tpl.code,
+          subjectTemplate: tpl.subjectTemplate,
+          htmlTemplate: tpl.htmlTemplate,
+          plainTextTemplate: tpl.plainTextTemplate,
+          isActive: !tpl.isActive,
+        },
+      })
       success(tpl.isActive ? 'Şablon devre dışı bırakıldı' : 'Şablon aktif edildi')
     } catch {
-      error('Güncelleme başarısız oldu')
+      error('Güncelleme başarısız oldu.')
     }
   }
 
@@ -178,12 +164,12 @@ export function TemplateManagementPage() {
       await deleteMutation.mutateAsync(deletingId)
       success('Şablon silindi')
     } catch {
-      error('Silme işlemi başarısız oldu')
+      error('Silme işlemi başarısız oldu.')
     }
     setDeletingId(null)
   }
 
-  const isFormValid = form.name.trim() && form.subject.trim() && form.content.trim()
+  const isFormValid = form.name.trim() && form.code.trim() && form.subjectTemplate.trim() && form.htmlTemplate.trim()
 
   return (
     <div className="p-6 space-y-5">
@@ -217,23 +203,6 @@ export function TemplateManagementPage() {
             className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
           />
         </div>
-        <div className="flex gap-1">
-          {(['all', 'public_reply', 'internal_note'] as const).map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilterType(f)}
-              className={clsx(
-                'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
-                filterType === f
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
-              )}
-            >
-              {f === 'all' ? 'Tümü' : f === 'public_reply' ? 'Müşteri Yanıtı' : 'İç Not'}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Table */}
@@ -249,22 +218,25 @@ export function TemplateManagementPage() {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Şablon Adı
+                  Ad
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Kod
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Konu
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Tür
+                  İçerik
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Grup
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Dil
+                  Sistem
                 </th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   Durum
+                </th>
+                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  Güncellendi
                 </th>
                 <th className="px-4 py-3" />
               </tr>
@@ -273,24 +245,31 @@ export function TemplateManagementPage() {
               {filtered.map((tpl) => (
                 <tr key={tpl.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-4 py-3">
-                    <span className="font-medium text-gray-800">{tpl.name}</span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{tpl.subject}</td>
-                  <td className="px-4 py-3">
-                    <TypeBadge type={tpl.type} />
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">
-                    {tpl.groupId
-                      ? (groups.find((g) => g.id === tpl.groupId)?.name ?? tpl.groupId)
-                      : <span className="text-gray-300">—</span>}
+                    <div className="font-medium text-gray-800">{tpl.name}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-xs text-gray-500 uppercase">{tpl.language}</span>
+                    <div className="font-medium text-gray-800">{tpl.code}</div>
+                  </td>
+                  <td className="px-4 py-3 text-gray-600 max-w-[260px] truncate">{tpl.subjectTemplate}</td>
+                  <td className="px-4 py-3 text-xs text-gray-500">
+                    <div className="flex gap-1.5">
+                      {tpl.htmlTemplate && <Badge variant="info" size="sm">HTML</Badge>}
+                      {tpl.plainTextTemplate && <Badge variant="outline" size="sm">Text</Badge>}
+                      {!tpl.htmlTemplate && !tpl.plainTextTemplate && <span>—</span>}
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    {tpl.isBuiltIn ? (
+                      <Badge variant="warning" size="sm">Built-in</Badge>
+                    ) : (
+                      <span className="text-xs text-gray-400">Custom</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <button
                       type="button"
                       onClick={() => handleToggleActive(tpl.id)}
+                      disabled={!tpl.canEdit}
                       className="flex items-center gap-1.5 text-xs"
                       title={tpl.isActive ? 'Devre dışı bırak' : 'Aktif et'}
                     >
@@ -307,12 +286,22 @@ export function TemplateManagementPage() {
                       )}
                     </button>
                   </td>
+                  <td className="px-4 py-3 text-xs text-gray-500">{formatTimestamp(tpl.updatedAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
                       <button
                         type="button"
-                        onClick={() => openEdit(tpl)}
+                        onClick={() => setPreviewTemplateId(tpl.id)}
                         className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                        title="Önizleme"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEdit(tpl)}
+                        disabled={!tpl.canEdit}
+                        className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                         title="Düzenle"
                       >
                         <Pencil size={14} />
@@ -320,7 +309,8 @@ export function TemplateManagementPage() {
                       <button
                         type="button"
                         onClick={() => setDeletingId(tpl.id)}
-                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors"
+                        disabled={!tpl.canDelete}
+                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                         title="Sil"
                       >
                         <Trash2 size={14} />
@@ -358,101 +348,130 @@ export function TemplateManagementPage() {
         }
       >
         <div className="space-y-4 p-1">
-          {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Şablon Adı <span className="text-red-500">*</span>
+              Ad <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              placeholder="ör. Genel Karşılama"
+              placeholder="ör. Ticket Reply Acknowledgement"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
             />
           </div>
 
-          {/* Subject */}
           <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
-              E-posta Konusu <span className="text-red-500">*</span>
+              Kod <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              value={form.subject}
-              onChange={(e) => setForm((f) => ({ ...f, subject: e.target.value }))}
+              value={form.code}
+              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              placeholder="ör. TICKET_REPLY_ACK"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              Konu Şablonu <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.subjectTemplate}
+              onChange={(e) => setForm((f) => ({ ...f, subjectTemplate: e.target.value }))}
               placeholder="ör. Destek Talebiniz Alındı"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
             />
           </div>
 
-          {/* Type + Language row */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Tür</label>
-              <div className="relative">
-                <select
-                  value={form.type}
-                  onChange={(e) => setForm((f) => ({ ...f, type: e.target.value as TemplateType }))}
-                  className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 bg-white"
-                >
-                  <option value="public_reply">Müşteri Yanıtı</option>
-                  <option value="internal_note">İç Not</option>
-                </select>
-                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">HTML Şablonu</label>
+              <textarea
+                value={form.htmlTemplate}
+                onChange={(e) => setForm((f) => ({ ...f, htmlTemplate: e.target.value }))}
+                placeholder="HTML template"
+                rows={10}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+              />
+              <p className="mt-1 text-xs text-gray-400">Backend bu alanı zorunlu istiyor.</p>
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Dil</label>
-              <div className="relative">
-                <select
-                  value={form.language}
-                  onChange={(e) => setForm((f) => ({ ...f, language: e.target.value as Language }))}
-                  className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 bg-white"
-                >
-                  <option value="tr">Türkçe</option>
-                  <option value="en">İngilizce</option>
-                </select>
-                <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-              </div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Plain Text Şablonu</label>
+              <textarea
+                value={form.plainTextTemplate}
+                onChange={(e) => setForm((f) => ({ ...f, plainTextTemplate: e.target.value }))}
+                placeholder="Plain text template"
+                rows={10}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+              />
             </div>
           </div>
 
-          {/* Group */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              Grup <span className="text-gray-400 font-normal">(isteğe bağlı)</span>
-            </label>
-            <div className="relative">
-              <select
-                value={form.groupId}
-                onChange={(e) => setForm((f) => ({ ...f, groupId: e.target.value }))}
-                className="w-full appearance-none border border-gray-300 rounded-lg px-3 py-2 text-sm pr-8 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 bg-white"
-              >
-                <option value="">Tüm Gruplar</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>{g.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-          </div>
-
-          {/* Content */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">
-              İçerik <span className="text-red-500">*</span>
-            </label>
-            <textarea
-              value={form.content}
-              onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-              placeholder="Şablon içeriğini buraya yazın…"
-              rows={8}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+          <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.isActive}
+              onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
-            <p className="text-xs text-gray-400 mt-1">{form.content.length} karakter</p>
-          </div>
+            Şablon aktif
+          </label>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!previewTemplateId}
+        onClose={() => setPreviewTemplateId(null)}
+        title="Şablon Önizleme"
+        size="xl"
+      >
+        {previewQuery.isLoading ? (
+          <div className="text-sm text-gray-500">Önizleme yükleniyor...</div>
+        ) : previewQuery.isError ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            Önizleme alınamadı.
+          </div>
+        ) : previewQuery.data ? (
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Rendered Subject</div>
+              <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">
+                {previewQuery.data.subject || '—'}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">HTML</div>
+                <div className="min-h-[16rem] rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
+                  {previewQuery.data.html ? (
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewQuery.data.html) }}
+                    />
+                  ) : (
+                    <span className="text-gray-400">HTML preview is empty.</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Plain Text</div>
+                <div className="min-h-[16rem] rounded-lg border border-gray-200 bg-slate-950 p-3 text-sm text-slate-100">
+                  {previewQuery.data.plainText ? (
+                    <pre className="whitespace-pre-wrap font-sans">{previewQuery.data.plainText}</pre>
+                  ) : (
+                    <span className="text-slate-400">Plain text preview is empty.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       {/* Delete Confirm */}
@@ -461,7 +480,7 @@ export function TemplateManagementPage() {
         onClose={() => setDeletingId(null)}
         onConfirm={handleDelete}
         title="Şablonu Sil"
-        message={`"${templates.find((t) => t.id === deletingId)?.name ?? ''}" şablonunu kalıcı olarak silmek istediğinizden emin misiniz?`}
+        message={`"${templates.find((t) => t.id === deletingId)?.code ?? ''}" şablonunu kalıcı olarak silmek istediğinizden emin misiniz?`}
         confirmLabel="Sil"
         isDestructive
         isLoading={deleteMutation.isPending}

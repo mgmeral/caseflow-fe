@@ -13,26 +13,26 @@ vi.mock('@/store/auth.store', () => ({
 const { usePermissions } = await import('@/hooks/usePermissions')
 
 describe('usePermissions – email platform permissions', () => {
-  it('grants mailbox management with MAILBOX_MANAGE', () => {
-    mockAuthState.currentUser = { permissionCodes: ['MAILBOX_MANAGE'] }
+  it('grants email config view with EMAIL_CONFIG_VIEW', () => {
+    mockAuthState.currentUser = { permissionCodes: ['EMAIL_CONFIG_VIEW'] }
     const { result } = renderHook(() => usePermissions())
 
-    expect(result.current.canManageMailboxes).toBe(true)
+    expect(result.current.canViewEmailConfig).toBe(true)
+    expect(result.current.canManageEmailConfig).toBe(false)
     expect(result.current.canAccessEmailAdmin).toBe(true)
-    expect(result.current.canManageCustomerEmail).toBe(false)
   })
 
-  it('grants customer email management with CUSTOMER_EMAIL_MANAGE', () => {
-    mockAuthState.currentUser = { permissionCodes: ['CUSTOMER_EMAIL_MANAGE'] }
+  it('grants email config manage (implies view) with EMAIL_CONFIG_MANAGE', () => {
+    mockAuthState.currentUser = { permissionCodes: ['EMAIL_CONFIG_MANAGE'] }
     const { result } = renderHook(() => usePermissions())
 
-    expect(result.current.canManageCustomerEmail).toBe(true)
+    expect(result.current.canViewEmailConfig).toBe(true)
+    expect(result.current.canManageEmailConfig).toBe(true)
     expect(result.current.canAccessEmailAdmin).toBe(true)
-    expect(result.current.canManageMailboxes).toBe(false)
   })
 
-  it('grants ingress event view via INGRESS_EVENT_VIEW', () => {
-    mockAuthState.currentUser = { permissionCodes: ['INGRESS_EVENT_VIEW'] }
+  it('grants ingress event view via EMAIL_OPERATIONS_VIEW', () => {
+    mockAuthState.currentUser = { permissionCodes: ['EMAIL_OPERATIONS_VIEW'] }
     const { result } = renderHook(() => usePermissions())
 
     expect(result.current.canViewIngressEvents).toBe(true)
@@ -40,8 +40,8 @@ describe('usePermissions – email platform permissions', () => {
     expect(result.current.canAccessEmailAdmin).toBe(true)
   })
 
-  it('grants ingress event manage (implies view)', () => {
-    mockAuthState.currentUser = { permissionCodes: ['INGRESS_EVENT_MANAGE'] }
+  it('grants ingress event manage (implies view) via EMAIL_OPERATIONS_MANAGE', () => {
+    mockAuthState.currentUser = { permissionCodes: ['EMAIL_OPERATIONS_MANAGE'] }
     const { result } = renderHook(() => usePermissions())
 
     expect(result.current.canViewIngressEvents).toBe(true)
@@ -57,29 +57,27 @@ describe('usePermissions – email platform permissions', () => {
     expect(result.current.canSendTicketEmailReply).toBe(false)
   })
 
-  it('grants ticket email view and reply via REPLY_PUBLIC (backward compat)', () => {
-    mockAuthState.currentUser = { permissionCodes: ['REPLY_PUBLIC'] }
+  it('grants ticket email reply via TICKET_EMAIL_REPLY_SEND', () => {
+    mockAuthState.currentUser = { permissionCodes: ['TICKET_EMAIL_REPLY_SEND'] }
     const { result } = renderHook(() => usePermissions())
 
-    expect(result.current.canViewTicketEmail).toBe(true)
     expect(result.current.canSendTicketEmailReply).toBe(true)
-    expect(result.current.canAddPublicReply).toBe(true)
+    expect(result.current.canViewTicketEmail).toBe(false)
   })
 
-  it('grants ticket email reply via TICKET_EMAIL_REPLY', () => {
-    mockAuthState.currentUser = { permissionCodes: ['TICKET_EMAIL_REPLY'] }
+  it('grants public reply with CUSTOMER_REPLY_SEND', () => {
+    mockAuthState.currentUser = { permissionCodes: ['CUSTOMER_REPLY_SEND'] }
     const { result } = renderHook(() => usePermissions())
 
-    expect(result.current.canSendTicketEmailReply).toBe(true)
-    expect(result.current.canViewTicketEmail).toBe(true)
+    expect(result.current.canAddPublicReply).toBe(true)
   })
 
   it('returns all email flags false when no permissions', () => {
     mockAuthState.currentUser = { permissionCodes: [] }
     const { result } = renderHook(() => usePermissions())
 
-    expect(result.current.canManageMailboxes).toBe(false)
-    expect(result.current.canManageCustomerEmail).toBe(false)
+    expect(result.current.canViewEmailConfig).toBe(false)
+    expect(result.current.canManageEmailConfig).toBe(false)
     expect(result.current.canViewIngressEvents).toBe(false)
     expect(result.current.canManageIngressEvents).toBe(false)
     expect(result.current.canViewTicketEmail).toBe(false)
@@ -88,7 +86,7 @@ describe('usePermissions – email platform permissions', () => {
   })
 
   it('canAccessEmailAdmin is true with any email admin permission', () => {
-    for (const code of ['MAILBOX_MANAGE', 'CUSTOMER_EMAIL_MANAGE', 'INGRESS_EVENT_VIEW', 'INGRESS_EVENT_MANAGE']) {
+    for (const code of ['EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE', 'EMAIL_OPERATIONS_VIEW', 'EMAIL_OPERATIONS_MANAGE']) {
       mockAuthState.currentUser = { permissionCodes: [code] }
       const { result } = renderHook(() => usePermissions())
       expect(result.current.canAccessEmailAdmin).toBe(true)

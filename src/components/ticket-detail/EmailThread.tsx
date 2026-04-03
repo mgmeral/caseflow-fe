@@ -5,9 +5,17 @@ import {
   CheckCircle2, ExternalLink,
 } from 'lucide-react'
 import { clsx } from 'clsx'
-import DOMPurify from 'dompurify'
 import type { TicketEmailMessage } from '@/types/email.types'
 import { Badge } from '@/components/shared/Badge'
+import { AttachmentViewerModal } from './AttachmentViewerModal'
+
+function getDisplayHtml(email: TicketEmailMessage): string | null {
+  return email.sanitizedHtmlBody ?? null
+}
+
+function getDisplayText(email: TicketEmailMessage): string | null {
+  return email.bodyText ?? email.bodyPreview ?? null
+}
 
 interface EmailThreadProps {
   emails: TicketEmailMessage[]
@@ -17,22 +25,27 @@ interface EmailThreadProps {
 function dispatchStatusDisplay(status: string | null) {
   switch (status) {
     case 'QUEUED': return { icon: <Clock size={10} />, label: 'Queued', color: 'text-gray-500' }
-    case 'PROCESSING': return { icon: <Clock size={10} />, label: 'Processing', color: 'text-blue-500' }
+    case 'PROCESSING':
+    case 'SENDING':
+      return { icon: <Clock size={10} />, label: 'Sending', color: 'text-blue-500' }
+    case 'SENT': return { icon: <CheckCircle2 size={10} />, label: 'Sent', color: 'text-green-600' }
     case 'DISPATCHED': return { icon: <CheckCircle2 size={10} />, label: 'Dispatched', color: 'text-green-600' }
     case 'DELIVERED': return { icon: <CheckCircle2 size={10} />, label: 'Delivered', color: 'text-green-600' }
-    case 'FAILED': return { icon: <AlertCircle size={10} />, label: 'Failed', color: 'text-red-500' }
+    case 'FAILED':
+    case 'PERMANENTLY_FAILED':
+      return { icon: <AlertCircle size={10} />, label: 'Failed', color: 'text-red-500' }
     default: return null
   }
 }
 
 function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: () => void }) {
   const [expanded, setExpanded] = useState(false)
+  const [showAttachments, setShowAttachments] = useState(false)
   const isInbound = email.direction === 'INBOUND'
 
   const timestamp = email.receivedAt ?? email.sentAt ?? ''
-  const body = email.bodyHtml ?? email.bodyText ?? email.bodyPreview ?? ''
-  const hasHtml = !!email.bodyHtml
-  const hasFullBody = !!email.bodyHtml || !!email.bodyText
+  const htmlContent = getDisplayHtml(email)
+  const textContent = getDisplayText(email)
 
   const dispatch = !isInbound ? dispatchStatusDisplay(email.dispatchStatus) : null
 
@@ -44,10 +57,17 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
       )}
     >
       {/* Header — clickable to expand */}
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         className="w-full text-left px-4 py-3 flex items-center justify-between hover:bg-gray-50/50 transition-colors"
         onClick={() => setExpanded((e) => !e)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setExpanded((v) => !v)
+          }
+        }}
       >
         <div className="flex items-center gap-2 min-w-0">
           {isInbound ? (
@@ -65,14 +85,28 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
+          {onSelect && (
+            <button
+              type="button"
+              aria-label="Open email detail"
+              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"
+              onClick={(e) => {
+                e.stopPropagation()
+                onSelect()
+              }}
+            >
+              <ExternalLink size={11} />
+              Detail
+            </button>
+          )}
           {dispatch && (
             <span className={clsx('inline-flex items-center gap-1 text-xs', dispatch.color)}>
               {dispatch.icon} {dispatch.label}
             </span>
           )}
-          {email.attachments.length > 0 && (
+          {email.attachmentCount > 0 && (
             <span className="inline-flex items-center gap-0.5 text-gray-400 text-xs">
-              <Paperclip size={10} /> {email.attachments.length}
+              <Paperclip size={10} /> {email.attachmentCount}
             </span>
           )}
           <span className="text-xs text-gray-400">
@@ -80,7 +114,7 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
           </span>
           {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
         </div>
-      </button>
+      </div>
 
       {/* Preview — always shown */}
       {!expanded && email.bodyPreview && (
@@ -107,41 +141,40 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
 
           {/* Body */}
           <div className="px-4 py-3">
-            {hasHtml ? (
-              <div
-                className="prose prose-sm max-w-none text-gray-800 overflow-x-auto"
-                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(email.bodyHtml!) }}
-              />
-            ) : hasFullBody ? (
-              <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans">{email.bodyText}</pre>
+            {htmlContent ? (
+              <div className="prose prose-sm max-w-none text-gray-800 overflow-x-auto" dangerouslySetInnerHTML={{ __html: htmlContent }} />
+            ) : textContent ? (
+              <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans">{textContent}</pre>
             ) : (
               <p className="text-sm text-gray-400 italic">No body content available.</p>
             )}
           </div>
 
           {/* Attachments */}
-          {email.attachments.length > 0 && (
+          {email.attachmentCount > 0 && (
             <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/40">
-              <div className="text-xs font-medium text-gray-500 mb-1">Attachments</div>
-              <div className="flex flex-wrap gap-2">
-                {email.attachments.map((att, idx) => (
-                  <span key={att.id ?? idx} className="inline-flex items-center gap-1 text-xs bg-white border border-gray-200 rounded px-2 py-1 text-gray-600">
-                    <Paperclip size={10} className="text-gray-400 shrink-0" />
-                    {att.downloadUrl ? (
-                      <a href={att.downloadUrl} className="text-indigo-600 hover:underline" target="_blank" rel="noopener noreferrer">
-                        {att.fileName}
-                      </a>
-                    ) : (
-                      att.fileName
-                    )}
-                    {att.size != null && <span className="text-gray-400">({(att.size / 1024).toFixed(0)}KB)</span>}
-                  </span>
-                ))}
-              </div>
+              <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800" onClick={() => setShowAttachments(true)}>
+                <Paperclip size={12} />
+                View Attachments
+              </button>
             </div>
           )}
         </div>
       )}
+
+      <AttachmentViewerModal
+        isOpen={showAttachments}
+        onClose={() => setShowAttachments(false)}
+        title="Email Attachments"
+        attachments={email.attachments.map((att) => ({
+          id: att.id,
+          fileName: att.fileName,
+          contentType: att.contentType,
+          size: att.sizeBytes ?? att.size,
+          downloadUrl: att.downloadUrl,
+        }))}
+        unavailableMessage="Attachment metadata is not available for this message."
+      />
     </div>
   )
 }

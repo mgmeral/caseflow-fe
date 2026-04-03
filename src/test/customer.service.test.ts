@@ -1,0 +1,100 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mockGet = vi.hoisted(() => vi.fn())
+const mockPost = vi.hoisted(() => vi.fn())
+const mockPut = vi.hoisted(() => vi.fn())
+const mockPatch = vi.hoisted(() => vi.fn())
+
+vi.mock('@/services/api.client', () => ({
+  apiClient: {
+    get: mockGet,
+    post: mockPost,
+    put: mockPut,
+    patch: mockPatch,
+    delete: vi.fn(),
+  },
+}))
+
+vi.mock('@/services/normalizers', () => ({
+  normalizeTicket: (raw: Record<string, unknown>) => ({ id: String(raw.id ?? 't1') }),
+}))
+
+const { customerService } = await import('@/services/customer.service')
+
+describe('customerService persistence contract', () => {
+  beforeEach(() => {
+    mockGet.mockReset()
+    mockPost.mockReset()
+    mockPut.mockReset()
+    mockPatch.mockReset()
+  })
+
+  it('lists customers from backend and maps fields', async () => {
+    mockGet.mockResolvedValueOnce([
+      {
+        id: 1,
+        name: 'Akbank',
+        code: 'AKBANK',
+        isActive: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-02T00:00:00Z',
+      },
+    ])
+
+    const result = await customerService.getAll('ak')
+
+    expect(mockGet).toHaveBeenCalledWith('/customers?search=ak')
+    expect(result).toEqual([
+      {
+        id: '1',
+        name: 'Akbank',
+        code: 'AKBANK',
+        isActive: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-02T00:00:00Z',
+      },
+    ])
+  })
+
+  it('creates and updates customer via backend', async () => {
+    mockPost.mockResolvedValueOnce({
+      id: 5,
+      name: 'Akbank',
+      code: 'AKBANK',
+      isActive: true,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-01T00:00:00Z',
+    })
+    mockPut.mockResolvedValueOnce({
+      id: 5,
+      name: 'Akbank Updated',
+      code: 'AKBANK',
+      isActive: true,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-03T00:00:00Z',
+    })
+
+    await customerService.create({ name: 'Akbank', code: 'AKBANK' })
+    await customerService.update('5', { name: 'Akbank Updated', code: 'AKBANK' })
+
+    expect(mockPost).toHaveBeenCalledWith('/customers', { name: 'Akbank', code: 'AKBANK' })
+    expect(mockPut).toHaveBeenCalledWith('/customers/5', { name: 'Akbank Updated', code: 'AKBANK' })
+  })
+
+  it('activates and deactivates customer via backend', async () => {
+    mockPatch.mockResolvedValue({
+      id: 5,
+      name: 'Akbank',
+      code: 'AKBANK',
+      isActive: true,
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-03T00:00:00Z',
+    })
+
+    await customerService.activate('5')
+    await customerService.deactivate('5')
+
+    expect(mockPatch).toHaveBeenNthCalledWith(1, '/customers/5/activate', {})
+    expect(mockPatch).toHaveBeenNthCalledWith(2, '/customers/5/deactivate', {})
+  })
+})

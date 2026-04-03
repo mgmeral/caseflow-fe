@@ -1,66 +1,117 @@
-import type { TicketTemplate } from '@/types/user.types'
-import { ApiError } from './api.client'
-import { USE_MOCKS } from '@/lib/env'
-import { mockTemplates, getMockDelay } from '@/mock'
+﻿import { apiClient, ApiError, type FieldViolation } from './api.client'
+import type {
+  MailTemplatePreviewRequest,
+  MailTemplatePreviewResponse,
+  MailTemplateRequest,
+  MailTemplateResponse,
+  PagedResponse,
+} from '@/types/api.types'
+import type {
+  MailTemplate,
+  MailTemplatePreview,
+  MailTemplateUpsertInput,
+} from '@/types/template.types'
 
-let _mockTemplates = [...mockTemplates]
+function toText(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
 
-const mockService = {
-  getAll: async (): Promise<TicketTemplate[]> => {
-    await getMockDelay()
-    return [..._mockTemplates]
+function toNullableText(value: unknown): string | null {
+  return typeof value === 'string' ? value : null
+}
+
+function normalizeTemplate(raw: MailTemplateResponse): MailTemplate {
+  const isBuiltIn = raw.isBuiltIn === true
+  const canEdit = typeof raw.canEdit === 'boolean' ? raw.canEdit : !isBuiltIn
+  const canDelete = typeof raw.canDelete === 'boolean' ? raw.canDelete : !isBuiltIn
+
+  return {
+    id: String(raw.id),
+    name: toText(raw.name, toText(raw.code)),
+    code: toText(raw.code),
+    subjectTemplate: toText(raw.subjectTemplate),
+    htmlTemplate: toText(raw.htmlTemplate),
+    plainTextTemplate: toText(raw.plainTextTemplate),
+    isActive: raw.isActive !== false,
+    isBuiltIn,
+    canEdit,
+    canDelete,
+    createdAt: toNullableText(raw.createdAt),
+    updatedAt: toNullableText(raw.updatedAt),
+  }
+}
+
+function toRequestBody(input: MailTemplateUpsertInput): MailTemplateRequest {
+  return {
+    name: input.name.trim(),
+    code: input.code.trim(),
+    subjectTemplate: input.subjectTemplate.trim(),
+    htmlTemplate: input.htmlTemplate.trim(),
+    plainTextTemplate: input.plainTextTemplate.trim(),
+    isActive: input.isActive,
+  }
+}
+
+export function getTemplateSaveErrorMessage(cause: unknown): string {
+  if (cause instanceof Error && 'violations' in cause) {
+    const apiError = cause as ApiError
+    const nameViolation = apiError.violations?.find((item: FieldViolation) => item.field === 'name')
+    if (nameViolation) return 'Şablon adı zorunlu.'
+
+    const htmlViolation = apiError.violations?.find((item: FieldViolation) => item.field === 'htmlTemplate')
+    if (htmlViolation) return 'HTML şablonu boş bırakılamaz.'
+
+    if (apiError.violations && apiError.violations.length > 0) {
+      return apiError.violations.map((item: FieldViolation) => `${item.field}: ${item.message}`).join(' ')
+    }
+
+    return apiError.message
+  }
+
+  return 'Şablon kaydedilemedi.'
+}
+
+function normalizePreview(raw: MailTemplatePreviewResponse): MailTemplatePreview {
+  return {
+    subject: toText(raw.renderedSubject ?? raw.subject),
+    html: toNullableText(raw.renderedHtml ?? raw.html),
+    plainText: toNullableText(raw.renderedPlainText ?? raw.plainText),
+  }
+}
+
+export const templateFeature = {
+  supported: true,
+  reason: null,
+} as const
+
+export const templateService = {
+  getAll: async (): Promise<MailTemplate[]> => {
+    const response = await apiClient.get<PagedResponse<MailTemplateResponse> | MailTemplateResponse[]>('/admin/mail-templates')
+    const items = Array.isArray(response) ? response : response.items
+    return items.map(normalizeTemplate)
   },
 
-  getById: async (id: string): Promise<TicketTemplate | null> => {
-    await getMockDelay()
-    return _mockTemplates.find((t) => t.id === id) ?? null
+  getById: async (id: string): Promise<MailTemplate> => {
+    const response = await apiClient.get<MailTemplateResponse>(`/admin/mail-templates/${id}`)
+    return normalizeTemplate(response)
   },
 
-  create: async (data: Omit<TicketTemplate, 'id'>): Promise<TicketTemplate> => {
-    await getMockDelay()
-    const newTemplate: TicketTemplate = { ...data, id: `t-${Date.now()}` }
-    _mockTemplates.push(newTemplate)
-    return { ...newTemplate }
+  create: async (data: MailTemplateUpsertInput): Promise<MailTemplate> => {
+    const response = await apiClient.post<MailTemplateResponse>('/admin/mail-templates', toRequestBody(data))
+    return normalizeTemplate(response)
   },
 
-  update: async (id: string, data: Partial<TicketTemplate>): Promise<TicketTemplate> => {
-    await getMockDelay()
-    const idx = _mockTemplates.findIndex((t) => t.id === id)
-    if (idx === -1) throw new Error('Template not found')
-    _mockTemplates[idx] = { ..._mockTemplates[idx], ...data }
-    return { ..._mockTemplates[idx] }
+  update: async (id: string, data: MailTemplateUpsertInput): Promise<MailTemplate> => {
+    const response = await apiClient.put<MailTemplateResponse>(`/admin/mail-templates/${id}`, toRequestBody(data))
+    return normalizeTemplate(response)
   },
 
   delete: async (id: string): Promise<void> => {
-    await getMockDelay()
-    _mockTemplates = _mockTemplates.filter((t) => t.id !== id)
+    await apiClient.delete(`/admin/mail-templates/${id}`)
+  },
+
+  preview: async (id: string, request: MailTemplatePreviewRequest = {}): Promise<MailTemplatePreview> => {
+    const response = await apiClient.post<MailTemplatePreviewResponse>(`/admin/mail-templates/${id}/preview`, request)
+    return normalizePreview(response)
   },
 }
-
-/**
- * Templates are not in the current backend contract.
- * Real mode returns empty list for reads and throws 501 for writes.
- * This feature is deferred to V2.
- */
-const realService = {
-  getAll: async (): Promise<TicketTemplate[]> => {
-    // Return empty array — no backend endpoint for templates in current version
-    return []
-  },
-
-  getById: async (_id: string): Promise<TicketTemplate | null> => null,
-
-  create: async (_data: Omit<TicketTemplate, 'id'>): Promise<TicketTemplate> => {
-    throw new ApiError(501, 'not_implemented', 'Template management is not supported by the current backend. Enable mock mode (VITE_USE_MOCKS=true) to use this feature.')
-  },
-
-  update: async (_id: string, _data: Partial<TicketTemplate>): Promise<TicketTemplate> => {
-    throw new ApiError(501, 'not_implemented', 'Template management is not supported by the current backend. Enable mock mode (VITE_USE_MOCKS=true) to use this feature.')
-  },
-
-  delete: async (_id: string): Promise<void> => {
-    throw new ApiError(501, 'not_implemented', 'Template management is not supported by the current backend. Enable mock mode (VITE_USE_MOCKS=true) to use this feature.')
-  },
-}
-
-export const templateService = USE_MOCKS ? mockService : realService

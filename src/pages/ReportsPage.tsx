@@ -23,11 +23,11 @@ export function ReportsPage() {
   const stats = useMemo(() => {
     return {
       total: tickets.length,
-      open: tickets.filter((t) => ['new', 'open', 'in_progress'].includes(t.status)).length,
-      resolved: tickets.filter((t) => t.status === 'resolved').length,
-      closed: tickets.filter((t) => t.status === 'closed').length,
+      open: tickets.filter((t) => ['NEW', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'new', 'open', 'in_progress'].includes(t.status)).length,
+      resolved: tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'resolved').length,
+      closed: tickets.filter((t) => t.status === 'CLOSED' || t.status === 'closed').length,
       breached: tickets.filter((t) => t.slaBreached).length,
-      pending: tickets.filter((t) => t.status === 'pending').length,
+      pending: tickets.filter((t) => t.status === 'WAITING_CUSTOMER' || t.status === 'pending').length,
     }
   }, [tickets])
 
@@ -37,8 +37,8 @@ export function ReportsPage() {
       .map((u) => ({
         user: u,
         total: tickets.filter((t) => t.assignedUserId === u.id).length,
-        open: tickets.filter((t) => t.assignedUserId === u.id && ['new', 'open', 'in_progress'].includes(t.status)).length,
-        resolved: tickets.filter((t) => t.assignedUserId === u.id && t.status === 'resolved').length,
+        open: tickets.filter((t) => t.assignedUserId === u.id && ['NEW', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'new', 'open', 'in_progress'].includes(t.status)).length,
+        resolved: tickets.filter((t) => t.assignedUserId === u.id && (t.status === 'RESOLVED' || t.status === 'resolved')).length,
       }))
       .sort((a, b) => b.total - a.total)
   }, [tickets, users])

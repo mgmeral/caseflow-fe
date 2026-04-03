@@ -1,122 +1,66 @@
 ﻿import type { Customer } from '@/types/customer.types'
 import type { Ticket } from '@/types/ticket.types'
+import type { CustomerResponse } from '@/types/api.types'
 import { apiClient } from './api.client'
-import { USE_MOCKS } from '@/lib/env'
-import { mockCustomers, mockTickets, getMockDelay } from '@/mock'
+import { normalizeTicket } from './normalizers'
 
-let _mockCustomers = [...mockCustomers]
-
-const mockService = {
-  getAll: async (search = '', segment?: string, isActive?: boolean): Promise<Customer[]> => {
-    await getMockDelay()
-    let result = [..._mockCustomers]
-    if (search) {
-      const q = search.toLowerCase()
-      result = result.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.emails.some((e) => e.toLowerCase().includes(q)),
-      )
-    }
-    if (segment) result = result.filter((c) => c.segment === segment)
-    if (isActive !== undefined) result = result.filter((c) => c.isActive === isActive)
-    return result
-  },
-
-  getById: async (id: string): Promise<Customer | null> => {
-    await getMockDelay()
-    return _mockCustomers.find((c) => c.id === id) ?? null
-  },
-
-  getTickets: async (customerId: string): Promise<Ticket[]> => {
-    await getMockDelay()
-    return mockTickets.filter((t) => t.customerId === customerId)
-  },
-
-  create: async (data: Omit<Customer, 'id' | 'totalTickets' | 'openTickets' | 'createdAt'>): Promise<Customer> => {
-    await getMockDelay()
-    const newCustomer: Customer = {
-      ...data,
-      id: `c-${Date.now()}`,
-      totalTickets: 0,
-      openTickets: 0,
-      createdAt: new Date().toISOString(),
-    }
-    _mockCustomers.push(newCustomer)
-    return { ...newCustomer }
-  },
-
-  update: async (id: string, data: Partial<Customer>): Promise<Customer> => {
-    await getMockDelay()
-    const idx = _mockCustomers.findIndex((c) => c.id === id)
-    if (idx === -1) throw new Error('Customer not found')
-    _mockCustomers[idx] = { ..._mockCustomers[idx], ...data }
-    return { ..._mockCustomers[idx] }
-  },
-
-  activate: async (id: string): Promise<Customer> => {
-    await getMockDelay()
-    const idx = _mockCustomers.findIndex((c) => c.id === id)
-    if (idx === -1) throw new Error('Customer not found')
-    _mockCustomers[idx] = { ..._mockCustomers[idx], isActive: true }
-    return { ..._mockCustomers[idx] }
-  },
-
-  deactivate: async (id: string): Promise<Customer> => {
-    await getMockDelay()
-    const idx = _mockCustomers.findIndex((c) => c.id === id)
-    if (idx === -1) throw new Error('Customer not found')
-    _mockCustomers[idx] = { ..._mockCustomers[idx], isActive: false }
-    return { ..._mockCustomers[idx] }
-  },
+function toCustomer(raw: CustomerResponse): Customer {
+  return {
+    id: String(raw.id),
+    name: raw.name,
+    code: raw.code,
+    isActive: raw.isActive,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+  }
 }
 
-// ---------------------------------------------------------------------------
-// Real API implementation
-// ---------------------------------------------------------------------------
-
-const realService = {
+export const customerService = {
   /**
    * GET /api/customers
-   * Spec: bare array { id, name, code }[]
-   * Query: search only (segment is not a spec filter param)
+   * Query: search only
    */
-  getAll: async (search = ''): Promise<Customer[]> => {
+  getAll: async (search = '', _segment?: string): Promise<Customer[]> => {
     const params = new URLSearchParams()
     if (search) params.set('search', search)
     const qs = params.toString()
-    const res = await apiClient.get<Customer[]>(`/customers${qs ? `?${qs}` : ''}`)
-    return Array.isArray(res) ? res : (res as { data: Customer[] }).data ?? []
+    const res = await apiClient.get<CustomerResponse[]>(`/customers${qs ? `?${qs}` : ''}`)
+    const list = Array.isArray(res) ? res : (res as unknown as { data: CustomerResponse[] }).data ?? []
+    return list.map(toCustomer)
   },
 
-  getById: (id: string) => apiClient.get<Customer | null>(`/customers/${id}`),
+  getById: async (id: string): Promise<Customer | null> => {
+    const res = await apiClient.get<CustomerResponse | null>(`/customers/${id}`)
+    return res ? toCustomer(res) : null
+  },
 
   /**
    * GET /api/tickets?customerId={id} — paged response { items, totalElements }
    */
   getTickets: async (customerId: string): Promise<Ticket[]> => {
-    type TicketPagedRes = { items: Ticket[]; totalElements: number } | Ticket[]
-    const res = await apiClient.get<TicketPagedRes>(`/tickets?customerId=${encodeURIComponent(customerId)}`)
-    return Array.isArray(res) ? res : (res as { items: Ticket[] }).items ?? []
+    type PagedRes = { items: Record<string, unknown>[]; totalElements: number } | Record<string, unknown>[]
+    const res = await apiClient.get<PagedRes>(`/tickets?customerId=${encodeURIComponent(customerId)}`)
+    const items = Array.isArray(res) ? res : (res as { items: Record<string, unknown>[] }).items ?? []
+    return items.map(normalizeTicket)
   },
 
-  /**
-   * POST /api/customers
-   * Spec body: { name, code }
-   */
   create: (data: { name: string; code: string }) =>
-    apiClient.post<Customer>('/customers', data),
+    apiClient.post<CustomerResponse>('/customers', data).then(toCustomer),
 
-  /**
-   * PUT /api/customers/{id}
-   * Spec body: { name, code }
-   */
   update: (id: string, data: { name: string; code: string }) =>
-    apiClient.put<Customer>(`/customers/${id}`, data),
+    apiClient.put<CustomerResponse>(`/customers/${id}`, data).then(toCustomer),
 
-  activate: (id: string) =>
-    apiClient.patch<Customer>(`/customers/${id}/activate`, {}),
+  activate: async (id: string) => {
+    const raw = await apiClient.patch<CustomerResponse | undefined>(`/customers/${id}/activate`, {})
+    if (raw) return toCustomer(raw)
+    const refreshed = await apiClient.get<CustomerResponse>(`/customers/${id}`)
+    return toCustomer(refreshed)
+  },
 
-  deactivate: (id: string) =>
-    apiClient.patch<Customer>(`/customers/${id}/deactivate`, {}),
+  deactivate: async (id: string) => {
+    const raw = await apiClient.patch<CustomerResponse | undefined>(`/customers/${id}/deactivate`, {})
+    if (raw) return toCustomer(raw)
+    const refreshed = await apiClient.get<CustomerResponse>(`/customers/${id}`)
+    return toCustomer(refreshed)
+  },
 }
-
-export const customerService = USE_MOCKS ? mockService : realService

@@ -3,4 +3,61 @@
 @tailwind utilities;
 
 * { box-sizing: border-box; }
-body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f9fafb; color: #111827; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f3f7ff; color: #0f172a; }
+
+/* Global neutral remap: shift white/gray utilities to logo-blue tints */
+.bg-white { background-color: #f8fbff !important; }
+.bg-gray-50 { background-color: #eef4ff !important; }
+.bg-gray-100 { background-color: #e6efff !important; }
+.bg-gray-200 { background-color: #dbe8ff !important; }
+
+.text-gray-900 { color: #0f2147 !important; }
+.text-gray-800 { color: #173061 !important; }
+.text-gray-700 { color: #224173 !important; }
+.text-gray-600 { color: #325488 !important; }
+.text-gray-500 { color: #4c6f9f !important; }
+.text-gray-400 { color: #6c8db8 !important; }
+.text-gray-300 { color: #8ca7c9 !important; }
+
+.border-gray-100 { border-color: #e3ecff !important; }
+.border-gray-200 { border-color: #d6e4fb !important; }
+.border-gray-300 { border-color: #c3d6f7 !important; }
+
+.hover\:bg-gray-50:hover { background-color: #edf4ff !important; }
+.hover\:bg-gray-100:hover { background-color: #e1ecff !important; }
+.hover\:text-gray-700:hover { color: #173061 !important; }
+.hover\:text-gray-800:hover { color: #0f2147 !important; }
+
+/* Brand-wide color remap: shift existing indigo utilities to logo blue */
+.bg-indigo-50 { background-color: #edf4ff !important; }
+.bg-indigo-100 { background-color: #dbe9ff !important; }
+.bg-indigo-200 { background-color: #bfd5fb !important; }
+.bg-indigo-500 { background-color: #2b6fd4 !important; }
+.bg-indigo-600 { background-color: #0d5ac9 !important; }
+.bg-indigo-700 { background-color: #0a4ca9 !important; }
+
+.text-indigo-50 { color: #edf4ff !important; }
+.text-indigo-100 { color: #dbe9ff !important; }
+.text-indigo-500 { color: #2b6fd4 !important; }
+.text-indigo-600 { color: #0d5ac9 !important; }
+.text-indigo-700 { color: #0a4ca9 !important; }
+.text-indigo-800 { color: #083f8d !important; }
+.text-indigo-900 { color: #072f72 !important; }
+
+.border-indigo-100 { border-color: #dbe9ff !important; }
+.border-indigo-500 { border-color: #0d5ac9 !important; }
+.border-indigo-600 { border-color: #0d5ac9 !important; }
+
+.hover\:bg-indigo-50:hover { background-color: #edf4ff !important; }
+.hover\:bg-indigo-100:hover { background-color: #dbe9ff !important; }
+.hover\:bg-indigo-500:hover { background-color: #1f61c2 !important; }
+.hover\:bg-indigo-600:hover { background-color: #0a4ca9 !important; }
+.hover\:bg-indigo-700:hover { background-color: #083f8d !important; }
+
+.hover\:text-indigo-600:hover { color: #0d5ac9 !important; }
+.hover\:text-indigo-700:hover { color: #0a4ca9 !important; }
+
+.focus\:ring-gray-400:focus { --tw-ring-color: #93b4e2 !important; }
+
+.focus\:ring-indigo-400:focus { --tw-ring-color: #3b82f6 !important; }
+.focus\:ring-indigo-500:focus { --tw-ring-color: #0d5ac9 !important; }

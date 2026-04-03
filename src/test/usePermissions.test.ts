@@ -25,7 +25,7 @@ describe('usePermissions', () => {
 
   it('enables flags by permission code membership', () => {
     mockAuthState.currentUser = {
-      permissionCodes: ['ADMIN_POOL_VIEW', 'ROLE_MANAGE', 'TICKET_STATUS', 'REPORT_VIEW'],
+      permissionCodes: ['ADMIN_POOL_VIEW', 'ROLE_MANAGE', 'TICKET_STATUS_CHANGE', 'REPORT_VIEW'],
       roleCode: 'SUPERVISOR',
       roleName: 'Supervisor',
     }

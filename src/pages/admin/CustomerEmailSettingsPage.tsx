@@ -21,10 +21,10 @@ import {
   ShieldOff, Mail, Save, Plus, Pencil, ToggleLeft, ToggleRight, Trash2, Search,
 } from 'lucide-react'
 
-const UNKNOWN_SENDER_POLICIES = ['ALLOW', 'REJECT', 'QUARANTINE', 'ROUTE_TO_DEFAULT', 'AUTO_CREATE_CONTACT']
+const UNKNOWN_SENDER_POLICIES = ['MANUAL_REVIEW', 'CREATE_UNMATCHED_TICKET', 'IGNORE', 'REJECT'] as const
 
 export function CustomerEmailSettingsPage() {
-  const { canManageCustomerEmail } = usePermissions()
+  const { canManageEmailConfig } = usePermissions()
   const { success, error } = useToast()
   const queryClient = useQueryClient()
 
@@ -45,18 +45,17 @@ export function CustomerEmailSettingsPage() {
   const [ruleModal, setRuleModal] = useState<'create' | 'edit' | null>(null)
   const [editingRule, setEditingRule] = useState<CustomerEmailRoutingRule | null>(null)
   const [ruleForm, setRuleForm] = useState<UpsertCustomerEmailRoutingRuleRequest>({
-    matchType: 'EXACT_EMAIL',
-    matchValue: '',
-    mailboxId: null,
-    groupId: null,
-    priority: null,
-    status: null,
+    senderMatchType: 'EXACT_EMAIL',
+    senderMatchValue: '',
+    recipientMailboxId: null,
+    priority: 10,
     isActive: true,
+    notes: null,
   })
   const [savingRule, setSavingRule] = useState(false)
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null)
 
-  if (!canManageCustomerEmail) {
+  if (!canManageEmailConfig) {
     return (
       <div className="p-6">
         <EmptyState
@@ -83,25 +82,21 @@ export function CustomerEmailSettingsPage() {
   const beginEditSettings = () => {
     if (!settings) {
       setSettingsForm({
-        mailboxId: null,
-        trustedContactsOnly: false,
-        autoCreateContact: true,
+        isEnabled: true,
         allowSubdomains: false,
-        unknownSenderPolicy: 'ROUTE_TO_DEFAULT',
+        unknownSenderPolicy: 'CREATE_UNMATCHED_TICKET',
         defaultGroupId: null,
         defaultPriority: null,
-        defaultStatus: null,
       })
     } else {
       setSettingsForm({
-        mailboxId: settings.mailboxId,
-        trustedContactsOnly: settings.trustedContactsOnly,
-        autoCreateContact: settings.autoCreateContact,
+        isEnabled: settings.isEnabled,
         allowSubdomains: settings.allowSubdomains,
-        unknownSenderPolicy: settings.unknownSenderPolicy,
+        unknownSenderPolicy: UNKNOWN_SENDER_POLICIES.includes(settings.unknownSenderPolicy as (typeof UNKNOWN_SENDER_POLICIES)[number])
+          ? settings.unknownSenderPolicy
+          : 'MANUAL_REVIEW',
         defaultGroupId: settings.defaultGroupId,
         defaultPriority: settings.defaultPriority?.toString() ?? null,
-        defaultStatus: settings.defaultStatus?.toString() ?? null,
       })
     }
   }
@@ -122,34 +117,45 @@ export function CustomerEmailSettingsPage() {
   }
 
   const openCreateRule = () => {
-    setRuleForm({ matchType: 'EXACT_EMAIL', matchValue: '', mailboxId: null, groupId: null, priority: null, status: null, isActive: true })
+    setRuleForm({ senderMatchType: 'EXACT_EMAIL', senderMatchValue: '', recipientMailboxId: null, priority: 10, isActive: true, notes: null })
     setEditingRule(null)
     setRuleModal('create')
   }
 
   const openEditRule = (rule: CustomerEmailRoutingRule) => {
     setRuleForm({
-      matchType: rule.matchType,
-      matchValue: rule.matchValue,
-      mailboxId: rule.mailboxId,
-      groupId: rule.groupId,
-      priority: rule.priority?.toString() ?? null,
-      status: rule.status?.toString() ?? null,
+      senderMatchType: rule.senderMatchType,
+      senderMatchValue: rule.senderMatchValue,
+      recipientMailboxId: rule.recipientMailboxId,
+      priority: rule.priority,
       isActive: rule.isActive,
+      notes: rule.notes,
     })
     setEditingRule(rule)
     setRuleModal('edit')
   }
 
+  const isValidMatchValue = (() => {
+    const v = ruleForm.senderMatchValue.trim().toLowerCase()
+    if (!v) return false
+    if (ruleForm.senderMatchType === 'EXACT_EMAIL') return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)
+    if (ruleForm.senderMatchType === 'DOMAIN_SUFFIX') return /^@?[a-z0-9]([a-z0-9-]*\.)+[a-z]{2,}$/i.test(v)
+    return true
+  })()
+
   const handleSaveRule = async () => {
-    if (!ruleForm.matchValue.trim() || !selectedCustomerId) return
+    if (!isValidMatchValue || !selectedCustomerId) return
     setSavingRule(true)
     try {
+      const payload: UpsertCustomerEmailRoutingRuleRequest = {
+        ...ruleForm,
+        senderMatchValue: ruleForm.senderMatchValue.trim().toLowerCase(),
+      }
       if (ruleModal === 'create') {
-        await customerEmailSettingsService.createRoutingRule(selectedCustomerId, ruleForm)
+        await customerEmailSettingsService.createRoutingRule(selectedCustomerId, payload)
         success('Routing rule created')
       } else if (editingRule) {
-        await customerEmailSettingsService.updateRoutingRule(selectedCustomerId, editingRule.id, ruleForm)
+        await customerEmailSettingsService.updateRoutingRule(selectedCustomerId, editingRule.id, payload)
         success('Routing rule updated')
       }
       await queryClient.invalidateQueries({ queryKey: ['customer-email-routing-rules', selectedCustomerId] })
@@ -180,10 +186,12 @@ export function CustomerEmailSettingsPage() {
         success('Rule deactivated')
       } else {
         await customerEmailSettingsService.updateRoutingRule(selectedCustomerId, rule.id, {
-          ...ruleForm,
-          matchType: rule.matchType,
-          matchValue: rule.matchValue,
+          senderMatchType: rule.senderMatchType,
+          senderMatchValue: rule.senderMatchValue,
+          recipientMailboxId: rule.recipientMailboxId,
+          priority: rule.priority,
           isActive: true,
+          notes: rule.notes,
         })
         success('Rule activated')
       }
@@ -264,31 +272,19 @@ export function CustomerEmailSettingsPage() {
                 {settingsForm === null ? (
                   /* Read-only view */
                   <div className="px-5 py-4 space-y-3 text-sm">
-                    <Row label="Mailbox" value={settings?.mailboxName ?? '—'} />
+                    <Row label="Enabled" value={settings?.isEnabled ? 'Yes' : 'No'} />
                     <Row label="Unknown Sender Policy" value={settings?.unknownSenderPolicy ?? '—'} />
-                    <Row label="Trusted Contacts Only" value={settings?.trustedContactsOnly ? 'Yes' : 'No'} />
-                    <Row label="Auto-create Contact" value={settings?.autoCreateContact ? 'Yes' : 'No'} />
                     <Row label="Allow Subdomains" value={settings?.allowSubdomains ? 'Yes' : 'No'} />
                     <Row label="Default Group" value={settings?.defaultGroupName ?? '—'} />
                     <Row label="Default Priority" value={settings?.defaultPriority?.toString() ?? '—'} />
-                    <Row label="Default Status" value={settings?.defaultStatus?.toString() ?? '—'} />
                   </div>
                 ) : (
                   /* Edit form */
                   <div className="px-5 py-4 space-y-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Mailbox</label>
-                      <select
-                        value={settingsForm.mailboxId ?? ''}
-                        onChange={(e) => setSettingsForm((f) => f && ({ ...f, mailboxId: e.target.value || null }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                      >
-                        <option value="">— None —</option>
-                        {mailboxes.map((m) => (
-                          <option key={m.id} value={m.id}>{m.name} ({m.emailAddress})</option>
-                        ))}
-                      </select>
-                    </div>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" checked={settingsForm.isEnabled} onChange={(e) => setSettingsForm((f) => f && ({ ...f, isEnabled: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
+                      Email Integration Enabled
+                    </label>
 
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Unknown Sender Policy</label>
@@ -303,19 +299,30 @@ export function CustomerEmailSettingsPage() {
                       </select>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-4">
-                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input type="checkbox" checked={settingsForm.trustedContactsOnly} onChange={(e) => setSettingsForm((f) => f && ({ ...f, trustedContactsOnly: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
-                        Trusted Contacts Only
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input type="checkbox" checked={settingsForm.autoCreateContact} onChange={(e) => setSettingsForm((f) => f && ({ ...f, autoCreateContact: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
-                        Auto-create Contact
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                        <input type="checkbox" checked={settingsForm.allowSubdomains} onChange={(e) => setSettingsForm((f) => f && ({ ...f, allowSubdomains: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
-                        Allow Subdomains
-                      </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input type="checkbox" checked={settingsForm.allowSubdomains} onChange={(e) => setSettingsForm((f) => f && ({ ...f, allowSubdomains: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
+                      Allow Subdomains
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Default Group ID</label>
+                        <input
+                          value={settingsForm.defaultGroupId ?? ''}
+                          onChange={(e) => setSettingsForm((f) => f && ({ ...f, defaultGroupId: e.target.value || null }))}
+                          placeholder="Optional"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Default Priority</label>
+                        <input
+                          value={settingsForm.defaultPriority ?? ''}
+                          onChange={(e) => setSettingsForm((f) => f && ({ ...f, defaultPriority: e.target.value || null }))}
+                          placeholder="Optional"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                        />
+                      </div>
                     </div>
 
                     <div className="flex justify-end gap-2 pt-2">
@@ -354,7 +361,7 @@ export function CustomerEmailSettingsPage() {
                         <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Match Type</th>
                         <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Match Value</th>
                         <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Mailbox</th>
-                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Group</th>
+                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Priority</th>
                         <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Status</th>
                         <th className="px-4 py-2 text-right font-semibold text-gray-600 text-xs">Actions</th>
                       </tr>
@@ -363,13 +370,13 @@ export function CustomerEmailSettingsPage() {
                       {rules.map((rule) => (
                         <tr key={rule.id} className="hover:bg-gray-50">
                           <td className="px-4 py-2">
-                            <Badge variant={rule.matchType === 'EXACT_EMAIL' ? 'info' : 'default'} size="sm">
-                              {rule.matchType === 'EXACT_EMAIL' ? 'Exact' : 'Domain'}
+                            <Badge variant={rule.senderMatchType === 'EXACT_EMAIL' ? 'info' : 'default'} size="sm">
+                              {rule.senderMatchType === 'EXACT_EMAIL' ? 'Exact' : 'Domain'}
                             </Badge>
                           </td>
-                          <td className="px-4 py-2 font-mono text-xs text-gray-700">{rule.matchValue}</td>
-                          <td className="px-4 py-2 text-gray-600 text-xs">{rule.mailboxName ?? '—'}</td>
-                          <td className="px-4 py-2 text-gray-600 text-xs">{rule.groupName ?? '—'}</td>
+                          <td className="px-4 py-2 font-mono text-xs text-gray-700">{rule.senderMatchValue}</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">{rule.recipientMailboxName ?? '—'}</td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">{rule.priority}</td>
                           <td className="px-4 py-2">
                             {rule.isActive ? (
                               <Badge variant="success" size="sm">Active</Badge>
@@ -405,14 +412,14 @@ export function CustomerEmailSettingsPage() {
       <Modal
         isOpen={ruleModal !== null}
         onClose={() => setRuleModal(null)}
-        title={ruleModal === 'create' ? 'New Routing Rule' : `Edit Rule — ${editingRule?.matchValue ?? ''}`}
+        title={ruleModal === 'create' ? 'New Routing Rule' : `Edit Rule — ${editingRule?.senderMatchValue ?? ''}`}
       >
         <div className="space-y-4 p-1">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Match Type</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Sender Match Type</label>
             <select
-              value={ruleForm.matchType}
-              onChange={(e) => setRuleForm((f) => ({ ...f, matchType: e.target.value as 'EXACT_EMAIL' | 'DOMAIN_SUFFIX' }))}
+              value={ruleForm.senderMatchType}
+              onChange={(e) => setRuleForm((f) => ({ ...f, senderMatchType: e.target.value as 'EXACT_EMAIL' | 'DOMAIN_SUFFIX' }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="EXACT_EMAIL">Exact Email</option>
@@ -420,46 +427,51 @@ export function CustomerEmailSettingsPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Match Value *</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Sender Match Value *</label>
             <input
-              value={ruleForm.matchValue}
-              onChange={(e) => setRuleForm((f) => ({ ...f, matchValue: e.target.value }))}
-              placeholder={ruleForm.matchType === 'EXACT_EMAIL' ? 'user@example.com' : '@example.com'}
+              value={ruleForm.senderMatchValue}
+              onChange={(e) => setRuleForm((f) => ({ ...f, senderMatchValue: e.target.value }))}
+              placeholder={ruleForm.senderMatchType === 'EXACT_EMAIL' ? 'user@example.com' : '@example.com'}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
+            <p className="text-xs text-gray-400 mt-1">
+              {ruleForm.senderMatchType === 'EXACT_EMAIL'
+                ? 'Full email address (e.g. alerts@bank.com). Will be lowercased.'
+                : 'Domain suffix including @ (e.g. @bank.com). Will be lowercased.'}
+            </p>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Mailbox</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Recipient Mailbox</label>
             <select
-              value={ruleForm.mailboxId ?? ''}
-              onChange={(e) => setRuleForm((f) => ({ ...f, mailboxId: e.target.value || null }))}
+              value={ruleForm.recipientMailboxId ?? ''}
+              onChange={(e) => setRuleForm((f) => ({ ...f, recipientMailboxId: e.target.value || null }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             >
               <option value="">— Default —</option>
               {mailboxes.map((m) => (
-                <option key={m.id} value={m.id}>{m.name}</option>
+                <option key={m.id} value={m.id}>{m.name} ({m.address})</option>
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
-              <input
-                value={ruleForm.priority ?? ''}
-                onChange={(e) => setRuleForm((f) => ({ ...f, priority: e.target.value || null }))}
-                placeholder="Optional"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
-              <input
-                value={ruleForm.status ?? ''}
-                onChange={(e) => setRuleForm((f) => ({ ...f, status: e.target.value || null }))}
-                placeholder="Optional"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+            <input
+              type="number"
+              min="0"
+              value={ruleForm.priority}
+              onChange={(e) => setRuleForm((f) => ({ ...f, priority: parseInt(e.target.value, 10) || 0 }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+            <textarea
+              value={ruleForm.notes ?? ''}
+              onChange={(e) => setRuleForm((f) => ({ ...f, notes: e.target.value || null }))}
+              rows={2}
+              placeholder="Optional notes…"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input type="checkbox" checked={ruleForm.isActive ?? true} onChange={(e) => setRuleForm((f) => ({ ...f, isActive: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
@@ -467,7 +479,7 @@ export function CustomerEmailSettingsPage() {
           </label>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" size="sm" onClick={() => setRuleModal(null)}>Cancel</Button>
-            <Button variant="primary" size="sm" onClick={handleSaveRule} isLoading={savingRule} disabled={!ruleForm.matchValue.trim()}>
+            <Button variant="primary" size="sm" onClick={handleSaveRule} isLoading={savingRule} disabled={!isValidMatchValue}>
               {ruleModal === 'create' ? 'Create' : 'Save'}
             </Button>
           </div>

@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 // Mock env so API_URL is set
-vi.mock('@/lib/env', () => ({ USE_MOCKS: false, API_URL: 'http://api.test' }))
+vi.mock('@/lib/env', () => ({ API_URL: 'http://api.test' }))
 
 const { apiClient, ApiError } = await import('@/services/api.client')
 

@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   put: vi.fn(async () => ({ id: 1 })),
 }))
 
-vi.mock('@/lib/env', () => ({ USE_MOCKS: false }))
+vi.mock('@/lib/env', () => ({ API_URL: '' }))
 vi.mock('@/services/api.client', () => ({
   apiClient: {
     get: vi.fn(),

@@ -1,9 +1,9 @@
 import type { User, Group, GroupType, TicketTemplate } from '@/types/user.types'
 
 // Permission code sets used by mock users
-const ADMIN_PERMS = ['ADMIN_POOL_VIEW','USER_MANAGE','ROLE_MANAGE','TICKET_ASSIGN','TICKET_TRANSFER','TICKET_CLOSE','TICKET_PRIORITY','TICKET_STATUS','REPLY_PUBLIC','NOTE_INTERNAL','REPORT_VIEW','REPORT_EXPORT','MAILBOX_MANAGE','CUSTOMER_EMAIL_MANAGE','INGRESS_EVENT_VIEW','INGRESS_EVENT_MANAGE','TICKET_EMAIL_VIEW','TICKET_EMAIL_REPLY']
-const SUPERVISOR_PERMS = ['ADMIN_POOL_VIEW','TICKET_ASSIGN','TICKET_TRANSFER','TICKET_CLOSE','TICKET_PRIORITY','TICKET_STATUS','REPLY_PUBLIC','NOTE_INTERNAL','REPORT_VIEW','REPORT_EXPORT','INGRESS_EVENT_VIEW','TICKET_EMAIL_VIEW','TICKET_EMAIL_REPLY']
-const AGENT_PERMS = ['TICKET_TRANSFER','TICKET_CLOSE','TICKET_STATUS','REPLY_PUBLIC','NOTE_INTERNAL','REPORT_VIEW','TICKET_EMAIL_VIEW','TICKET_EMAIL_REPLY']
+const ADMIN_PERMS = ['ADMIN_POOL_VIEW','USER_MANAGE','ROLE_MANAGE','GROUP_MANAGE','ADMIN_CONFIG','TICKET_ASSIGN','TICKET_TRANSFER','TICKET_CLOSE','TICKET_PRIORITY_CHANGE','TICKET_STATUS_CHANGE','CUSTOMER_REPLY_SEND','INTERNAL_NOTE_ADD','REPORT_VIEW','DATA_EXPORT','EMAIL_CONFIG_VIEW','EMAIL_CONFIG_MANAGE','EMAIL_OPERATIONS_VIEW','EMAIL_OPERATIONS_MANAGE','TICKET_EMAIL_VIEW','TICKET_EMAIL_REPLY_SEND']
+const SUPERVISOR_PERMS = ['ADMIN_POOL_VIEW','TICKET_ASSIGN','TICKET_TRANSFER','TICKET_CLOSE','TICKET_PRIORITY_CHANGE','TICKET_STATUS_CHANGE','CUSTOMER_REPLY_SEND','INTERNAL_NOTE_ADD','REPORT_VIEW','DATA_EXPORT','EMAIL_OPERATIONS_VIEW','TICKET_EMAIL_VIEW','TICKET_EMAIL_REPLY_SEND']
+const AGENT_PERMS = ['TICKET_TRANSFER','TICKET_CLOSE','TICKET_STATUS_CHANGE','CUSTOMER_REPLY_SEND','INTERNAL_NOTE_ADD','REPORT_VIEW','TICKET_EMAIL_VIEW','TICKET_EMAIL_REPLY_SEND']
 const VIEWER_PERMS = ['REPORT_VIEW']
 
 export const mockGroupTypes: GroupType[] = [
@@ -101,7 +101,7 @@ export const mockUsers: User[] = [
     role: 'trade_agent',
     roleName: 'Agent',
     permissionCodes: AGENT_PERMS,
-    ticketScope: 'GROUP',
+    ticketScope: 'OWN_GROUPS',
     groupIds: ['g1'],
     groupNames: ['Trade'],
     adminLevel: 0,
@@ -119,7 +119,7 @@ export const mockUsers: User[] = [
     role: 'trade_agent',
     roleName: 'Agent',
     permissionCodes: AGENT_PERMS,
-    ticketScope: 'GROUP',
+    ticketScope: 'OWN_GROUPS',
     groupIds: ['g1'],
     groupNames: ['Trade'],
     adminLevel: 0,
@@ -137,7 +137,7 @@ export const mockUsers: User[] = [
     role: 'trade_agent',
     roleName: 'Agent',
     permissionCodes: AGENT_PERMS,
-    ticketScope: 'GROUP',
+    ticketScope: 'OWN_GROUPS',
     groupIds: ['g1'],
     groupNames: ['Trade'],
     adminLevel: 0,
@@ -155,7 +155,7 @@ export const mockUsers: User[] = [
     role: 'operation_agent',
     roleName: 'Agent',
     permissionCodes: AGENT_PERMS,
-    ticketScope: 'GROUP',
+    ticketScope: 'OWN_GROUPS',
     groupIds: ['g2'],
     groupNames: ['Operations'],
     adminLevel: 0,
@@ -173,7 +173,7 @@ export const mockUsers: User[] = [
     role: 'operation_agent',
     roleName: 'Agent',
     permissionCodes: AGENT_PERMS,
-    ticketScope: 'GROUP',
+    ticketScope: 'OWN_GROUPS',
     groupIds: ['g2'],
     groupNames: ['Operations'],
     adminLevel: 0,
@@ -191,7 +191,7 @@ export const mockUsers: User[] = [
     role: 'operation_agent',
     roleName: 'Agent',
     permissionCodes: AGENT_PERMS,
-    ticketScope: 'GROUP',
+    ticketScope: 'OWN_GROUPS',
     groupIds: ['g2'],
     groupNames: ['Operations'],
     adminLevel: 0,
@@ -209,7 +209,7 @@ export const mockUsers: User[] = [
     role: 'trade_agent',
     roleName: 'Agent',
     permissionCodes: VIEWER_PERMS,
-    ticketScope: 'OWN',
+    ticketScope: 'ASSIGNED_ONLY',
     groupIds: ['g1'],
     groupNames: ['Trade'],
     adminLevel: 0,

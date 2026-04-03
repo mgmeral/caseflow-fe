@@ -71,7 +71,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin',
-            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'MAILBOX_MANAGE', 'CUSTOMER_EMAIL_MANAGE', 'INGRESS_EVENT_VIEW', 'INGRESS_EVENT_MANAGE']} />,
+            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'GROUP_MANAGE', 'ADMIN_CONFIG', 'EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE', 'EMAIL_OPERATIONS_VIEW', 'EMAIL_OPERATIONS_MANAGE']} />,
             children: [
               {
                 index: true,

@@ -25,10 +25,10 @@ export function DashboardPage() {
 
   const stats = useMemo(() => {
     const total = tickets.length
-    const open = tickets.filter((t) => ['new', 'open', 'in_progress'].includes(t.status)).length
+    const open = tickets.filter((t) => ['NEW', 'TRIAGED', 'ASSIGNED', 'IN_PROGRESS', 'REOPENED', 'new', 'open', 'in_progress'].includes(t.status)).length
     const breached = tickets.filter((t) => t.slaBreached).length
-    const resolved = tickets.filter((t) => t.status === 'resolved').length
-    const pending = tickets.filter((t) => t.status === 'pending').length
+    const resolved = tickets.filter((t) => t.status === 'RESOLVED' || t.status === 'resolved').length
+    const pending = tickets.filter((t) => t.status === 'WAITING_CUSTOMER' || t.status === 'pending').length
     return { total, open, breached, resolved, pending }
   }, [tickets])
 

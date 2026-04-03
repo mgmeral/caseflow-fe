@@ -13,8 +13,17 @@ export function useTicketEmailThread(ticketId: string) {
 
 export function useTicketEmailDetail(ticketId: string, emailId: string) {
   return useQuery({
-    queryKey: ['ticket-email-detail', ticketId, emailId],
-    queryFn: () => ticketEmailService.getDetail(ticketId, emailId),
+    queryKey: ['ticket-email-detail', ticketId, emailId, 'INBOUND'],
+    queryFn: () => ticketEmailService.getDetail(ticketId, emailId, 'INBOUND'),
+    enabled: !!ticketId && !!emailId,
+    staleTime: 15_000,
+  })
+}
+
+export function useTicketEmailDetailByDirection(ticketId: string, emailId: string, direction?: 'INBOUND' | 'OUTBOUND') {
+  return useQuery({
+    queryKey: ['ticket-email-detail', ticketId, emailId, direction ?? 'INBOUND'],
+    queryFn: () => ticketEmailService.getDetail(ticketId, emailId, direction),
     enabled: !!ticketId && !!emailId,
     staleTime: 15_000,
   })

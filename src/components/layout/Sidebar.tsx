@@ -22,7 +22,6 @@ import { Avatar } from '@/components/shared/Avatar'
 import { useAuthStore } from '@/store/auth.store'
 import { useUIStore } from '@/store/ui.store'
 import { usePermissions } from '@/hooks/usePermissions'
-import { USE_MOCKS } from '@/lib/env'
 
 interface NavItem {
   to: string
@@ -33,7 +32,7 @@ interface NavItem {
 export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { canManageUsers, canManageRoles, canViewAdminPool, canViewReports, canManageMailboxes, canManageCustomerEmail, canViewIngressEvents, canAccessEmailAdmin } = usePermissions()
+  const { canManageUsers, canManageRoles, canManageGroups, canViewAdminPool, canViewReports, canViewEmailConfig, canManageEmailConfig, canViewIngressEvents, canAccessEmailAdmin } = usePermissions()
 
   const canAccessAdminSection = canManageUsers || canManageRoles || canAccessEmailAdmin
 
@@ -46,12 +45,10 @@ export function Sidebar() {
   const adminNav: NavItem[] = [
     ...(canManageUsers ? [{ to: '/admin/users', icon: <UserCog size={18} />, label: 'Users' }] : []),
     ...(canManageRoles ? [{ to: '/admin/roles', icon: <Shield size={18} />, label: 'Roles' }] : []),
-    ...(canManageUsers ? [{ to: '/admin/groups', icon: <UsersRound size={18} />, label: 'Groups' }] : []),
-    ...(canManageUsers && USE_MOCKS
-      ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }]
-      : []),
-    ...(canManageMailboxes ? [{ to: '/admin/email/mailboxes', icon: <Mail size={18} />, label: 'Mailboxes' }] : []),
-    ...(canManageCustomerEmail ? [{ to: '/admin/email/customers', icon: <AtSign size={18} />, label: 'Email Settings' }] : []),
+    ...(canManageGroups ? [{ to: '/admin/groups', icon: <UsersRound size={18} />, label: 'Groups' }] : []),
+    ...(canManageUsers ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }] : []),
+    ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', icon: <Mail size={18} />, label: 'Mailboxes' }] : []),
+    ...(canManageEmailConfig ? [{ to: '/admin/email/customers', icon: <AtSign size={18} />, label: 'Email Settings' }] : []),
     ...(canViewIngressEvents ? [{ to: '/admin/email/ingress-events', icon: <Activity size={18} />, label: 'Ingress Events' }] : []),
     ...(canManageUsers ? [{ to: '/admin/settings', icon: <Settings size={18} />, label: 'Settings' }] : []),
   ]
@@ -59,18 +56,24 @@ export function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col h-full bg-gray-900 text-gray-100 transition-all duration-200 ease-in-out flex-shrink-0',
+        'flex flex-col h-full bg-[#071a3d] text-slate-100 transition-all duration-200 ease-in-out flex-shrink-0',
         sidebarCollapsed ? 'w-16' : 'w-60',
       )}
     >
       {/* Logo / Brand */}
-      <div className="flex items-center justify-between h-14 px-3 border-b border-gray-700">
-        {!sidebarCollapsed && (
-          <span className="text-base font-bold text-white tracking-wide">CSM CRM</span>
+      <div className="flex items-center justify-between h-24 px-3 border-b border-blue-900/70 bg-[#091f49]">
+        {sidebarCollapsed ? (
+          <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.125rem] h-[2.125rem] object-contain" />
+        ) : (
+          <div className="flex items-center gap-2.5">
+            <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.35rem] h-[2.35rem] object-contain" />
+            <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-white">Case</span>
+            <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-[#f0b323] -ml-1">Flow</span>
+          </div>
         )}
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-md hover:bg-gray-700 transition-colors ml-auto"
+          className="p-1.5 rounded-md hover:bg-blue-800/70 transition-colors ml-auto text-blue-100"
           aria-label="Toggle sidebar"
         >
           {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -87,7 +90,7 @@ export function Sidebar() {
           <>
             {!sidebarCollapsed && (
               <div className="pt-4 pb-1 px-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-blue-300/55 uppercase tracking-wider">
                   Management
                 </span>
               </div>
@@ -111,7 +114,7 @@ export function Sidebar() {
           <>
             {!sidebarCollapsed && (
               <div className="pt-4 pb-1 px-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                <span className="text-xs font-semibold text-blue-300/55 uppercase tracking-wider">
                   Admin
                 </span>
               </div>
@@ -124,7 +127,7 @@ export function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-gray-700 p-3">
+      <div className="border-t border-blue-900/70 p-3 bg-[#071736]">
         {currentUser && (
           <div
             className={clsx(
@@ -136,12 +139,12 @@ export function Sidebar() {
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-white truncate">{currentUser.fullName}</div>
-                <div className="text-xs text-gray-400 truncate capitalize">{currentUser.roleName ?? currentUser.role}</div>
+                <div className="text-xs text-blue-200/80 truncate capitalize">{currentUser.roleName ?? currentUser.role}</div>
               </div>
             )}
             <button
               onClick={logout}
-              className="p-1.5 rounded-md hover:bg-gray-700 transition-colors text-gray-400 hover:text-white flex-shrink-0"
+              className="p-1.5 rounded-md hover:bg-blue-800/70 transition-colors text-blue-200/70 hover:text-white flex-shrink-0"
               title="Logout"
               aria-label="Logout"
             >
@@ -163,8 +166,8 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
         clsx(
           'flex items-center gap-3 px-2 py-2 rounded-md text-sm transition-colors w-full',
           isActive
-            ? 'bg-indigo-600 text-white'
-            : 'text-gray-300 hover:bg-gray-700 hover:text-white',
+            ? 'bg-[#0d5ac9] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]'
+            : 'text-blue-100/90 hover:bg-blue-900/70 hover:text-white',
           collapsed && 'justify-center',
         )
       }

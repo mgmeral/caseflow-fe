@@ -1,7 +1,6 @@
-import { Mail, Phone, Tag } from 'lucide-react'
+import { Tag } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { Ticket } from '@/types/ticket.types'
-import { CUSTOMER_SEGMENT_LABELS } from '@/constants/enums'
 import { Badge } from '@/components/shared/Badge'
 
 interface CustomerInfoCardProps {
@@ -22,11 +21,6 @@ export function CustomerInfoCard({ ticket }: CustomerInfoCardProps) {
           >
             {ticket.customerName}
           </button>
-          <div className="mt-1">
-            <Badge variant="info" size="sm">
-              {CUSTOMER_SEGMENT_LABELS[ticket.customerSegment] ?? ticket.customerSegment}
-            </Badge>
-          </div>
         </div>
       </div>
 

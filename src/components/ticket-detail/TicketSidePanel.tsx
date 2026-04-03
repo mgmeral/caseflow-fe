@@ -1,19 +1,18 @@
 import { Users, CheckCircle, XCircle, RotateCcw, ArrowRight } from 'lucide-react'
 import { clsx } from 'clsx'
-import { format } from 'date-fns'
-import type { Ticket, TicketStatus, TicketPriority, TransferRecord, TicketMessage } from '@/types/ticket.types'
+import type { Ticket, TicketStatus, TicketPriority, TicketActivityItem } from '@/types/ticket.types'
 import { SLAIndicator } from './SLAIndicator'
 import { Button } from '@/components/shared/Button'
 import { usePermissions } from '@/hooks/usePermissions'
 import { TICKET_STATUS_LABELS, TICKET_PRIORITY_LABELS } from '@/constants/enums'
+import { TicketActivityTimeline } from './TicketActivityTimeline'
 
-const STATUSES: TicketStatus[] = ['new', 'open', 'in_progress', 'pending', 'resolved', 'transferred']
 const PRIORITIES: TicketPriority[] = ['critical', 'high', 'medium', 'low']
 
 interface TicketSidePanelProps {
   ticket: Ticket
-  transfers: TransferRecord[]
-  systemEvents: TicketMessage[]
+  allowedTransitions: TicketStatus[]
+  activities: TicketActivityItem[]
   onAssign: () => void
   onChangeStatus: (status: TicketStatus) => void
   onChangePriority: (priority: TicketPriority) => void
@@ -24,8 +23,8 @@ interface TicketSidePanelProps {
 
 export function TicketSidePanel({
   ticket,
-  transfers,
-  systemEvents,
+  allowedTransitions,
+  activities,
   onAssign,
   onChangeStatus,
   onChangePriority,
@@ -40,7 +39,8 @@ export function TicketSidePanel({
     canChangeStatus,
   } = usePermissions()
 
-  const hasHistory = transfers.length > 0 || systemEvents.length > 0
+  const allowedTransitionSet = new Set(allowedTransitions)
+  const statusActions = allowedTransitions.filter((status) => !['CLOSED', 'REOPENED', 'RESOLVED'].includes(status))
 
   return (
     <div className="p-4 space-y-3">
@@ -49,24 +49,35 @@ export function TicketSidePanel({
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</h3>
         </div>
-        <div className="px-4 py-3 flex flex-wrap gap-1.5">
-          {STATUSES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => canChangeStatus && onChangeStatus(s)}
-              disabled={!canChangeStatus}
-              className={clsx(
-                'text-xs px-2.5 py-1 rounded-full border transition-colors',
-                ticket.status === s
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
-                !canChangeStatus && 'opacity-50 cursor-not-allowed',
-              )}
-            >
-              {TICKET_STATUS_LABELS[s]}
-            </button>
-          ))}
+        <div className="px-4 py-3 space-y-3">
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Current</div>
+            <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+              {TICKET_STATUS_LABELS[ticket.status]}
+            </span>
+          </div>
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Allowed next actions</div>
+            {canChangeStatus && statusActions.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {statusActions.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => onChangeStatus(status)}
+                    className={clsx(
+                      'text-xs px-2.5 py-1 rounded-full border transition-colors',
+                      'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
+                    )}
+                  >
+                    {TICKET_STATUS_LABELS[status]}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400">No manual status actions available.</p>
+            )}
+          </div>
         </div>
       </div>
 
@@ -119,28 +130,7 @@ export function TicketSidePanel({
           </h3>
         </div>
         <div className="px-4 py-3 space-y-3 max-h-72 overflow-y-auto">
-          {transfers.map((t) => (
-            <div key={t.id} className="text-xs border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-              <div className="flex items-center gap-1 text-gray-700 font-medium mb-0.5">
-                <span>{t.fromGroupName}</span>
-                <ArrowRight size={10} className="text-gray-400" />
-                <span>{t.toGroupName}</span>
-              </div>
-              <p className="text-gray-500 mb-0.5">Transfer: &ldquo;{t.reason}&rdquo;</p>
-              <p className="text-gray-400">
-                {t.transferredByName} · {format(new Date(t.createdAt), 'MMM d, HH:mm')}
-              </p>
-            </div>
-          ))}
-          {systemEvents.map((e) => (
-            <div key={e.id} className="text-xs text-gray-500 border-b border-gray-100 pb-2 last:border-0 last:pb-0">
-              <p>{e.content}</p>
-              <p className="text-gray-400 mt-0.5">{format(new Date(e.createdAt), 'MMM d, HH:mm')}</p>
-            </div>
-          ))}
-          {!hasHistory && (
-            <p className="text-xs text-gray-400 text-center py-2">No history yet.</p>
-          )}
+          <TicketActivityTimeline activities={activities} />
         </div>
       </div>
 
@@ -157,7 +147,7 @@ export function TicketSidePanel({
             {ticket.assignedUserId ? `Reassign (${ticket.assignedUserName})` : 'Assign'}
           </Button>
         )}
-        {canCloseTickets && ticket.status !== 'closed' && (
+        {canCloseTickets && allowedTransitionSet.has('CLOSED') && (
           <Button
             variant="danger"
             size="sm"
@@ -168,7 +158,7 @@ export function TicketSidePanel({
             Close Ticket
           </Button>
         )}
-        {canCloseTickets && ticket.status === 'closed' && (
+        {canCloseTickets && allowedTransitionSet.has('REOPENED') && (
           <Button
             variant="secondary"
             size="sm"
@@ -179,13 +169,13 @@ export function TicketSidePanel({
             Reopen Ticket
           </Button>
         )}
-        {canChangeStatus && ticket.status === 'in_progress' && (
+        {canChangeStatus && allowedTransitionSet.has('RESOLVED') && (
           <Button
             variant="secondary"
             size="sm"
             fullWidth
             leftIcon={<CheckCircle size={14} className="text-green-600" />}
-            onClick={() => onChangeStatus('resolved')}
+            onClick={() => onChangeStatus('RESOLVED')}
           >
             Mark as Resolved
           </Button>

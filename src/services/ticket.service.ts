@@ -1,254 +1,18 @@
 ﻿import type { Ticket, TicketFilters, TicketMessage, TicketStatus, TicketPriority, TransferRecord } from '@/types/ticket.types'
 import type { SortState } from '@/types/common.types'
-import type { NoteResponse, EmailDocumentResponse, EmailDocumentSummaryResponse, TransferListItem, PagedResponse } from '@/types/api.types'
+import type {
+  NoteResponse,
+  EmailDocumentResponse,
+  EmailDocumentSummaryResponse,
+  TicketStatusTransitionListResponse,
+  TransferListItem,
+  PagedResponse,
+} from '@/types/api.types'
 import { apiClient, ApiError } from './api.client'
-import { USE_MOCKS } from '@/lib/env'
-import { mockTickets, mockMessages, mockTransferRecords, getMockDelay } from '@/mock'
-import { normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
+import { normalizeStatus, normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
 
 // ---------------------------------------------------------------------------
-// Mock implementation (only used when VITE_USE_MOCKS=true)
-// ---------------------------------------------------------------------------
-
-let _mockTickets = [...mockTickets]
-let _mockMessages = [...mockMessages]
-let _mockTransferRecords = [...mockTransferRecords]
-
-function addSystemEvent(ticketId: string, content: string): void {
-  _mockMessages.push({
-    id: `sys-${Date.now()}-${Math.random()}`,
-    ticketId,
-    type: 'system_event',
-    authorId: null,
-    authorName: 'System',
-    content,
-    createdAt: new Date().toISOString(),
-    attachments: [],
-  })
-}
-
-const mockService = {
-  getAll: async (
-    filters: TicketFilters,
-    sort: SortState,
-    page: number,
-    pageSize: number,
-  ): Promise<{ data: Ticket[]; total: number }> => {
-    await getMockDelay()
-    let result = [..._mockTickets]
-
-    if (filters.search) {
-      const q = filters.search.toLowerCase()
-      result = result.filter(
-        (t) =>
-          t.subject.toLowerCase().includes(q) ||
-          t.customerName.toLowerCase().includes(q) ||
-          t.id.toLowerCase().includes(q),
-      )
-    }
-    if (filters.statuses.length > 0) result = result.filter((t) => filters.statuses.includes(t.status))
-    if (filters.priorities.length > 0) result = result.filter((t) => filters.priorities.includes(t.priority))
-    if (filters.assignedUserIds.length > 0) {
-      result = result.filter((t) => t.assignedUserId && filters.assignedUserIds.includes(t.assignedUserId))
-    }
-    if (filters.groupIds.length > 0) result = result.filter((t) => filters.groupIds.includes(t.groupId))
-    if (filters.dateFrom) result = result.filter((t) => t.createdAt >= filters.dateFrom!)
-    if (filters.dateTo) result = result.filter((t) => t.createdAt <= filters.dateTo!)
-    if (filters.unassignedOnly) result = result.filter((t) => t.assignedUserId === null)
-    if (filters.overdueOnly) result = result.filter((t) => t.slaBreached)
-    if (filters.openOnly) result = result.filter((t) => !['resolved', 'closed'].includes(t.status))
-    if (filters.transferredOnly) result = result.filter((t) => t.isTransferred)
-
-    result.sort((a, b) => {
-      const aVal = a[sort.field as keyof Ticket]
-      const bVal = b[sort.field as keyof Ticket]
-      const dir = sort.direction === 'asc' ? 1 : -1
-      if (aVal == null) return dir
-      if (bVal == null) return -dir
-      return aVal < bVal ? -dir : aVal > bVal ? dir : 0
-    })
-
-    const total = result.length
-    const data = result.slice((page - 1) * pageSize, page * pageSize)
-    return { data, total }
-  },
-
-  getById: async (id: string): Promise<Ticket | null> => {
-    await getMockDelay()
-    return _mockTickets.find((t) => t.id === id) ?? null
-  },
-
-  getMessages: async (ticketId: string): Promise<TicketMessage[]> => {
-    await getMockDelay()
-    return _mockMessages
-      .filter((m) => m.ticketId === ticketId)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  },
-
-  getTransferHistory: async (ticketId: string): Promise<TransferRecord[]> => {
-    await getMockDelay()
-    return _mockTransferRecords
-      .filter((r) => r.ticketId === ticketId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-  },
-
-  assign: async (ticketId: string, userId: string | null, userName: string | null, note?: string): Promise<Ticket> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    ticket.assignedUserId = userId
-    ticket.assignedUserName = userName
-    ticket.updatedAt = new Date().toISOString()
-    ticket.lastActionAt = new Date().toISOString()
-    ticket.lastActionSummary = userId ? `${userName} assigned` : 'Assignment removed'
-    addSystemEvent(ticketId, userId ? `Ticket assigned to ${userName}.` : 'Ticket assignment removed.')
-    if (note) {
-      _mockMessages.push({
-        id: `note-${Date.now()}`,
-        ticketId,
-        type: 'internal_note',
-        authorId: null,
-        authorName: 'System',
-        content: note,
-        createdAt: new Date().toISOString(),
-        attachments: [],
-      })
-    }
-    return { ...ticket }
-  },
-
-  changeStatus: async (ticketId: string, status: TicketStatus, reason?: string): Promise<Ticket> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    const prev = ticket.status
-    ticket.status = status
-    ticket.updatedAt = new Date().toISOString()
-    ticket.lastActionAt = new Date().toISOString()
-    ticket.lastActionSummary = `Status changed "${prev}" to "${status}"`
-    addSystemEvent(ticketId, `Status updated "${prev}" to "${status}".${reason ? ` Reason: ${reason}` : ''}`)
-    return { ...ticket }
-  },
-
-  changePriority: async (ticketId: string, priority: TicketPriority): Promise<Ticket> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    ticket.priority = priority
-    ticket.updatedAt = new Date().toISOString()
-    addSystemEvent(ticketId, `Priority updated to "${priority}".`)
-    return { ...ticket }
-  },
-
-  addPublicReply: async (ticketId: string, content: string, authorId: string, authorName: string): Promise<TicketMessage> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    const msg: TicketMessage = {
-      id: `msg-${Date.now()}`,
-      ticketId,
-      type: 'public_outbound',
-      authorId,
-      authorName,
-      content,
-      createdAt: new Date().toISOString(),
-      attachments: [],
-    }
-    _mockMessages.push(msg)
-    ticket.messageCount += 1
-    ticket.updatedAt = new Date().toISOString()
-    ticket.lastActionAt = new Date().toISOString()
-    ticket.lastActionSummary = `${authorName} sent a reply`
-    return msg
-  },
-
-  addInternalNote: async (ticketId: string, content: string, authorId: string, authorName: string): Promise<TicketMessage> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    const msg: TicketMessage = {
-      id: `note-${Date.now()}`,
-      ticketId,
-      type: 'internal_note',
-      authorId,
-      authorName,
-      content,
-      createdAt: new Date().toISOString(),
-      attachments: [],
-    }
-    _mockMessages.push(msg)
-    ticket.internalNoteCount += 1
-    ticket.updatedAt = new Date().toISOString()
-    return msg
-  },
-
-  transfer: async (
-    ticketId: string,
-    toGroupId: string,
-    toGroupName: string,
-    fromGroupId: string,
-    fromGroupName: string,
-    byName: string,
-    reason: string,
-    note?: string,
-  ): Promise<Ticket> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    const record: TransferRecord = {
-      id: `tr-${Date.now()}`,
-      ticketId,
-      fromGroupId,
-      fromGroupName,
-      toGroupId,
-      toGroupName,
-      transferredByName: byName,
-      reason,
-      note: note ?? null,
-      createdAt: new Date().toISOString(),
-    }
-    _mockTransferRecords.push(record)
-    ticket.groupId = toGroupId
-    ticket.groupName = toGroupName
-    ticket.assignedUserId = null
-    ticket.assignedUserName = null
-    ticket.isTransferred = true
-    ticket.transferredFromGroup = fromGroupName
-    ticket.status = 'transferred'
-    ticket.updatedAt = new Date().toISOString()
-    ticket.lastActionAt = new Date().toISOString()
-    ticket.lastActionSummary = `Transferred to ${toGroupName} team`
-    addSystemEvent(ticketId, `Ticket transferred to ${toGroupName}. By: ${byName}. Reason: ${reason}`)
-    return { ...ticket }
-  },
-
-  close: async (ticketId: string, sendNotification: boolean): Promise<Ticket> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    ticket.status = 'closed'
-    ticket.updatedAt = new Date().toISOString()
-    ticket.lastActionAt = new Date().toISOString()
-    ticket.lastActionSummary = 'Ticket closed'
-    addSystemEvent(ticketId, `Ticket closed.${sendNotification ? ' Customer notification email sent.' : ''}`)
-    return { ...ticket }
-  },
-
-  reopen: async (ticketId: string): Promise<Ticket> => {
-    await getMockDelay()
-    const ticket = _mockTickets.find((t) => t.id === ticketId)
-    if (!ticket) throw new Error('Ticket not found')
-    ticket.status = 'open'
-    ticket.updatedAt = new Date().toISOString()
-    ticket.lastActionAt = new Date().toISOString()
-    ticket.lastActionSummary = 'Ticket reopened'
-    addSystemEvent(ticketId, 'Ticket reopened.')
-    return { ...ticket }
-  },
-}
-
-// ---------------------------------------------------------------------------
-// Helpers: map backend DTOs → TicketMessage view model
+// Helpers: map backend DTOs to TicketMessage view model
 // ---------------------------------------------------------------------------
 
 function noteToMessage(n: NoteResponse): TicketMessage {
@@ -263,7 +27,6 @@ function noteToMessage(n: NoteResponse): TicketMessage {
     ticketId: n.ticketId,
     type: typeMap[n.type] ?? 'internal_note',
     authorId: null,
-    // Spec: NoteResponse has `createdBy` (username/display name), no authorId field
     authorName: n.createdBy ?? '',
     content: n.content,
     createdAt: n.createdAt,
@@ -275,14 +38,10 @@ function emailToMessage(e: EmailDocumentResponse): TicketMessage {
   return {
     id: e.id,
     ticketId: e.ticketId,
-    // Spec does not include direction — infer from presence of textBody/htmlBody (inbound)
     type: 'public_inbound',
     authorId: null,
-    // Spec field: `from` (sender address)
     authorName: e.from ?? '',
-    // Prefer textBody; fall back to htmlBody
     content: e.textBody ?? e.htmlBody ?? '',
-    // Spec: receivedAt (no sentAt in spec)
     createdAt: e.receivedAt ?? new Date().toISOString(),
     attachments: (e.attachments ?? []).map((a) => a.fileName),
   }
@@ -292,7 +51,7 @@ function emailToMessage(e: EmailDocumentResponse): TicketMessage {
 // Real API implementation — aligned to backend contract
 // ---------------------------------------------------------------------------
 
-const realService = {
+export const ticketService = {
   getAll: async (
     filters: TicketFilters,
     sort: SortState,
@@ -301,33 +60,23 @@ const realService = {
   ): Promise<{ data: Ticket[]; total: number }> => {
     const params = new URLSearchParams()
 
-    // Backend uses 0-indexed page numbers
     params.set('page', String(page - 1))
     params.set('size', String(pageSize))
 
-    // Sort — backend accepts sort field name and direction
     if (sort.field) params.set('sort', sort.field)
     if (sort.direction) params.set('direction', sort.direction)
-
-    // Scalar search
     if (filters.search) params.set('search', filters.search)
 
-    // Array filters — send as repeated params with UPPERCASE values (backend enum)
     for (const s of filters.statuses) params.append('status', toBackendStatus(s))
     for (const p of filters.priorities) params.append('priority', toBackendPriority(p))
     for (const uid of filters.assignedUserIds) params.append('userId', uid)
     for (const gid of filters.groupIds) params.append('groupId', gid)
 
-    // Date range
     if (filters.dateFrom) params.set('from', filters.dateFrom)
     if (filters.dateTo) params.set('to', filters.dateTo)
 
-    // Boolean flags (unassignedOnly/overdueOnly/openOnly/transferredOnly) are not in
-    // the backend contract — omitted in real mode.
-
     const res = await apiClient.get<PagedResponse<Record<string, unknown>> | Record<string, unknown>[]>(`/tickets?${params.toString()}`)
 
-    // Normalize: backend returns PagedResponse { items, totalElements } or a flat array
     if (Array.isArray(res)) return { data: res.map(normalizeTicket), total: res.length }
     return { data: res.items.map(normalizeTicket), total: res.totalElements }
   },
@@ -337,7 +86,21 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  /** GET /tickets/by-ticket-no/{ticketNo} — path param as per backend contract */
+  getAllowedTransitions: async (ticketId: string): Promise<TicketStatus[]> => {
+    try {
+      const response = await apiClient.get<TicketStatusTransitionListResponse | string[]>(`/tickets/${ticketId}/transitions`)
+      const rawTransitions = Array.isArray(response)
+        ? response
+        : response.allowedTransitions ?? []
+      return rawTransitions.map((value) => normalizeStatus(value))
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return []
+      }
+      throw error
+    }
+  },
+
   getByTicketNo: async (ticketNo: string): Promise<Ticket> => {
     const raw = await apiClient.get<Record<string, unknown>>(`/tickets/by-ticket-no/${encodeURIComponent(ticketNo)}`)
     return normalizeTicket(raw)
@@ -362,19 +125,12 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  /**
-   * Combines /notes/by-ticket + /emails/by-ticket into a unified TicketMessage view model.
-   *
-   * /emails/by-ticket returns EmailDocumentSummaryResponse[] — no content or attachments.
-   * We batch-fetch full detail (GET /emails/{id}) so every message has a body before render.
-   */
   getMessages: async (ticketId: string): Promise<TicketMessage[]> => {
     const [notes, emailSummaries] = await Promise.all([
       apiClient.get<NoteResponse[]>(`/notes/by-ticket/${ticketId}`),
       apiClient.get<EmailDocumentSummaryResponse[]>(`/emails/by-ticket/${ticketId}`),
     ])
 
-    // Fetch full detail for each email to get content + attachments
     const emailDetails = await Promise.all(
       emailSummaries.map((s) => apiClient.get<EmailDocumentResponse>(`/emails/${s.id}`)),
     )
@@ -403,11 +159,11 @@ const realService = {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   },
 
-  /** Routes to /assignments/assign or /assignments/unassign, returns refreshed ticket */
   assign: async (
     ticketId: string,
     userId: string | null,
     _userName: string | null,
+    _note?: string,
   ): Promise<Ticket> => {
     if (userId === null) {
       await apiClient.post('/assignments/unassign', { ticketId: Number(ticketId) })
@@ -421,18 +177,13 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  /** POST /tickets/{id}/status — body: { status } only (no reason field in spec) */
-  changeStatus: async (ticketId: string, status: TicketStatus): Promise<Ticket> => {
+  changeStatus: async (ticketId: string, status: TicketStatus, _reason?: string): Promise<Ticket> => {
     const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/status`, {
       status: toBackendStatus(status),
     })
     return normalizeTicket(raw)
   },
 
-  /**
-   * Priority change requires a full PUT — spec requires subject + priority.
-   * Fetch current ticket to get subject, then PUT with updated priority.
-   */
   changePriority: async (ticketId: string, priority: TicketPriority): Promise<Ticket> => {
     const current = await apiClient.get<Record<string, unknown>>(`/tickets/${ticketId}`)
     const raw = await apiClient.put<Record<string, unknown>>(`/tickets/${ticketId}`, {
@@ -442,7 +193,6 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  /** POST /notes with type=INTERNAL — authorId is NOT sent (backend derives from session) */
   addInternalNote: async (
     ticketId: string,
     content: string,
@@ -457,10 +207,6 @@ const realService = {
     return noteToMessage(note)
   },
 
-  /**
-   * Public reply via email is NOT supported by the current backend (no POST /emails).
-   * Deferred to V2. Throws a 501 so the caller can show a graceful error.
-   */
   addPublicReply: async (
     _ticketId: string,
     _content: string,
@@ -470,11 +216,10 @@ const realService = {
     throw new ApiError(
       501,
       'not_implemented',
-      'Sending email replies is not supported in this backend version. Use mock mode for this feature.',
+      'Use ticketEmailService.sendReply() for email replies.',
     )
   },
 
-  /** POST /transfers then returns refreshed ticket */
   transfer: async (
     ticketId: string,
     toGroupId: string,
@@ -496,20 +241,13 @@ const realService = {
     return normalizeTicket(raw)
   },
 
-  /** POST /tickets/{id}/close — spec requires empty body {} */
   close: async (ticketId: string): Promise<Ticket> => {
     const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/close`, {})
     return normalizeTicket(raw)
   },
 
-  /** POST /tickets/{id}/reopen */
   reopen: async (ticketId: string): Promise<Ticket> => {
     const raw = await apiClient.post<Record<string, unknown>>(`/tickets/${ticketId}/reopen`, {})
     return normalizeTicket(raw)
   },
 }
-
-// ---------------------------------------------------------------------------
-// Export: route to mock or real depending on env flag
-// ---------------------------------------------------------------------------
-export const ticketService = USE_MOCKS ? mockService : realService

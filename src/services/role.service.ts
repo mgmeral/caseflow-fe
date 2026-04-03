@@ -1,10 +1,6 @@
-import type { RoleRecord, RoleSummaryRecord, PermissionDef } from '@/types/user.types'
+﻿import type { RoleRecord, RoleSummaryRecord, PermissionDef } from '@/types/user.types'
 import type { CreateRoleRequest, RoleDetailResponse, RoleResponse, RoleTicketScope, UpdateRoleRequest } from '@/types/api.types'
 import { apiClient } from './api.client'
-import { USE_MOCKS } from '@/lib/env'
-import { mockRoles, mockPermissionDefs, getMockDelay } from '@/mock'
-
-let _mockRoles = [...mockRoles]
 
 function toArrayPayload(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw
@@ -51,84 +47,6 @@ function normalizePermissionCodes(raw: unknown): string[] {
     .filter((code) => code.length > 0)
 
   return Array.from(new Set(codes))
-}
-
-const mockService = {
-  getAll: async (): Promise<RoleSummaryRecord[]> => {
-    await getMockDelay()
-    return _mockRoles.map((role) => ({
-      id: role.id,
-      code: role.code,
-      name: role.name,
-      ticketScope: role.ticketScope,
-      isActive: role.isActive,
-      permissionCount: role.permissions.length,
-      userCount: role.userCount,
-    }))
-  },
-
-  getPermissions: async (): Promise<PermissionDef[]> => {
-    await getMockDelay()
-    return [...mockPermissionDefs]
-  },
-
-  getById: async (id: string): Promise<RoleRecord> => {
-    await getMockDelay()
-    const role = _mockRoles.find((item) => item.id === id)
-    if (!role) throw new Error('Role not found')
-    return { ...role, permissions: [...role.permissions] }
-  },
-
-  create: async (data: CreateRoleRequest): Promise<RoleRecord> => {
-    await getMockDelay()
-    const role: RoleRecord = {
-      id: `r-${Date.now()}`,
-      code: data.code.trim(),
-      name: data.name.trim(),
-      description: data.description?.trim(),
-      ticketScope: data.ticketScope,
-      isActive: true,
-      permissions: [...data.permissions],
-    }
-    _mockRoles = [..._mockRoles, role]
-    return { ...role }
-  },
-
-  update: async (id: string, data: UpdateRoleRequest): Promise<RoleRecord> => {
-    await getMockDelay()
-    const idx = _mockRoles.findIndex((r) => r.id === id)
-    if (idx === -1) throw new Error('Role not found')
-    _mockRoles[idx] = {
-      ..._mockRoles[idx],
-      code: data.code.trim(),
-      name: data.name.trim(),
-      description: data.description?.trim(),
-      ticketScope: data.ticketScope,
-      permissions: [...data.permissions],
-    }
-    return { ..._mockRoles[idx] }
-  },
-
-  activate: async (id: string): Promise<RoleRecord> => {
-    await getMockDelay()
-    const idx = _mockRoles.findIndex((r) => r.id === id)
-    if (idx === -1) throw new Error('Role not found')
-    _mockRoles[idx] = { ..._mockRoles[idx], isActive: true }
-    return { ..._mockRoles[idx] }
-  },
-
-  deactivate: async (id: string): Promise<RoleRecord> => {
-    await getMockDelay()
-    const idx = _mockRoles.findIndex((r) => r.id === id)
-    if (idx === -1) throw new Error('Role not found')
-    _mockRoles[idx] = { ..._mockRoles[idx], isActive: false }
-    return { ..._mockRoles[idx] }
-  },
-
-  delete: async (id: string): Promise<void> => {
-    await getMockDelay()
-    _mockRoles = _mockRoles.filter((r) => r.id !== id)
-  },
 }
 
 function normalizeRole(raw: unknown): RoleRecord {
@@ -224,26 +142,22 @@ function normalizePermDef(raw: unknown): PermissionDef {
   }
 }
 
-const realService = {
-  /** GET /api/roles */
+export const roleService = {
   getAll: async (): Promise<RoleSummaryRecord[]> => {
     const res = await apiClient.get<RoleResponse[] | unknown>('/roles')
     return toArrayPayload(res).map(normalizeRoleSummary)
   },
 
-  /** GET /api/roles/{id} */
   getById: async (id: string): Promise<RoleRecord> => {
     const res = await apiClient.get<RoleDetailResponse | unknown>(`/roles/${id}`)
     return normalizeRole(res)
   },
 
-  /** GET /api/roles/permissions */
   getPermissions: async (): Promise<PermissionDef[]> => {
     const res = await apiClient.get<unknown>('/roles/permissions')
     return toArrayPayload(res).map(normalizePermDef).filter((p) => p.code.length > 0)
   },
 
-  /** POST /api/roles */
   create: async (data: CreateRoleRequest): Promise<RoleRecord> => {
     const raw = await apiClient.post<Record<string, unknown>>('/roles', {
       code: data.code.trim(),
@@ -255,7 +169,6 @@ const realService = {
     return normalizeRole(raw)
   },
 
-  /** PUT /api/roles/{id} */
   update: async (id: string, data: UpdateRoleRequest): Promise<RoleRecord> => {
     const raw = await apiClient.put<Record<string, unknown>>(`/roles/${id}`, {
       code: data.code.trim(),
@@ -267,22 +180,21 @@ const realService = {
     return normalizeRole(raw)
   },
 
-  /** PATCH /api/roles/{id}/activate */
   activate: async (id: string): Promise<RoleRecord> => {
-    const raw = await apiClient.patch<Record<string, unknown>>(`/roles/${id}/activate`, {})
-    return normalizeRole(raw)
+    const raw = await apiClient.patch<Record<string, unknown> | undefined>(`/roles/${id}/activate`, {})
+    if (raw && typeof raw === 'object') return normalizeRole(raw)
+    const refreshed = await apiClient.get<RoleDetailResponse | unknown>(`/roles/${id}`)
+    return normalizeRole(refreshed)
   },
 
-  /** PATCH /api/roles/{id}/deactivate */
   deactivate: async (id: string): Promise<RoleRecord> => {
-    const raw = await apiClient.patch<Record<string, unknown>>(`/roles/${id}/deactivate`, {})
-    return normalizeRole(raw)
+    const raw = await apiClient.patch<Record<string, unknown> | undefined>(`/roles/${id}/deactivate`, {})
+    if (raw && typeof raw === 'object') return normalizeRole(raw)
+    const refreshed = await apiClient.get<RoleDetailResponse | unknown>(`/roles/${id}`)
+    return normalizeRole(refreshed)
   },
 
-  /** DELETE /api/roles/{id} */
   delete: async (id: string): Promise<void> => {
     await apiClient.delete<void>(`/roles/${id}`)
   },
 }
-
-export const roleService = USE_MOCKS ? mockService : realService

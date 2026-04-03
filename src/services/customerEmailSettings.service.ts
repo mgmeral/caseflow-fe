@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   CustomerEmailRoutingRuleResponse,
   CustomerEmailSettingsResponse,
   CustomerSummaryResponse,
@@ -7,13 +7,6 @@ import type {
 } from '@/types/api.types'
 import type { CustomerEmailRoutingRule, CustomerEmailSettings } from '@/types/email.types'
 import { apiClient } from './api.client'
-import { USE_MOCKS } from '@/lib/env'
-import { getMockDelay } from '@/mock'
-import {
-  mockCustomerEmailSettings,
-  mockCustomerRoutingRules,
-  mockMailboxes,
-} from '@/mock/email-platform.mock'
 import {
   normalizeCustomerEmailRoutingRule,
   normalizeCustomerEmailSettings,
@@ -25,116 +18,33 @@ export interface CustomerEmailSummary {
   code?: string
 }
 
-let settingsStore = [...mockCustomerEmailSettings]
-let rulesStore = [...mockCustomerRoutingRules]
-
-const mockService = {
-  listCustomers: async (): Promise<CustomerEmailSummary[]> => {
-    await getMockDelay()
-    return settingsStore.map((item) => ({
-      id: item.customerId,
-      name: item.customerName ?? item.customerId,
-    }))
-  },
-
-  getByCustomer: async (customerId: string): Promise<CustomerEmailSettings | null> => {
-    await getMockDelay()
-    const settings = settingsStore.find((item) => item.customerId === customerId)
-    return settings ? normalizeCustomerEmailSettings(settings) : null
-  },
-
-  upsert: async (customerId: string, payload: UpsertCustomerEmailSettingsRequest): Promise<CustomerEmailSettings> => {
-    await getMockDelay()
-    const mailbox = mockMailboxes.find((item) => item.id === payload.mailboxId)
-    const next: CustomerEmailSettingsResponse = {
-      customerId,
-      customerName: settingsStore.find((item) => item.customerId === customerId)?.customerName ?? customerId,
-      mailboxId: payload.mailboxId ?? null,
-      mailboxName: mailbox?.name ?? null,
-      trustedContactsOnly: payload.trustedContactsOnly,
-      autoCreateContact: payload.autoCreateContact,
-      allowSubdomains: payload.allowSubdomains,
-      unknownSenderPolicy: payload.unknownSenderPolicy,
-      defaultGroupId: payload.defaultGroupId ?? null,
-      defaultGroupName: mailbox?.defaultGroupName ?? null,
-      defaultPriority: payload.defaultPriority ?? null,
-      defaultStatus: payload.defaultStatus ?? null,
-      updatedAt: new Date().toISOString(),
-    }
-    settingsStore = settingsStore.filter((item) => item.customerId !== customerId)
-    settingsStore.push(next)
-    return normalizeCustomerEmailSettings(next)
-  },
-
-  listRoutingRules: async (customerId: string): Promise<CustomerEmailRoutingRule[]> => {
-    await getMockDelay()
-    return rulesStore
-      .filter((item) => item.customerId === customerId)
-      .map(normalizeCustomerEmailRoutingRule)
-  },
-
-  createRoutingRule: async (customerId: string, payload: UpsertCustomerEmailRoutingRuleRequest) => {
-    await getMockDelay()
-    const mailbox = mockMailboxes.find((item) => item.id === payload.mailboxId)
-    const rule: CustomerEmailRoutingRuleResponse = {
-      id: `rule-${Date.now()}`,
-      customerId,
-      matchType: payload.matchType,
-      matchValue: payload.matchValue,
-      mailboxId: payload.mailboxId ?? null,
-      mailboxName: mailbox?.name ?? null,
-      groupId: payload.groupId ?? null,
-      groupName: mailbox?.defaultGroupName ?? null,
-      priority: payload.priority ?? null,
-      status: payload.status ?? null,
-      isActive: payload.isActive ?? true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-    rulesStore = [rule, ...rulesStore]
-    return normalizeCustomerEmailRoutingRule(rule)
-  },
-
-  updateRoutingRule: async (customerId: string, ruleId: string, payload: UpsertCustomerEmailRoutingRuleRequest) => {
-    await getMockDelay()
-    rulesStore = rulesStore.map((item) =>
-      item.id === ruleId && item.customerId === customerId
-        ? {
-            ...item,
-            ...payload,
-            mailboxId: payload.mailboxId ?? null,
-            groupId: payload.groupId ?? null,
-            priority: payload.priority ?? null,
-            status: payload.status ?? null,
-            isActive: payload.isActive ?? item.isActive,
-            updatedAt: new Date().toISOString(),
-          }
-        : item,
-    )
-    const rule = rulesStore.find((item) => item.id === ruleId && item.customerId === customerId)
-    if (!rule) throw new Error('Routing rule not found')
-    return normalizeCustomerEmailRoutingRule(rule)
-  },
-
-  deactivateRoutingRule: async (customerId: string, ruleId: string) => {
-    await getMockDelay()
-    rulesStore = rulesStore.map((item) =>
-      item.id === ruleId && item.customerId === customerId
-        ? { ...item, isActive: false, updatedAt: new Date().toISOString() }
-        : item,
-    )
-    const rule = rulesStore.find((item) => item.id === ruleId && item.customerId === customerId)
-    if (!rule) throw new Error('Routing rule not found')
-    return normalizeCustomerEmailRoutingRule(rule)
-  },
-
-  deleteRoutingRule: async (customerId: string, ruleId: string): Promise<void> => {
-    await getMockDelay()
-    rulesStore = rulesStore.filter((item) => !(item.id === ruleId && item.customerId === customerId))
-  },
+function toBackendUnknownSenderPolicy(policy: UpsertCustomerEmailSettingsRequest['unknownSenderPolicy']) {
+  switch (policy) {
+    case 'ROUTE_TO_DEFAULT':
+    case 'AUTO_CREATE_CONTACT':
+    case 'ALLOW':
+      return 'CREATE_UNMATCHED_TICKET'
+    case 'QUARANTINE':
+      return 'MANUAL_REVIEW'
+    default:
+      return policy
+  }
 }
 
-const realService = {
+function toBackendSenderMatchType(type: UpsertCustomerEmailRoutingRuleRequest['senderMatchType']) {
+  return type === 'DOMAIN_SUFFIX' ? 'DOMAIN' : type
+}
+
+function toBackendRoutingRulePayload(payload: UpsertCustomerEmailRoutingRuleRequest) {
+  return {
+    senderMatchType: toBackendSenderMatchType(payload.senderMatchType),
+    matchValue: payload.matchValue ?? payload.senderMatchValue,
+    ...(payload.priority !== undefined ? { priority: payload.priority } : {}),
+    ...(payload.isActive !== undefined ? { isActive: payload.isActive } : {}),
+  }
+}
+
+export const customerEmailSettingsService = {
   listCustomers: async (): Promise<CustomerEmailSummary[]> => {
     const customers = await apiClient.get<CustomerSummaryResponse[]>('/customers')
     return customers.map((customer) => ({
@@ -150,33 +60,55 @@ const realService = {
   },
 
   upsert: async (customerId: string, payload: UpsertCustomerEmailSettingsRequest): Promise<CustomerEmailSettings> => {
-    const settings = await apiClient.put<CustomerEmailSettingsResponse>(`/customers/${customerId}/email-settings`, payload)
+    const settings = await apiClient.put<CustomerEmailSettingsResponse>(`/customers/${customerId}/email-settings`, {
+      isActive: payload.isActive ?? payload.isEnabled,
+      allowSubdomains: payload.allowSubdomains,
+      unknownSenderPolicy: toBackendUnknownSenderPolicy(payload.unknownSenderPolicy),
+      ...(payload.defaultGroupId !== undefined ? { defaultGroupId: payload.defaultGroupId } : {}),
+      ...(payload.defaultPriority !== undefined ? { defaultPriority: payload.defaultPriority } : {}),
+    })
     return normalizeCustomerEmailSettings(settings)
   },
 
   listRoutingRules: async (customerId: string): Promise<CustomerEmailRoutingRule[]> => {
-    const rules = await apiClient.get<CustomerEmailRoutingRuleResponse[]>(`/customers/${customerId}/email-routing-rules`)
-    return rules.map(normalizeCustomerEmailRoutingRule)
+    const settings = await apiClient.get<CustomerEmailSettingsResponse | null>(`/customers/${customerId}/email-settings`)
+    return (settings?.rules ?? []).map(normalizeCustomerEmailRoutingRule)
   },
 
   createRoutingRule: async (customerId: string, payload: UpsertCustomerEmailRoutingRuleRequest) => {
-    const rule = await apiClient.post<CustomerEmailRoutingRuleResponse>(`/customers/${customerId}/email-routing-rules`, payload)
+    const rule = await apiClient.post<CustomerEmailRoutingRuleResponse>(
+      `/customers/${customerId}/email-settings/rules`,
+      toBackendRoutingRulePayload(payload),
+    )
     return normalizeCustomerEmailRoutingRule(rule)
   },
 
   updateRoutingRule: async (customerId: string, ruleId: string, payload: UpsertCustomerEmailRoutingRuleRequest) => {
-    const rule = await apiClient.put<CustomerEmailRoutingRuleResponse>(`/customers/${customerId}/email-routing-rules/${ruleId}`, payload)
+    const rule = await apiClient.put<CustomerEmailRoutingRuleResponse>(
+      `/customers/${customerId}/email-settings/rules/${ruleId}`,
+      toBackendRoutingRulePayload(payload),
+    )
     return normalizeCustomerEmailRoutingRule(rule)
   },
 
   deactivateRoutingRule: async (customerId: string, ruleId: string) => {
-    const rule = await apiClient.patch<CustomerEmailRoutingRuleResponse>(`/customers/${customerId}/email-routing-rules/${ruleId}/deactivate`, {})
-    return normalizeCustomerEmailRoutingRule(rule)
+    const rules = await customerEmailSettingsService.listRoutingRules(customerId)
+    const existingRule = rules.find((rule) => rule.id === ruleId)
+    if (!existingRule) {
+      throw new Error('Routing rule not found')
+    }
+
+    return customerEmailSettingsService.updateRoutingRule(customerId, ruleId, {
+      senderMatchType: existingRule.senderMatchType,
+      senderMatchValue: existingRule.senderMatchValue,
+      recipientMailboxId: existingRule.recipientMailboxId,
+      priority: existingRule.priority,
+      isActive: false,
+      notes: existingRule.notes,
+    })
   },
 
   deleteRoutingRule: async (customerId: string, ruleId: string): Promise<void> => {
-    await apiClient.delete<void>(`/customers/${customerId}/email-routing-rules/${ruleId}`)
+    await apiClient.delete<void>(`/customers/${customerId}/email-settings/rules/${ruleId}`)
   },
 }
-
-export const customerEmailSettingsService = USE_MOCKS ? mockService : realService

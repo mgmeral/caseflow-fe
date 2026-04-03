@@ -3,6 +3,8 @@
  * New ticket email integrations should use ticketEmailService + useTicketEmailThread.
  */
 import type { TicketMessage } from '@/types/ticket.types'
+import type { EmailDocumentResponse } from '@/types/api.types'
+import { apiClient } from './api.client'
 import { ticketEmailService } from './ticketEmail.service'
 
 function toLegacyTicketMessage(message: Awaited<ReturnType<typeof ticketEmailService.listThread>>[number]): TicketMessage {
@@ -18,6 +20,19 @@ function toLegacyTicketMessage(message: Awaited<ReturnType<typeof ticketEmailSer
   }
 }
 
+function emailDocToLegacyTicketMessage(message: EmailDocumentResponse): TicketMessage {
+  return {
+    id: message.id,
+    ticketId: message.ticketId,
+    type: 'public_inbound',
+    authorId: null,
+    authorName: message.from ?? '',
+    content: message.textBody ?? message.htmlBody ?? '',
+    createdAt: message.receivedAt ?? new Date().toISOString(),
+    attachments: (message.attachments ?? []).map((attachment) => attachment.fileName),
+  }
+}
+
 export const emailService = {
   getByTicket: async (ticketId: string): Promise<TicketMessage[]> => {
     const messages = await ticketEmailService.listThread(ticketId)
@@ -25,8 +40,8 @@ export const emailService = {
   },
 
   getById: async (id: string): Promise<TicketMessage | null> => {
-    const message = await ticketEmailService.getDetail('', id)
-    return message ? toLegacyTicketMessage(message) : null
+    const message = await apiClient.get<EmailDocumentResponse | null>(`/emails/${id}`)
+    return message ? emailDocToLegacyTicketMessage(message) : null
   },
 
   getByThread: async (_threadKey: string): Promise<TicketMessage[]> => [],

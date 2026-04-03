@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { customerService } from '@/services/customer.service'
 
 export function useCustomers(search = '', segment?: string) {
@@ -26,4 +26,28 @@ export function useCustomerTickets(customerId: string) {
     enabled: !!customerId,
   })
   return { tickets: data ?? [], isLoading, ...rest }
+}
+
+export function useCreateCustomer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (payload: { name: string; code: string }) => customerService.create(payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['customers'] })
+    },
+  })
+}
+
+export function useUpdateCustomer() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { name: string; code: string } }) =>
+      customerService.update(id, payload),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
+        queryClient.invalidateQueries({ queryKey: ['customer', variables.id] }),
+      ])
+    },
+  })
 }

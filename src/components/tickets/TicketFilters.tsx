@@ -13,7 +13,16 @@ interface TicketFiltersProps {
   users: User[]
 }
 
-const ALL_STATUSES: TicketStatus[] = ['new', 'open', 'in_progress', 'pending', 'resolved', 'closed', 'transferred']
+const ALL_STATUSES: TicketStatus[] = [
+  'NEW',
+  'TRIAGED',
+  'ASSIGNED',
+  'IN_PROGRESS',
+  'WAITING_CUSTOMER',
+  'RESOLVED',
+  'CLOSED',
+  'REOPENED',
+]
 const ALL_PRIORITIES: TicketPriority[] = ['critical', 'high', 'medium', 'low']
 
 function useDebounce<T>(value: T, delay: number): T {

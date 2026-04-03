@@ -2,8 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/shared/Button'
-import { LogIn } from 'lucide-react'
-import { USE_MOCKS, API_URL } from '@/lib/env'
+import { API_URL } from '@/lib/env'
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -36,11 +35,8 @@ export function LoginPage() {
       <div className="bg-white rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm p-8">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-indigo-600 rounded-xl mb-3">
-            <LogIn className="w-6 h-6 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">CSM CRM</h1>
-          <p className="text-sm text-gray-500 mt-1">Sign in to your account</p>
+          <img src="/logo-full.png" alt="CaseFlow" className="h-44 mx-auto -mb-8" />
+          <p className="text-sm text-gray-500">Sign in to your account</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -74,14 +70,6 @@ export function LoginPage() {
           <Button type="submit" variant="primary" isLoading={isLoading} fullWidth>
             Sign In
           </Button>
-
-          {!USE_MOCKS && (
-            <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 leading-relaxed">
-              <strong>Real mode:</strong> backend must be running at{' '}
-              <span className="font-mono break-all">{API_URL || 'VITE_API_URL (not set)'}</span>.
-              {' '}Set <span className="font-mono">VITE_USE_MOCKS=true</span> for local dev without a backend.
-            </p>
-          )}
         </form>
       </div>
     </div>

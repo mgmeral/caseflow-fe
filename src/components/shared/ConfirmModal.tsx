@@ -10,6 +10,7 @@ interface ConfirmModalProps {
   confirmLabel?: string
   isDestructive?: boolean
   isLoading?: boolean
+  children?: React.ReactNode
 }
 
 export function ConfirmModal({
@@ -21,6 +22,7 @@ export function ConfirmModal({
   confirmLabel = 'Confirm',
   isDestructive = false,
   isLoading = false,
+  children,
 }: ConfirmModalProps) {
   return (
     <Modal
@@ -44,7 +46,7 @@ export function ConfirmModal({
         </>
       }
     >
-      <p className="text-sm text-gray-600">{message}</p>
+      {children ?? <p className="text-sm text-gray-600">{message}</p>}
     </Modal>
   )
 }

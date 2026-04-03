@@ -13,28 +13,29 @@
 import type { User, Group } from '@/types/user.types'
 import type { UserRole } from '@/types/common.types'
 import type { BackendRole } from '@/types/api.types'
-import type { Ticket, TicketStatus, TicketPriority, SourceType } from '@/types/ticket.types'
+import type { Ticket, TicketAttachment, TicketStatus, TicketPriority, SourceType } from '@/types/ticket.types'
 
 // ---------------------------------------------------------------------------
-// Status / priority normalization (backend uppercase → FE lowercase enum)
+// Status / priority normalization
 // ---------------------------------------------------------------------------
 
 /**
- * Map backend uppercase status values to FE TicketStatus.
- * Backend: NEW, TRIAGED, ASSIGNED, IN_PROGRESS, WAITING_CUSTOMER, RESOLVED, CLOSED, REOPENED
- * FE:      new, open,    open,     in_progress, pending,          resolved, closed, open
+ * Map incoming status values to backend-aligned TicketStatus.
  */
 export function normalizeStatus(raw: unknown): TicketStatus {
   switch (String(raw).toUpperCase()) {
-    case 'NEW': return 'new'
-    case 'TRIAGED':
-    case 'ASSIGNED':
-    case 'REOPENED': return 'open'
-    case 'IN_PROGRESS': return 'in_progress'
-    case 'WAITING_CUSTOMER': return 'pending'
-    case 'RESOLVED': return 'resolved'
-    case 'CLOSED': return 'closed'
-    default: return 'open'
+    case 'NEW': return 'NEW'
+    case 'TRIAGED': return 'TRIAGED'
+    case 'ASSIGNED': return 'ASSIGNED'
+    case 'IN_PROGRESS': return 'IN_PROGRESS'
+    case 'WAITING_CUSTOMER': return 'WAITING_CUSTOMER'
+    case 'RESOLVED': return 'RESOLVED'
+    case 'CLOSED': return 'CLOSED'
+    case 'REOPENED': return 'REOPENED'
+    // Legacy FE aliases accepted for compatibility in mixed data paths.
+    case 'OPEN': return 'ASSIGNED'
+    case 'PENDING': return 'WAITING_CUSTOMER'
+    default: return 'NEW'
   }
 }
 
@@ -58,6 +59,15 @@ export function normalizePriority(raw: unknown): TicketPriority {
  */
 export function toBackendStatus(status: TicketStatus | string): string {
   switch (status) {
+    case 'NEW':
+    case 'TRIAGED':
+    case 'ASSIGNED':
+    case 'IN_PROGRESS':
+    case 'WAITING_CUSTOMER':
+    case 'RESOLVED':
+    case 'CLOSED':
+    case 'REOPENED':
+      return status
     case 'new': return 'NEW'
     case 'open': return 'ASSIGNED'
     case 'in_progress': return 'IN_PROGRESS'
@@ -85,6 +95,42 @@ export function normalizeRole(role: BackendRole | string | undefined): UserRole 
     case 'AGENT': return 'agent'
     case 'VIEWER': return 'viewer'
     default: return 'viewer'
+  }
+}
+
+function normalizeRoleFromMe(raw: Record<string, unknown>): UserRole {
+  const roleCode = String(raw.roleCode ?? '').toUpperCase()
+  if (roleCode.includes('ADMIN')) return 'admin'
+  if (roleCode.includes('VIEW')) return 'viewer'
+  if (roleCode) return 'agent'
+  return normalizeRole(raw.role as BackendRole | string | undefined)
+}
+
+function normalizeTicketScope(raw: unknown): User['ticketScope'] {
+  switch (String(raw ?? '').toUpperCase()) {
+    case 'ALL':
+      return 'ALL'
+    case 'OWN_GROUPS':
+      return 'OWN_GROUPS'
+    case 'OWN_AND_OWN_GROUPS':
+      return 'OWN_AND_OWN_GROUPS'
+    case 'ASSIGNED_ONLY':
+      return 'ASSIGNED_ONLY'
+    default:
+      return 'ASSIGNED_ONLY'
+  }
+}
+
+function normalizeTicketAttachment(raw: Record<string, unknown>): TicketAttachment {
+  return {
+    id: String(raw.id ?? ''),
+    ticketId: raw.ticketId != null ? String(raw.ticketId) : null,
+    emailId: raw.emailId != null ? String(raw.emailId) : null,
+    fileName: String(raw.fileName ?? ''),
+    contentType: raw.contentType ? String(raw.contentType) : null,
+    size: typeof raw.size === 'number' ? raw.size : null,
+    downloadUrl: raw.downloadPath ? String(raw.downloadPath) : raw.downloadUrl ? String(raw.downloadUrl) : null,
+    uploadedAt: raw.uploadedAt ? String(raw.uploadedAt) : null,
   }
 }
 
@@ -125,14 +171,12 @@ export function normalizeUser(raw: Record<string, unknown>): User {
     lastName,
     fullName,
     email: String(raw.email ?? ''),
-    role: normalizeRole(raw.role as BackendRole | string | undefined),
+    role: normalizeRoleFromMe(raw),
     roleId: raw.roleId != null ? String(raw.roleId) : undefined,
     roleCode: raw.roleCode ? String(raw.roleCode) : undefined,
     roleName: raw.roleName ? String(raw.roleName) : undefined,
     permissionCodes: Array.isArray(raw.permissionCodes) ? (raw.permissionCodes as string[]) : [],
-    ticketScope: (raw.ticketScope === 'ALL' || raw.ticketScope === 'GROUP' || raw.ticketScope === 'OWN')
-      ? raw.ticketScope
-      : 'OWN',
+    ticketScope: normalizeTicketScope(raw.ticketScope),
     groupIds: Array.isArray(raw.groupIds) ? (raw.groupIds as (string | number)[]).map(String) : [],
     groupNames: Array.isArray(raw.groupNames) ? (raw.groupNames as string[]) : [],
     adminLevel: 0,
@@ -162,7 +206,6 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
     subject: String(raw.subject ?? ''),
     customerId: String(raw.customerId ?? ''),
     customerName: String(raw.customerName ?? ''),
-    customerSegment: String(raw.customerSegment ?? ''),
     groupId,
     groupName,
     assignedUserId: raw.assignedUserId != null ? String(raw.assignedUserId) : null,
@@ -183,6 +226,16 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
     messageCount: typeof raw.messageCount === 'number' ? raw.messageCount : 0,
     internalNoteCount: typeof raw.internalNoteCount === 'number' ? raw.internalNoteCount : 0,
     tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : [],
+    ...(Array.isArray(raw.allowedTransitions)
+      ? {
+          allowedTransitions: (raw.allowedTransitions as unknown[])
+            .map((value) => normalizeStatus(value))
+            .filter((value, index, list) => list.indexOf(value) === index),
+        }
+      : {}),
+    attachments: Array.isArray(raw.attachments)
+      ? (raw.attachments as Record<string, unknown>[]).map(normalizeTicketAttachment)
+      : [],
   }
 }
 

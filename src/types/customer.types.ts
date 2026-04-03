@@ -1,5 +1,3 @@
-export type CustomerSegment = 'bank' | 'insurance' | 'leasing' | 'corporate' | 'other'
-
 /** Aligns to backend ContactResponse */
 export interface Contact {
   id: string
@@ -13,17 +11,16 @@ export interface Contact {
   isPrimary: boolean
 }
 
+/**
+ * Frontend view-model for a Customer.
+ * Aligned to backend GET /api/customers/{id} (CustomerResponse).
+ */
 export interface Customer {
   id: string
   name: string
-  segment: CustomerSegment
-  emails: string[]
-  phone: string | null
-  assignedAgentId: string | null
-  assignedAgentName: string | null
-  totalTickets: number
-  openTickets: number
-  createdAt: string
+  code: string
   isActive: boolean
-  notes: string
+  createdAt: string
+  updatedAt: string
 }
+""

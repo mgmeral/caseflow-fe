@@ -1,10 +1,36 @@
-import { useState, useRef } from 'react'
-import { Send, Mail, X, Paperclip, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import DOMPurify from 'dompurify'
+import { Send, Mail, X, Eye } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 import { useSendTicketReply } from '@/hooks/useTicketEmails'
 import { useMailboxes } from '@/hooks/useMailboxes'
 import { useToast } from '@/hooks/useToast'
+import { Modal } from '@/components/shared/Modal'
+import { useTemplatePreview, useTemplates } from '@/hooks/useTemplates'
 import type { SendTicketReplyRequest, TicketEmailMessage } from '@/types/email.types'
+
+function getReplyStatusMessage(status: string, message: string | null) {
+  switch (status) {
+    case 'QUEUED':
+      return { kind: 'success' as const, text: 'Reply accepted and queued for delivery.' }
+    case 'PROCESSING':
+    case 'SENDING':
+      return { kind: 'success' as const, text: 'Reply accepted and is being sent.' }
+    case 'SENT':
+      return { kind: 'success' as const, text: 'Reply sent.' }
+    case 'DISPATCHED':
+      return { kind: 'success' as const, text: 'Reply dispatched to outbound delivery.' }
+    case 'DELIVERED':
+      return { kind: 'success' as const, text: 'Reply delivered.' }
+    case 'FAILED':
+    case 'PERMANENTLY_FAILED':
+      return { kind: 'error' as const, text: message ?? 'Reply failed to send.' }
+    case 'UNKNOWN':
+      return { kind: 'success' as const, text: 'Reply request completed, but the backend did not return a send status yet.' }
+    default:
+      return { kind: 'success' as const, text: `Reply accepted (${status}).` }
+  }
+}
 
 interface EmailReplyComposerProps {
   isOpen: boolean
@@ -16,6 +42,15 @@ interface EmailReplyComposerProps {
   ticketSubject?: string
 }
 
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+interface ComposerFeedback {
+  tone: 'info' | 'success' | 'error'
+  text: string
+}
+
 export function EmailReplyComposer({
   isOpen,
   onClose,
@@ -25,43 +60,49 @@ export function EmailReplyComposer({
 }: EmailReplyComposerProps) {
   const { success, error: toastError } = useToast()
   const { data: mailboxData } = useMailboxes({ active: true })
+  const templatesQuery = useTemplates(isOpen)
   const mailboxes = mailboxData?.items ?? []
+  const templates = (templatesQuery.data ?? []).filter((template) => template.isActive)
   const sendMutation = useSendTicketReply(ticketId)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Form state
-  const [mailboxId, setMailboxId] = useState<string>(lastInbound?.mailboxId ?? '')
-  const [to, setTo] = useState(lastInbound?.from ? lastInbound.from : '')
-  const [cc, setCc] = useState('')
-  const [bcc, setBcc] = useState('')
-  const [subject, setSubject] = useState(
+  const replySourceEventId = lastInbound?.sourceEventId ?? null
+  const defaultSubject =
     lastInbound?.subject
       ? (lastInbound.subject.startsWith('Re:') ? lastInbound.subject : `Re: ${lastInbound.subject}`)
       : ticketSubject
         ? `Re: ${ticketSubject}`
-        : '',
-  )
+        : ''
+
+  // Form state
+  const [mailboxId, setMailboxId] = useState<string>(lastInbound?.mailboxId ?? '')
+  const [subject, setSubject] = useState(defaultSubject)
   const [body, setBody] = useState('')
-  const [attachments, setAttachments] = useState<File[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const [selectedTemplateHtml, setSelectedTemplateHtml] = useState<string | null>(null)
+  const [showTemplatePreview, setShowTemplatePreview] = useState(false)
+  const [feedback, setFeedback] = useState<ComposerFeedback | null>(null)
+  const previewQuery = useTemplatePreview(selectedTemplateId || null, isOpen && showTemplatePreview && !!selectedTemplateId)
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    setMailboxId(lastInbound?.mailboxId ?? '')
+    setSubject(defaultSubject)
+    setBody('')
+    setSelectedTemplateId('')
+    setSelectedTemplateHtml(null)
+    setShowTemplatePreview(false)
+    setFeedback(null)
+  }, [defaultSubject, isOpen, lastInbound?.mailboxId])
 
   if (!isOpen) return null
 
-  const handleAddFiles = (files: FileList | null) => {
-    if (!files) return
-    setAttachments((prev) => [...prev, ...Array.from(files)])
-  }
-
-  const handleRemoveFile = (idx: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== idx))
-  }
-
-  const parseAddresses = (str: string): string[] =>
-    str.split(/[,;\s]+/).map((s) => s.trim()).filter(Boolean)
-
   const handleSend = () => {
-    const toList = parseAddresses(to)
-    if (toList.length === 0) {
-      toastError('At least one recipient is required.')
+    if (!replySourceEventId) {
+      toastError('No inbound email context is available for a real threaded reply.')
+      return
+    }
+    if (!mailboxId) {
+      toastError('Select the mailbox that should send this reply.')
       return
     }
     if (!body.trim()) {
@@ -71,43 +112,65 @@ export function EmailReplyComposer({
 
     const payload: SendTicketReplyRequest = {
       mailboxId: mailboxId || null,
-      to: toList,
-      cc: parseAddresses(cc),
-      bcc: parseAddresses(bcc),
+      sourceEventId: replySourceEventId,
       subject: subject.trim(),
-      body: body.trim(),
-      isHtml: false,
-      attachments,
+      textBody: body.trim(),
+      ...(selectedTemplateHtml ? { htmlBody: selectedTemplateHtml } : {}),
+      inReplyToMessageId: lastInbound?.messageId ?? undefined,
     }
+
+    setFeedback({ tone: 'info', text: 'Sending reply...' })
 
     sendMutation.mutate(payload, {
       onSuccess: (result) => {
-        success(result.status === 'QUEUED' || result.status === 'PROCESSING'
-          ? 'Reply queued for delivery'
-          : result.status === 'DISPATCHED' || result.status === 'DELIVERED'
-            ? 'Reply sent successfully'
-            : `Reply submitted (${result.status})`)
-        resetAndClose()
+        const feedback = getReplyStatusMessage(result.status, result.message)
+        setFeedback({ tone: feedback.kind, text: feedback.text })
+
+        if (feedback.kind === 'error') {
+          toastError(feedback.text)
+          return
+        }
+
+        success(feedback.text)
+        setSubject(defaultSubject)
+        setBody('')
+        setSelectedTemplateId('')
+        setSelectedTemplateHtml(null)
       },
       onError: (err) => {
-        toastError(err instanceof Error ? err.message : 'Failed to send reply')
+        const message = err instanceof Error ? err.message : 'Failed to send reply'
+        setFeedback({ tone: 'error', text: message })
+        toastError(message)
       },
     })
   }
 
   const resetAndClose = () => {
     setMailboxId(lastInbound?.mailboxId ?? '')
-    setTo(lastInbound?.from ?? '')
-    setCc('')
-    setBcc('')
-    setSubject(
-      lastInbound?.subject
-        ? (lastInbound.subject.startsWith('Re:') ? lastInbound.subject : `Re: ${lastInbound.subject}`)
-        : ticketSubject ? `Re: ${ticketSubject}` : '',
-    )
+    setSubject(defaultSubject)
     setBody('')
-    setAttachments([])
+    setSelectedTemplateId('')
+    setSelectedTemplateHtml(null)
+    setShowTemplatePreview(false)
+    setFeedback(null)
     onClose()
+  }
+
+  const handleTemplateChange = (templateId: string) => {
+    setSelectedTemplateId(templateId)
+    setFeedback(null)
+
+    const template = templates.find((item) => item.id === templateId)
+    if (!template) {
+      setSelectedTemplateHtml(null)
+      setSubject(defaultSubject)
+      setBody('')
+      return
+    }
+
+    setSubject(template.subjectTemplate.trim() || defaultSubject)
+    setBody(template.plainTextTemplate.trim() || stripHtml(template.htmlTemplate))
+    setSelectedTemplateHtml(template.htmlTemplate || null)
   }
 
   return (
@@ -141,42 +204,48 @@ export function EmailReplyComposer({
               >
                 <option value="">— Auto / Default —</option>
                 {mailboxes.map((m) => (
-                  <option key={m.id} value={m.id}>{m.name} ({m.emailAddress})</option>
+                  <option key={m.id} value={m.id}>{m.name} ({m.address})</option>
                 ))}
               </select>
             </div>
 
-            {/* To */}
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">To *</label>
-              <input
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-                placeholder="recipient@example.com"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              />
+            {replySourceEventId ? (
+              <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                Reply target is derived from the selected inbound email context. Manual To entry is disabled in real reply mode.
+              </div>
+            ) : (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                No inbound email context is available. This screen only supports real threaded replies, so direct outreach is not enabled here.
+              </div>
+            )}
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              Real mode supports direct replies only. CC, BCC, and attachments are hidden until the backend supports them.
             </div>
 
-            {/* CC / BCC */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">CC</label>
-                <input
-                  value={cc}
-                  onChange={(e) => setCc(e.target.value)}
-                  placeholder="Comma-separated"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="block text-xs font-medium text-gray-600">Template</label>
+                {selectedTemplateId && (
+                  <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800" onClick={() => setShowTemplatePreview(true)}>
+                    <Eye size={12} />
+                    Preview
+                  </button>
+                )}
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">BCC</label>
-                <input
-                  value={bcc}
-                  onChange={(e) => setBcc(e.target.value)}
-                  placeholder="Comma-separated"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
+              <select
+                value={selectedTemplateId}
+                onChange={(e) => handleTemplateChange(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              >
+                <option value="">No template</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name}</option>
+                ))}
+              </select>
+              {templatesQuery.isError && (
+                <p className="mt-1 text-xs text-amber-700">Template list is unavailable for this session.</p>
+              )}
             </div>
 
             {/* Subject */}
@@ -205,35 +274,12 @@ export function EmailReplyComposer({
               />
             </div>
 
-            {/* Attachments */}
-            <div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => handleAddFiles(e.target.files)}
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-indigo-600 transition-colors"
-              >
-                <Paperclip size={12} /> Attach files
-              </button>
-              {attachments.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {attachments.map((file, idx) => (
-                    <span key={idx} className="inline-flex items-center gap-1 bg-gray-100 border border-gray-200 rounded px-2 py-1 text-xs text-gray-600">
-                      {file.name} ({(file.size / 1024).toFixed(0)}KB)
-                      <button type="button" onClick={() => handleRemoveFile(idx)} className="text-gray-400 hover:text-red-500 ml-0.5">
-                        <X size={10} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
+            {feedback && (
+              <div className={`rounded-lg px-3 py-2 text-xs ${feedback.tone === 'error' ? 'border border-red-200 bg-red-50 text-red-800' : feedback.tone === 'success' ? 'border border-emerald-200 bg-emerald-50 text-emerald-800' : 'border border-sky-200 bg-sky-50 text-sky-800'}`}>
+                {feedback.text}
+              </div>
+            )}
+
           </div>
 
           {/* Footer */}
@@ -249,7 +295,7 @@ export function EmailReplyComposer({
                 leftIcon={<Send size={13} />}
                 onClick={handleSend}
                 isLoading={sendMutation.isPending}
-                disabled={!to.trim() || !body.trim()}
+                disabled={!mailboxId || !replySourceEventId || !body.trim() || sendMutation.isPending}
               >
                 Send
               </Button>
@@ -257,6 +303,45 @@ export function EmailReplyComposer({
           </div>
         </div>
       </div>
+
+      <Modal isOpen={showTemplatePreview} onClose={() => setShowTemplatePreview(false)} title="Template Preview" size="xl">
+        {!selectedTemplateId ? (
+          <div className="text-sm text-gray-500">Select a template first.</div>
+        ) : previewQuery.isLoading ? (
+          <div className="text-sm text-gray-500">Loading preview...</div>
+        ) : previewQuery.isError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">Template preview is unavailable.</div>
+        ) : previewQuery.data ? (
+          <div className="space-y-4">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Subject</div>
+              <div className="mt-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800">{previewQuery.data.subject || '—'}</div>
+            </div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">HTML</div>
+                <div className="min-h-[16rem] rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
+                  {previewQuery.data.html ? (
+                    <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(previewQuery.data.html) }} />
+                  ) : (
+                    <span className="text-gray-400">HTML preview is empty.</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Plain Text</div>
+                <div className="min-h-[16rem] rounded-lg border border-gray-200 bg-slate-950 p-3 text-sm text-slate-100">
+                  {previewQuery.data.plainText ? (
+                    <pre className="whitespace-pre-wrap font-sans">{previewQuery.data.plainText}</pre>
+                  ) : (
+                    <span className="text-slate-400">Plain text preview is empty.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </>
   )
 }
