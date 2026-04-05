@@ -4,6 +4,7 @@ import type { TicketActivityItem } from '@/types/ticket.types'
 
 interface TicketActivityTimelineProps {
   activities: TicketActivityItem[]
+  isLoading?: boolean
 }
 
 function iconFor(kind: TicketActivityItem['kind']) {
@@ -12,6 +13,8 @@ function iconFor(kind: TicketActivityItem['kind']) {
       return <PlusCircle size={14} className="text-blue-600" />
     case 'status_changed':
       return <RefreshCcw size={14} className="text-indigo-600" />
+    case 'priority_changed':
+      return <RefreshCcw size={14} className="text-amber-600" />
     case 'assigned':
       return <UserRoundCog size={14} className="text-violet-600" />
     case 'transferred':
@@ -34,7 +37,11 @@ function iconFor(kind: TicketActivityItem['kind']) {
   }
 }
 
-export function TicketActivityTimeline({ activities }: TicketActivityTimelineProps) {
+export function TicketActivityTimeline({ activities, isLoading = false }: TicketActivityTimelineProps) {
+  if (isLoading) {
+    return <p className="text-xs text-gray-400 text-center py-2">Loading history...</p>
+  }
+
   if (activities.length === 0) {
     return <p className="text-xs text-gray-400 text-center py-2">No history yet.</p>
   }

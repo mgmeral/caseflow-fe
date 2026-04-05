@@ -16,7 +16,7 @@ import { TemplateManagementPage } from '@/pages/admin/TemplateManagementPage'
 import { SettingsPage } from '@/pages/admin/SettingsPage'
 import { MailboxManagementPage } from '@/pages/admin/MailboxManagementPage'
 import { CustomerEmailSettingsPage } from '@/pages/admin/CustomerEmailSettingsPage'
-import { IngressEventsPage } from '@/pages/admin/IngressEventsPage'
+import { TagManagementPage } from '../pages/admin/TagManagementPage'
 
 export const router = createBrowserRouter([
   {
@@ -71,7 +71,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin',
-            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'GROUP_MANAGE', 'ADMIN_CONFIG', 'EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE', 'EMAIL_OPERATIONS_VIEW', 'EMAIL_OPERATIONS_MANAGE']} />,
+            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'GROUP_MANAGE', 'ADMIN_CONFIG', 'EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE']} />,
             children: [
               {
                 index: true,
@@ -94,6 +94,14 @@ export const router = createBrowserRouter([
                 element: <TemplateManagementPage />,
               },
               {
+                path: 'tags',
+                element: (
+                  <ProtectedRoute requiredPermissions={['ADMIN_CONFIG']}>
+                    <TagManagementPage />
+                  </ProtectedRoute>
+                ),
+              },
+              {
                 path: 'settings',
                 element: <SettingsPage />,
               },
@@ -104,10 +112,6 @@ export const router = createBrowserRouter([
               {
                 path: 'email/customers',
                 element: <CustomerEmailSettingsPage />,
-              },
-              {
-                path: 'email/ingress-events',
-                element: <IngressEventsPage />,
               },
             ],
           },

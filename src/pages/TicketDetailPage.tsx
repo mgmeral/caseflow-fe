@@ -14,14 +14,36 @@ import { TransferModal } from '@/components/modals/TransferModal'
 import { CloseConfirmModal } from '@/components/modals/CloseConfirmModal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, Mail, MessageSquare, Paperclip } from 'lucide-react'
+import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, Mail, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { clsx } from 'clsx'
 import type { TicketEmailMessage } from '@/types/email.types'
+import type { TicketAttachment } from '@/types/ticket.types'
 import { AttachmentViewerModal } from '@/components/ticket-detail/AttachmentViewerModal'
+import { TicketTagsCard } from '@/components/ticket-detail/TicketTagsCard'
 import { buildTicketActivityItems } from '@/lib/ticketActivity'
+
+function getEmailSelectionKey(email: Pick<TicketEmailMessage, 'detailType' | 'detailId'>): string | null {
+  return email.detailType && email.detailId ? `${email.detailType}:${email.detailId}` : null
+}
+
+function mapSelectedEmailAttachments(email: TicketEmailMessage | null, ticketId: string | null): TicketAttachment[] {
+  return (email?.attachments ?? []).map((attachment) => ({
+    id: attachment.id ?? `${email?.detailId ?? email?.emailDocumentId ?? email?.id ?? 'email'}:${attachment.fileName}`,
+    ticketId,
+    emailId: email?.emailDocumentId ?? email?.detailId ?? email?.id ?? null,
+    fileName: attachment.fileName,
+    contentType: attachment.contentType,
+    size: attachment.sizeBytes ?? attachment.size,
+    previewSupported: attachment.previewSupported,
+    previewUrl: attachment.previewUrl ?? attachment.downloadPath ?? null,
+    openUrl: attachment.openUrl ?? attachment.downloadPath ?? null,
+    downloadUrl: attachment.downloadUrl ?? attachment.downloadPath ?? null,
+    uploadedAt: email?.receivedAt ?? email?.sentAt ?? null,
+  }))
+}
 
 export function TicketDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -33,6 +55,7 @@ export function TicketDetailPage() {
     transfers,
     allowedStatusTransitions,
     isLoading,
+    isHistoryLoading,
     addNote,
     assign,
     changeStatus,
@@ -46,27 +69,34 @@ export function TicketDetailPage() {
     isClosing,
   } = useTicketDetail(id)
 
-  const { data: emailThread = [], isLoading: emailThreadLoading } = useTicketEmailThread(id)
-
   const { users, groups } = useUsers()
   const { canAssignTickets, canTransferTickets, canSendTicketEmailReply, canViewTicketEmail } = usePermissions()
+  const { data: emailThread = [], isLoading: emailThreadLoading } = useTicketEmailThread(id)
 
   const [showAssign, setShowAssign] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
   const [showClose, setShowClose] = useState(false)
   const [showReply, setShowReply] = useState(false)
-  const [selectedEmail, setSelectedEmail] = useState<TicketEmailMessage | null>(null)
+  const [selectedEmailKey, setSelectedEmailKey] = useState<string | null>(null)
+  const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false)
   const [showTicketAttachments, setShowTicketAttachments] = useState(false)
+  const selectedEmailSummary = useMemo(
+    () => emailThread.find((email) => getEmailSelectionKey(email) === selectedEmailKey) ?? null,
+    [emailThread, selectedEmailKey],
+  )
+  const ticketPublicId = ticket?.publicId ?? null
 
   const { data: selectedEmailDetail, isLoading: selectedEmailLoading } = useTicketEmailDetailByDirection(
-    id,
-    selectedEmail?.id ?? '',
-    selectedEmail?.direction,
+    ticketPublicId ?? '',
+    selectedEmailSummary?.detailId ?? '',
+    selectedEmailSummary?.detailType ?? selectedEmailSummary?.direction,
+    canViewTicketEmail && !!ticketPublicId && !!selectedEmailSummary?.detailId,
   )
 
   type ThreadTab = 'email' | 'notes'
   const hasEmailThread = emailThread.length > 0
-  const [activeTab, setActiveTab] = useState<ThreadTab>(hasEmailThread ? 'email' : 'notes')
+  const [activeTab, setActiveTab] = useState<ThreadTab>('notes')
+  const [hasManualTabSelection, setHasManualTabSelection] = useState(false)
 
   const allMessages = messages ?? []
   const conversationMessages = allMessages.filter((message) => message.type !== 'system_event')
@@ -74,6 +104,44 @@ export function TicketDetailPage() {
     () => ticket ? buildTicketActivityItems({ ticket, messages: allMessages, transfers: transfers ?? [], emailThread }) : [],
     [allMessages, emailThread, ticket, transfers],
   )
+  const selectedEmailAttachments = useMemo(
+    () => mapSelectedEmailAttachments(selectedEmailDetail ?? null, ticket?.id ?? null),
+    [selectedEmailDetail, ticket?.id],
+  )
+  const attachmentEmptyMessage = selectedEmailKey
+    ? 'No attachments on this email.'
+    : 'Select an email to inspect attachments.'
+
+  useEffect(() => {
+    if (hasManualTabSelection) return
+    setActiveTab(canViewTicketEmail && hasEmailThread ? 'email' : 'notes')
+  }, [canViewTicketEmail, hasEmailThread, hasManualTabSelection])
+
+  useEffect(() => {
+    if (!canViewTicketEmail || emailThread.length === 0) {
+      setSelectedEmailKey(null)
+      setIsEmailDrawerOpen(false)
+      return
+    }
+
+    const firstSelectableEmailKey = emailThread.map(getEmailSelectionKey).find(Boolean) ?? null
+
+    if (!firstSelectableEmailKey) {
+      setSelectedEmailKey(null)
+      setIsEmailDrawerOpen(false)
+      return
+    }
+
+    const selectedEmailStillExists = selectedEmailKey
+      ? emailThread.some((email) => getEmailSelectionKey(email) === selectedEmailKey)
+      : false
+
+    if (selectedEmailStillExists) {
+      return
+    }
+
+    setSelectedEmailKey(firstSelectableEmailKey)
+  }, [canViewTicketEmail, emailThread, selectedEmailKey])
 
   if (isLoading) {
     return (
@@ -110,8 +178,8 @@ export function TicketDetailPage() {
   const transferableGroups = groups.filter((g) => g.id !== ticket.groupId)
 
   const lastInboundEmail = [...emailThread].reverse().find((e) => e.direction === 'INBOUND') ?? null
-  const selectedInboundEmail = (selectedEmailDetail ?? selectedEmail)?.direction === 'INBOUND'
-    ? (selectedEmailDetail ?? selectedEmail)
+  const selectedInboundEmail = (selectedEmailDetail ?? selectedEmailSummary)?.direction === 'INBOUND'
+    ? (selectedEmailDetail ?? selectedEmailSummary)
     : null
   const replySourceEmail = selectedInboundEmail ?? lastInboundEmail
 
@@ -183,7 +251,10 @@ export function TicketDetailPage() {
               <div className="flex bg-gray-50 border-b border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setActiveTab('email')}
+                  onClick={() => {
+                    setHasManualTabSelection(true)
+                    setActiveTab('email')
+                  }}
                   className={clsx(
                     'flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors',
                     activeTab === 'email'
@@ -199,7 +270,10 @@ export function TicketDetailPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setActiveTab('notes')}
+                  onClick={() => {
+                    setHasManualTabSelection(true)
+                    setActiveTab('notes')
+                  }}
                   className={clsx(
                     'flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors',
                     activeTab === 'notes'
@@ -216,34 +290,6 @@ export function TicketDetailPage() {
               </div>
             )}
 
-            {ticket.attachments.length > 0 && (
-              <div className="border-b border-gray-200 bg-gray-50/70 px-5 py-4">
-                <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-700">
-                  <div className="flex items-center gap-2">
-                    <Paperclip size={14} className="text-gray-500" />
-                    Ticket Attachments
-                  </div>
-                  <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800" onClick={() => setShowTicketAttachments(true)}>
-                    <Paperclip size={12} />
-                    View Attachments
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {ticket.attachments.slice(0, 3).map((attachment) => (
-                    <span key={attachment.id} className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700">
-                      <Paperclip size={10} className="text-gray-400" />
-                      {attachment.fileName}
-                    </span>
-                  ))}
-                  {ticket.attachments.length > 3 && (
-                    <span className="inline-flex items-center rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-500">
-                      +{ticket.attachments.length - 3} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Email thread tab */}
             {activeTab === 'email' && canViewTicketEmail && (
               emailThreadLoading ? (
@@ -251,7 +297,17 @@ export function TicketDetailPage() {
                   <table className="w-full"><tbody><SkeletonRow colCount={3} /><SkeletonRow colCount={3} /></tbody></table>
                 </div>
               ) : (
-                <EmailThread emails={emailThread} onSelectEmail={(email) => setSelectedEmail(email)} />
+                <EmailThread
+                  ticketPublicId={ticketPublicId}
+                  emails={emailThread}
+                  messageFallbacks={conversationMessages}
+                  onSelectEmail={(email) => {
+                    const emailKey = getEmailSelectionKey(email)
+                    if (!emailKey) return
+                    setSelectedEmailKey(emailKey)
+                    setIsEmailDrawerOpen(true)
+                  }}
+                />
               )
             )}
 
@@ -283,6 +339,12 @@ export function TicketDetailPage() {
             ticket={ticket}
             allowedTransitions={allowedStatusTransitions}
             activities={activityItems}
+            attachments={selectedEmailAttachments}
+            tagsCard={<TicketTagsCard ticketId={ticket.id} />}
+            attachmentEmptyMessage={attachmentEmptyMessage}
+            isActivityLoading={isHistoryLoading || emailThreadLoading}
+            isAttachmentLoading={canViewTicketEmail && !!selectedEmailKey && selectedEmailLoading}
+            onViewAttachments={() => setShowTicketAttachments(true)}
             onChangeStatus={(status) => changeStatus({ status })}
             onChangePriority={(priority) => changePriority(priority)}
             onAssign={() => setShowAssign(true)}
@@ -335,26 +397,30 @@ export function TicketDetailPage() {
         isOpen={showReply}
         onClose={() => setShowReply(false)}
         ticketId={ticket.id}
+        ticketPublicId={ticketPublicId}
         lastInbound={replySourceEmail}
         ticketSubject={ticket.subject}
       />
 
       <EmailDetailDrawer
-        isOpen={selectedEmail !== null}
-        onClose={() => setSelectedEmail(null)}
-        email={selectedEmailDetail ?? selectedEmail}
+        isOpen={isEmailDrawerOpen}
+        onClose={() => setIsEmailDrawerOpen(false)}
+        email={selectedEmailDetail ?? null}
         isLoading={selectedEmailLoading}
       />
 
       <AttachmentViewerModal
         isOpen={showTicketAttachments}
         onClose={() => setShowTicketAttachments(false)}
-        title="Ticket Attachments"
-        attachments={ticket.attachments.map((attachment) => ({
+        title="Email Attachments"
+        attachments={selectedEmailAttachments.map((attachment) => ({
           id: attachment.id,
           fileName: attachment.fileName,
           contentType: attachment.contentType,
           size: attachment.size,
+          previewSupported: attachment.previewSupported,
+          previewUrl: attachment.previewUrl,
+          openUrl: attachment.openUrl,
           downloadUrl: attachment.downloadUrl,
         }))}
       />

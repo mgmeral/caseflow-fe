@@ -15,7 +15,7 @@ import {
   FileText,
   Mail,
   AtSign,
-  Activity,
+  Tags,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Avatar } from '@/components/shared/Avatar'
@@ -32,9 +32,9 @@ interface NavItem {
 export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { canManageUsers, canManageRoles, canManageGroups, canViewAdminPool, canViewReports, canViewEmailConfig, canManageEmailConfig, canViewIngressEvents, canAccessEmailAdmin } = usePermissions()
+  const { canManageUsers, canManageRoles, canManageGroups, canManageAdminConfig, canViewAdminPool, canViewReports, canViewEmailConfig, canManageEmailConfig, canAccessEmailAdmin } = usePermissions()
 
-  const canAccessAdminSection = canManageUsers || canManageRoles || canAccessEmailAdmin
+  const canAccessAdminSection = canManageUsers || canManageRoles || canManageAdminConfig || canAccessEmailAdmin
 
   const mainNav: NavItem[] = [
     { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -47,9 +47,9 @@ export function Sidebar() {
     ...(canManageRoles ? [{ to: '/admin/roles', icon: <Shield size={18} />, label: 'Roles' }] : []),
     ...(canManageGroups ? [{ to: '/admin/groups', icon: <UsersRound size={18} />, label: 'Groups' }] : []),
     ...(canManageUsers ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }] : []),
+    ...(canManageAdminConfig ? [{ to: '/admin/tags', icon: <Tags size={18} />, label: 'Tag Management' }] : []),
     ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', icon: <Mail size={18} />, label: 'Mailboxes' }] : []),
     ...(canManageEmailConfig ? [{ to: '/admin/email/customers', icon: <AtSign size={18} />, label: 'Email Settings' }] : []),
-    ...(canViewIngressEvents ? [{ to: '/admin/email/ingress-events', icon: <Activity size={18} />, label: 'Ingress Events' }] : []),
     ...(canManageUsers ? [{ to: '/admin/settings', icon: <Settings size={18} />, label: 'Settings' }] : []),
   ]
 
@@ -62,15 +62,24 @@ export function Sidebar() {
     >
       {/* Logo / Brand */}
       <div className="flex items-center justify-between h-24 px-3 border-b border-blue-900/70 bg-[#091f49]">
-        {sidebarCollapsed ? (
-          <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.125rem] h-[2.125rem] object-contain" />
-        ) : (
-          <div className="flex items-center gap-2.5">
-            <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.35rem] h-[2.35rem] object-contain" />
-            <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-white">Case</span>
-            <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-[#f0b323] -ml-1">Flow</span>
-          </div>
-        )}
+        <NavLink
+          to="/dashboard"
+          aria-label="Go to dashboard"
+          className={clsx(
+            'transition-opacity hover:opacity-90 focus:outline-none',
+            sidebarCollapsed ? 'mx-auto' : 'min-w-0',
+          )}
+        >
+          {sidebarCollapsed ? (
+            <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.125rem] h-[2.125rem] object-contain" />
+          ) : (
+            <div className="flex items-center gap-2.5">
+              <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.35rem] h-[2.35rem] object-contain" />
+              <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-white">Case</span>
+              <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-[#f0b323] -ml-1">Flow</span>
+            </div>
+          )}
+        </NavLink>
         <button
           onClick={toggleSidebar}
           className="p-1.5 rounded-md hover:bg-blue-800/70 transition-colors ml-auto text-blue-100"

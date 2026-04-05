@@ -155,6 +155,7 @@ export function useTicketDetail(id: string) {
     transfers: transfersQuery.data ?? [],
     allowedStatusTransitions: ticketQuery.data?.allowedTransitions ?? transitionsQuery.data ?? [],
     isLoading: ticketQuery.isLoading,
+    isHistoryLoading: messagesQuery.isLoading || transfersQuery.isLoading,
     isError: ticketQuery.isError,
     assign: assignMutation.mutate,
     isAssigning: assignMutation.isPending,

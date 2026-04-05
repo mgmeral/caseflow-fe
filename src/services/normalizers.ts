@@ -129,8 +129,36 @@ function normalizeTicketAttachment(raw: Record<string, unknown>): TicketAttachme
     fileName: String(raw.fileName ?? ''),
     contentType: raw.contentType ? String(raw.contentType) : null,
     size: typeof raw.size === 'number' ? raw.size : null,
+    previewSupported: typeof raw.previewSupported === 'boolean' ? raw.previewSupported : null,
+    previewUrl: raw.previewUrl ? String(raw.previewUrl) : raw.downloadPath ? String(raw.downloadPath) : raw.downloadUrl ? String(raw.downloadUrl) : null,
+    openUrl: raw.openUrl ? String(raw.openUrl) : raw.downloadUrl ? String(raw.downloadUrl) : raw.downloadPath ? String(raw.downloadPath) : null,
     downloadUrl: raw.downloadPath ? String(raw.downloadPath) : raw.downloadUrl ? String(raw.downloadUrl) : null,
     uploadedAt: raw.uploadedAt ? String(raw.uploadedAt) : null,
+  }
+}
+
+function normalizeTicketTag(raw: unknown) {
+  if (typeof raw === 'string') {
+    return {
+      id: raw,
+      code: raw,
+      name: raw,
+      color: null,
+      isActive: true,
+    }
+  }
+
+  const record = raw as Record<string, unknown>
+  const id = String(record.id ?? record.code ?? record.name ?? '')
+  const code = String(record.code ?? record.name ?? id)
+  const name = String(record.name ?? record.code ?? id)
+
+  return {
+    id,
+    code,
+    name,
+    color: record.color ? String(record.color) : null,
+    isActive: record.isActive !== false,
   }
 }
 
@@ -202,6 +230,11 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
   const groupName = String(raw.assignedGroupName ?? raw.groupName ?? '')
   return {
     id: String(raw.id ?? ''),
+    publicId: raw.publicId != null
+      ? String(raw.publicId)
+      : raw.ticketPublicId != null
+        ? String(raw.ticketPublicId)
+        : null,
     ticketNo: String(raw.ticketNo ?? ''),
     subject: String(raw.subject ?? ''),
     customerId: String(raw.customerId ?? ''),
@@ -225,7 +258,7 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
     slaBreached: raw.slaBreached === true,
     messageCount: typeof raw.messageCount === 'number' ? raw.messageCount : 0,
     internalNoteCount: typeof raw.internalNoteCount === 'number' ? raw.internalNoteCount : 0,
-    tags: Array.isArray(raw.tags) ? (raw.tags as string[]) : [],
+    tags: Array.isArray(raw.tags) ? raw.tags.map(normalizeTicketTag) : [],
     ...(Array.isArray(raw.allowedTransitions)
       ? {
           allowedTransitions: (raw.allowedTransitions as unknown[])

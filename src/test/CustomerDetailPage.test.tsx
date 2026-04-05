@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
+const mockNavigate = vi.hoisted(() => vi.fn())
+
 const mockSuccess = vi.hoisted(() => vi.fn())
 const mockError = vi.hoisted(() => vi.fn())
 
@@ -10,6 +12,34 @@ const mockCreateRule = vi.hoisted(() => vi.fn())
 const mockUpdateRule = vi.hoisted(() => vi.fn())
 const mockDeactivateRule = vi.hoisted(() => vi.fn())
 const mockDeleteRule = vi.hoisted(() => vi.fn())
+const mockDeleteCustomer = vi.hoisted(() => vi.fn())
+
+const reportState = vi.hoisted(() => ({
+  data: {
+    totalCount: 12,
+    openCount: 5,
+    closedCount: 3,
+    resolvedCount: 4,
+    newCount: 2,
+    inProgressCount: 2,
+    waitingCustomerCount: 1,
+    reopenedCount: 0,
+    byTag: [
+      { tagId: 'vip', tagCode: 'VIP', tagName: 'VIP', tagColor: '#ef4444', count: 3 },
+    ],
+  },
+  isLoading: false,
+  isError: false,
+  error: null as Error | null,
+}))
+
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  }
+})
 
 const detailState = vi.hoisted(() => ({
   customer: {
@@ -51,6 +81,7 @@ const detailState = vi.hoisted(() => ({
       senderMatchValue: '@akbank.com',
       priority: 10,
       isActive: true,
+      allowSubdomains: true,
       notes: null,
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-02T00:00:00Z',
@@ -61,6 +92,16 @@ const detailState = vi.hoisted(() => ({
 vi.mock('@/hooks/useCustomers', () => ({
   useCustomerDetail: () => ({ customer: detailState.customer, isLoading: false }),
   useCustomerTickets: () => ({ tickets: detailState.tickets, isLoading: false }),
+  useDeleteCustomer: () => ({ mutateAsync: mockDeleteCustomer, isPending: false }),
+}))
+
+vi.mock('@/hooks/useReports', () => ({
+  useCustomerReport: () => ({
+    data: reportState.data,
+    isLoading: reportState.isLoading,
+    isError: reportState.isError,
+    error: reportState.error,
+  }),
 }))
 
 vi.mock('@/hooks/useCustomerEmailSettings', () => ({
@@ -115,12 +156,59 @@ describe('CustomerDetailPage', () => {
     mockUpdateRule.mockReset()
     mockDeactivateRule.mockReset()
     mockDeleteRule.mockReset()
+    mockDeleteCustomer.mockReset()
+    mockNavigate.mockReset()
 
     mockUpsertSettings.mockResolvedValue(undefined)
     mockCreateRule.mockResolvedValue(undefined)
     mockUpdateRule.mockResolvedValue(undefined)
     mockDeactivateRule.mockResolvedValue(undefined)
     mockDeleteRule.mockResolvedValue(undefined)
+    mockDeleteCustomer.mockResolvedValue(undefined)
+
+    detailState.emailSettings = {
+      customerId: 'c1',
+      customerName: 'Akbank',
+      isEnabled: true,
+      allowSubdomains: false,
+      unknownSenderPolicy: 'MANUAL_REVIEW',
+      defaultGroupId: 'g1',
+      defaultGroupName: 'Tier 1',
+      defaultPriority: 'MEDIUM',
+      updatedAt: '2025-01-02T00:00:00Z',
+    }
+    detailState.routingRules = [
+      {
+        id: 'r1',
+        customerId: 'c1',
+        recipientMailboxId: 'm1',
+        recipientMailboxName: 'Main',
+        senderMatchType: 'DOMAIN_SUFFIX',
+        senderMatchValue: '@akbank.com',
+        priority: 10,
+        isActive: true,
+        allowSubdomains: true,
+        notes: null,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-02T00:00:00Z',
+      },
+    ]
+    reportState.data = {
+      totalCount: 12,
+      openCount: 5,
+      closedCount: 3,
+      resolvedCount: 4,
+      newCount: 2,
+      inProgressCount: 2,
+      waitingCustomerCount: 1,
+      reopenedCount: 0,
+      byTag: [
+        { tagId: 'vip', tagCode: 'VIP', tagName: 'VIP', tagColor: '#ef4444', count: 3 },
+      ],
+    }
+    reportState.isLoading = false
+    reportState.isError = false
+    reportState.error = null
   })
 
   it('renders customer detail and sender patterns section', () => {
@@ -130,6 +218,28 @@ describe('CustomerDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Email Settings' }))
     expect(screen.getByText('Sender Patterns & Routing Rules')).toBeInTheDocument()
     expect(screen.getByText('@akbank.com')).toBeInTheDocument()
+    expect(screen.getByText('Subdomains')).toBeInTheDocument()
+    expect(screen.getByText('Yes')).toBeInTheDocument()
+  })
+
+  it('includes the real customer detail tabs in the routed page flow', () => {
+    renderPage()
+
+    expect(screen.getByRole('button', { name: 'Overview' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Email Settings' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Report' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tickets' })).toBeInTheDocument()
+  })
+
+  it('shows the empty routing rule state only when the backend returned no rules', () => {
+    detailState.routingRules = []
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Email Settings' }))
+
+    expect(screen.getByText('No routing rules')).toBeInTheDocument()
+    expect(screen.queryByText('@akbank.com')).not.toBeInTheDocument()
   })
 
   it('supports customer email settings edit flow', async () => {
@@ -196,5 +306,91 @@ describe('CustomerDetailPage', () => {
     await waitFor(() => {
       expect(mockDeleteRule).toHaveBeenCalledWith('r1')
     })
+  })
+
+  it('renders the backend customer report data on the report tab', () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    expect(screen.getByText('Backend Customer Report')).toBeInTheDocument()
+    expect(screen.getByText('Tag Breakdown')).toBeInTheDocument()
+    expect(screen.getByText('VIP')).toBeInTheDocument()
+    expect(screen.getByText('12')).toBeInTheDocument()
+  })
+
+  it('shows a loading state while the customer report is fetching', () => {
+    reportState.isLoading = true
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    expect(screen.getAllByText('...')).toHaveLength(4)
+  })
+
+  it('shows an empty state when the customer report is valid but contains no counts', () => {
+    reportState.data = {
+      totalCount: 0,
+      openCount: 0,
+      closedCount: 0,
+      resolvedCount: 0,
+      newCount: 0,
+      inProgressCount: 0,
+      waitingCustomerCount: 0,
+      reopenedCount: 0,
+      byTag: [],
+    }
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    expect(screen.getByText('No tag breakdown returned by the backend.')).toBeInTheDocument()
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0)
+  })
+
+  it('shows the backend report error message instead of a stale unavailable-session fallback', () => {
+    reportState.data = undefined as unknown as typeof reportState.data
+    reportState.isError = true
+    reportState.error = new Error('Customer report route not found')
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+
+    expect(screen.getByText('Customer report route not found')).toBeInTheDocument()
+    expect(screen.queryByText('Customer report is unavailable for this session.')).not.toBeInTheDocument()
+  })
+
+  it('deletes the customer and navigates back to the customer list', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Customer' }))
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete Customer' })
+    fireEvent.click(deleteButtons[deleteButtons.length - 1] as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(mockDeleteCustomer).toHaveBeenCalledWith('c1')
+      expect(mockSuccess).toHaveBeenCalledWith('Customer deleted')
+      expect(mockNavigate).toHaveBeenCalledWith('/customers')
+    })
+  })
+
+  it('surfaces backend delete errors when customer deletion is blocked', async () => {
+    mockDeleteCustomer.mockRejectedValueOnce(new Error('Customer cannot be deleted because tickets still exist.'))
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete Customer' }))
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete Customer' })
+    fireEvent.click(deleteButtons[deleteButtons.length - 1] as HTMLButtonElement)
+
+    await waitFor(() => {
+      expect(mockDeleteCustomer).toHaveBeenCalledWith('c1')
+      expect(mockError).toHaveBeenCalledWith('Customer cannot be deleted because tickets still exist.')
+    })
+
+    expect(mockNavigate).not.toHaveBeenCalled()
   })
 })

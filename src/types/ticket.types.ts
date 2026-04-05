@@ -31,8 +31,70 @@ export type MessageType =
 
 export type SourceType = 'email' | 'manual' | 'api'
 
+export interface TicketTag {
+  id: string
+  code: string
+  name: string
+  color: string | null
+  isActive: boolean
+}
+
+export interface TicketTagAssignment {
+  id: string
+  ticketId: string
+  tagId: string
+  taggedAt: string | null
+  taggedBy: string | null
+  taggedByName: string | null
+  tagCode: string | null
+  tagName: string | null
+  tagColor: string | null
+  tagIsActive: boolean
+  tag: TicketTag | null
+}
+
+export interface TicketTagBreakdown {
+  tagId: string
+  tagCode: string
+  tagName: string
+  tagColor: string | null
+  count: number
+}
+
+export interface CustomerTicketReport {
+  totalCount: number
+  openCount: number
+  closedCount: number
+  resolvedCount: number
+  newCount: number
+  inProgressCount: number
+  waitingCustomerCount: number
+  reopenedCount: number
+  byTag: TicketTagBreakdown[]
+}
+
+export interface AdminCustomerTicketAggregateItem {
+  customerId: string
+  customerName: string
+  totalCount: number
+  openCount: number
+  closedCount: number
+  resolvedCount: number
+  waitingCustomerCount: number
+  byTag: TicketTagBreakdown[]
+}
+
+export interface AdminCustomerTicketAggregateReport {
+  items: AdminCustomerTicketAggregateItem[]
+  page: number
+  size: number
+  total: number
+  totalPages: number
+}
+
 export interface Ticket {
   id: string
+  publicId: string | null
   ticketNo: string
   subject: string
   customerId: string
@@ -56,7 +118,7 @@ export interface Ticket {
   slaBreached: boolean
   messageCount: number
   internalNoteCount: number
-  tags: string[]
+  tags: TicketTag[]
   allowedTransitions?: TicketStatus[]
   attachments: TicketAttachment[]
 }
@@ -68,6 +130,9 @@ export interface TicketAttachment {
   fileName: string
   contentType: string | null
   size: number | null
+  previewSupported?: boolean | null
+  previewUrl?: string | null
+  openUrl?: string | null
   downloadUrl: string | null
   uploadedAt: string | null
 }
@@ -101,6 +166,7 @@ export interface TicketActivityItem {
   kind:
     | 'created'
     | 'status_changed'
+    | 'priority_changed'
     | 'assigned'
     | 'transferred'
     | 'note_added'

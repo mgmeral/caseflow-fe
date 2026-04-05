@@ -51,3 +51,18 @@ export function useUpdateCustomer() {
     },
   })
 }
+
+export function useDeleteCustomer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => customerService.delete(id),
+    onSuccess: async (_data, id) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
+        queryClient.removeQueries({ queryKey: ['customer', id] }),
+        queryClient.removeQueries({ queryKey: ['customer-tickets', id] }),
+      ])
+    },
+  })
+}

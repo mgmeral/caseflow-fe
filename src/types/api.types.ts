@@ -304,6 +304,7 @@ export interface AttachmentMetadataResponse {
   downloadPath: string
   contentType: string
   size: number
+  previewSupported?: boolean | null
   uploadedAt: string
 }
 
@@ -329,13 +330,9 @@ export interface EmailDocumentResponse {
   parsedAt: string | null
   ticketId: string
   textBody: string | null
-  htmlBody: string | null
-  attachments: Array<{
-    fileName: string
-    objectKey: string
-    contentType: string
-    size: number
-  }>
+  sanitizedHtmlBody?: string | null
+  htmlBody?: string | null
+  attachments: AttachmentMetadataResponse[]
 }
 
 /**
@@ -449,6 +446,8 @@ export interface CustomerEmailSettingsResponse {
   defaultPriority: string | null
   updatedAt: string | null
   rules?: CustomerEmailRoutingRuleResponse[]
+  routingRules?: CustomerEmailRoutingRuleResponse[]
+  senderPatterns?: CustomerEmailRoutingRuleResponse[]
 }
 
 export interface UpsertCustomerEmailSettingsRequest {
@@ -465,12 +464,17 @@ export interface CustomerEmailRoutingRuleResponse {
   customerId: string
   recipientMailboxId: string | null
   recipientMailboxName: string | null
-  senderMatchType: SenderMatchType
-  matchValue?: string
-  senderMatchValue: string
-  priority: number
-  isActive: boolean
-  notes: string | null
+  senderMatchType?: SenderMatchType
+  ruleType?: SenderMatchType | string | null
+  matchValue?: string | null
+  senderMatchValue?: string | null
+  pattern?: string | null
+  value?: string | null
+  priority?: number | null
+  isActive?: boolean | null
+  active?: boolean | null
+  allowSubdomains?: boolean | null
+  notes?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -485,54 +489,94 @@ export interface UpsertCustomerEmailRoutingRuleRequest {
   notes?: string | null
 }
 
-export interface IngressEventResponse {
-  id: string | number
-  publicId?: string
-  mailboxId: string | number | null
-  mailboxName?: string | null
-  mailboxEmail?: string | null
-  sourceType: MailboxSourceType | null
-  sourceUid: string | null
-  internetMessageId?: string | null
-  messageId?: string | null
-  subject?: string | null
-  rawSubject?: string | null
-  sender?: string | null
-  rawFrom?: string | null
-  inReplyTo?: string | null
-  rawReplyTo?: string | null
-  status?: string
-  processingStatus?: ProcessingStatus
-  receivedAt: string
-  processedAt: string | null
-  failureReason?: string | null
-  lastError: string | null
-  processingAttempts?: number | null
-  lastAttemptAt?: string | null
-  documentId?: string | null
-  ticketId?: string | number | null
-}
-
-export interface IngressEventDetailResponse extends IngressEventResponse {
-  recipients?: string[]
-  cc?: string[]
-  rawHeaders?: Record<string, string>
-  payloadExcerpt?: string | null
-  retryCount?: number
-  relatedTicketId?: string | null
-}
-
 export interface TicketEmailAttachmentResponse {
   id: string | null
   fileName: string
   contentType: string | null
   size?: number | null
   sizeBytes?: number | null
+  previewSupported?: boolean | null
+  previewUrl?: string | null
+  openUrl?: string | null
+  downloadPath?: string | null
   downloadUrl?: string | null
+}
+
+export type TicketEmailDetailType = 'INBOUND' | 'OUTBOUND'
+
+export interface TicketEmailTemplateInfoResponse {
+  templateId?: string | null
+  templateCode?: string | null
+  templateName?: string | null
+}
+
+export interface TicketEmailReplyContextResponse {
+  sourceEventId?: string | null
+  sourceEmailDocumentId?: string | null
+  resolvedReplyTarget?: string | null
+}
+
+export interface UnifiedTicketEmailDetailResponse {
+  detailType: TicketEmailDetailType
+  id: string | number
+  ticketPublicId: string
+  direction: TicketEmailDirection
+  mailboxId?: string | number | null
+  mailboxName?: string | null
+  mailboxAddress?: string | null
+  messageId?: string | null
+  threadMessageId?: string | null
+  fromAddress?: string | null
+  toAddress?: string[] | null
+  cc?: string[] | null
+  bcc?: string[] | null
+  replyTo?: string[] | null
+  subject?: string | null
+  status?: string | null
+  failureReason?: string | null
+  sentAt?: string | null
+  receivedAt?: string | null
+  createdAt?: string | null
+  bodyText?: string | null
+  bodyHtml?: string | null
+  bodyPreview?: string | null
+  attachments?: TicketEmailAttachmentResponse[] | null
+  templateInfo?: TicketEmailTemplateInfoResponse | null
+  replyContext?: TicketEmailReplyContextResponse | null
+  contentWasEdited?: boolean | null
+}
+
+export interface TicketEmailReplyPreviewRequest {
+  sourceEventId: string
+  mailboxId?: string | null
+  templateId?: string | null
+}
+
+export interface TicketEmailReplyPreviewPlaceholderDiagnosticResponse {
+  placeholder: string
+  status: 'EMPTY' | 'UNKNOWN'
+  message: string
+}
+
+export interface TicketEmailReplyPreviewResponse {
+  derivedToAddress: string | null
+  derivedFromAddress: string | null
+  subject: string
+  bodyText: string | null
+  bodyHtml: string | null
+  templateInfo?: TicketEmailTemplateInfoResponse | null
+  placeholderDiagnostics?: TicketEmailReplyPreviewPlaceholderDiagnosticResponse[] | null
+  warnings?: string[] | null
+  mailboxName?: string | null
+  mailboxAddress?: string | null
+  isEditable?: boolean | null
 }
 
 export interface TicketEmailMessageResponse {
   id: string | number
+  emailDocumentId?: string | null
+  emailId?: string | null
+  documentId?: string | null
   ticketId: string | number
   threadKey: string | null
   messageId: string
@@ -548,13 +592,17 @@ export interface TicketEmailMessageResponse {
   to: string[]
   cc: string[]
   bcc: string[]
+  replyTo?: string[] | null
   bodyText: string | null
   bodyHtml: string | null
   sanitizedHtmlBody?: string | null
   rawHtmlBody?: string | null
   bodyPreview: string | null
+  failureReason?: string | null
+  lastError?: string | null
   sentAt: string | null
   receivedAt: string | null
+  createdAt?: string | null
   processingStatus?: ProcessingStatus | null
   dispatchStatus: OutboundDispatchStatus | null
   attachmentCount?: number | null
@@ -565,39 +613,32 @@ export interface TicketEmailMessageResponse {
   toAddress?: string | null
   status?: string | null
   timestamp?: string | null
-}
-
-export interface DispatchResponse {
-  id: string | number
-  ticketId: string | number
-  messageId: string | null
-  mailboxId?: string | number | null
-  mailboxName?: string | null
-  fromAddress: string | null
-  toAddress: string | null
-  subject: string | null
-  status: OutboundDispatchStatus | string
-  attempts?: number | null
-  lastAttemptAt?: string | null
-  sentAt?: string | null
-  failureReason?: string | null
-  scheduledAt?: string | null
-  createdAt?: string | null
-  bodyText?: string | null
-  bodyHtml?: string | null
-  sanitizedHtmlBody?: string | null
-  rawHtmlBody?: string | null
-  bodyPreview?: string | null
-  attachments?: TicketEmailAttachmentResponse[]
+  mailboxAddress?: string | null
+  threadMessageId?: string | null
+  templateInfo?: TicketEmailTemplateInfoResponse | null
+  replyContext?: TicketEmailReplyContextResponse | null
+  contentWasEdited?: boolean | null
+  resolvedReplyTarget?: string | null
+  detailType?: TicketEmailDetailType | null
+  detailId?: string | null
+  hasAttachments?: boolean | null
+  isPreviewAvailable?: boolean | null
 }
 
 export interface EmailThreadItemResponse {
   direction: 'INBOUND' | 'OUTBOUND'
+  replyTo?: string[] | null
   id: string | number
+  emailDocumentId?: string | null
+  emailId?: string | null
+  documentId?: string | null
+  inboundEmailId?: string | null
+  outboundEmailId?: string | null
   mailboxId?: string | number | null
   mailboxName?: string | null
   sourceEventId?: string | number | null
   sourceEmailEventId?: string | number | null
+  createdAt?: string | null
   ingressEventId?: string | number | null
   messageId: string | null
   fromAddress: string | null
@@ -605,8 +646,85 @@ export interface EmailThreadItemResponse {
   subject: string | null
   status: string | null
   timestamp: string | null
+  threadMessageId?: string | null
+  templateInfo?: TicketEmailTemplateInfoResponse | null
+  replyContext?: TicketEmailReplyContextResponse | null
+  contentWasEdited?: boolean | null
   bodyPreview: string | null
+  failureReason?: string | null
   attachmentCount?: number | null
+  resolvedReplyTarget?: string | null
+  detailType?: TicketEmailDetailType | null
+  detailId?: string | number | null
+  hasAttachments?: boolean | null
+  isPreviewAvailable?: boolean | null
+}
+
+export interface TagResponse {
+  id: string | number
+  code: string
+  name: string
+  color?: string | null
+  isActive?: boolean | null
+}
+
+export interface TagRequest {
+  code: string
+  name: string
+  color?: string | null
+  isActive?: boolean | null
+}
+
+export interface CreateTagRequest extends TagRequest {}
+
+export interface UpdateTagRequest extends TagRequest {}
+
+export interface TicketTagResponse {
+  id?: string | number | null
+  ticketId?: string | number | null
+  tagId?: string | number | null
+  taggedAt?: string | null
+  taggedBy?: string | null
+  taggedByName?: string | null
+  tag?: TagResponse | null
+  tagCode?: string | null
+  tagName?: string | null
+  tagColor?: string | null
+  code?: string | null
+  name?: string | null
+  color?: string | null
+  isActive?: boolean | null
+}
+
+export interface TicketTagBreakdownResponse {
+  tagId?: string | number | null
+  tagCode?: string | null
+  tagName?: string | null
+  tagColor?: string | null
+  count?: number | null
+}
+
+export interface CustomerTicketReportResponse {
+  totalCount?: number | null
+  openCount?: number | null
+  closedCount?: number | null
+  resolvedCount?: number | null
+  newCount?: number | null
+  inProgressCount?: number | null
+  waitingCustomerCount?: number | null
+  reopenedCount?: number | null
+  byTag?: TicketTagBreakdownResponse[] | null
+}
+
+export interface AdminCustomerTicketAggregateItemResponse {
+  customerId?: string | number | null
+  customerName?: string | null
+  totalCount?: number | null
+  openCount?: number | null
+  closedCount?: number | null
+  resolvedCount?: number | null
+  waitingCustomerCount?: number | null
+  byTag?: TicketTagBreakdownResponse[] | null
 }
 
 export interface SendTicketReplyResponse {

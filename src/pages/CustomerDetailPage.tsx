@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useCustomerDetail, useCustomerTickets } from '@/hooks/useCustomers'
+import { useCustomerDetail, useCustomerTickets, useDeleteCustomer } from '@/hooks/useCustomers'
+import { useCustomerReport } from '@/hooks/useReports'
 import {
   useCreateCustomerRoutingRule,
   useCustomerEmailSettings,
@@ -14,6 +15,7 @@ import { useMailboxes } from '@/hooks/useMailboxes'
 import { useGroupsQuery } from '@/hooks/useUsers'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errors'
 import type { UpsertCustomerEmailSettingsRequest, UpsertCustomerEmailRoutingRuleRequest } from '@/types/api.types'
 import type { CustomerEmailRoutingRule } from '@/types/email.types'
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge'
@@ -26,11 +28,21 @@ import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
 import {
   ArrowLeft, Ticket, Mail, Settings, Plus, Pencil, Trash2,
-  ToggleLeft, ToggleRight, Save, Globe, AtSign,
+  ToggleLeft, ToggleRight, Save, Globe, AtSign, BarChart2,
 } from 'lucide-react'
 import { format } from 'date-fns'
 
-const UNKNOWN_SENDER_POLICIES = ['MANUAL_REVIEW', 'CREATE_UNMATCHED_TICKET', 'IGNORE', 'REJECT'] as const
+const UNKNOWN_SENDER_POLICIES = ['MANUAL_REVIEW', 'IGNORE', 'REJECT'] as const
+
+function getRoutingRuleTypeLabel(type: CustomerEmailRoutingRule['senderMatchType']) {
+  return type === 'EXACT_EMAIL' ? 'Exact Email' : 'Domain'
+}
+
+function getRoutingRuleAllowSubdomains(rule: CustomerEmailRoutingRule, inheritedAllowSubdomains: boolean | null) {
+  if (rule.allowSubdomains != null) return rule.allowSubdomains ? 'Yes' : 'No'
+  if (rule.senderMatchType === 'DOMAIN_SUFFIX') return inheritedAllowSubdomains ? 'Yes' : 'No'
+  return '—'
+}
 
 export function CustomerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -40,8 +52,15 @@ export function CustomerDetailPage() {
 
   const { customer, isLoading } = useCustomerDetail(id)
   const { tickets, isLoading: ticketsLoading } = useCustomerTickets(id)
+  const {
+    data: customerReport,
+    isLoading: customerReportLoading,
+    isError: customerReportError,
+    error: customerReportQueryError,
+  } = useCustomerReport(id)
   const { data: emailSettings, isLoading: settingsLoading } = useCustomerEmailSettings(id)
   const { data: routingRules = [], isLoading: rulesLoading } = useCustomerRoutingRules(id)
+  const deleteCustomer = useDeleteCustomer()
   const upsertSettings = useUpsertCustomerEmailSettings(id)
   const createRule = useCreateCustomerRoutingRule(id)
   const updateRule = useUpdateCustomerRoutingRule(id)
@@ -52,7 +71,7 @@ export function CustomerDetailPage() {
   const mailboxes = mailboxData?.items ?? []
 
   // Tab state
-  type TabId = 'overview' | 'email' | 'tickets'
+  type TabId = 'overview' | 'email' | 'report' | 'tickets'
   const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   // Email settings form
@@ -73,6 +92,7 @@ export function CustomerDetailPage() {
   })
   const [savingRule, setSavingRule] = useState(false)
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null)
+  const [showDeleteCustomerConfirm, setShowDeleteCustomerConfirm] = useState(false)
 
   const supportsDefaultStatus = emailSettings != null && Object.prototype.hasOwnProperty.call(emailSettings, 'defaultStatus')
 
@@ -109,11 +129,23 @@ export function CustomerDetailPage() {
       : {
           isEnabled: true,
           allowSubdomains: false,
-          unknownSenderPolicy: 'CREATE_UNMATCHED_TICKET',
+          unknownSenderPolicy: 'MANUAL_REVIEW',
           defaultGroupId: null,
           defaultPriority: null,
           ...(supportsDefaultStatus ? { defaultStatus: null } : {}),
         })
+  }
+
+  const handleDeleteCustomer = async () => {
+    try {
+      await deleteCustomer.mutateAsync(id)
+      success('Customer deleted')
+      navigate('/customers')
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to delete customer')
+    } finally {
+      setShowDeleteCustomerConfirm(false)
+    }
   }
 
   const handleSaveSettings = async () => {
@@ -224,10 +256,12 @@ export function CustomerDetailPage() {
   }
 
   const showEmailTab = canViewEmailConfig || canManageEmailConfig
+  const activeRoutingRules = routingRules.filter((rule) => rule.isActive)
 
   const tabs = [
     { id: 'overview' as const, label: 'Overview' },
     ...(showEmailTab ? [{ id: 'email' as const, label: 'Email Settings' }] : []),
+    { id: 'report' as const, label: 'Report' },
     { id: 'tickets' as const, label: 'Tickets' },
   ]
 
@@ -268,9 +302,12 @@ export function CustomerDetailPage() {
             {routingRules.length > 0 && showEmailTab && (
               <div className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700">
                 <Globe size={12} />
-                {routingRules.filter((r) => r.isActive).length} routing rule{routingRules.filter((r) => r.isActive).length !== 1 ? 's' : ''}
+                {activeRoutingRules.length} routing rule{activeRoutingRules.length !== 1 ? 's' : ''}
               </div>
             )}
+            <Button variant="danger" size="sm" leftIcon={<Trash2 size={12} />} onClick={() => setShowDeleteCustomerConfirm(true)}>
+              Delete Customer
+            </Button>
           </div>
         </div>
       </div>
@@ -332,16 +369,16 @@ export function CustomerDetailPage() {
                   )}
                   {routingRules.length > 0 && (
                     <div>
-                      <div className="text-xs text-gray-500 mb-1.5">Sender Patterns ({routingRules.filter((r) => r.isActive).length} active)</div>
+                      <div className="text-xs text-gray-500 mb-1.5">Sender Patterns ({activeRoutingRules.length} active)</div>
                       <div className="flex flex-wrap gap-1.5">
-                        {routingRules.filter((r) => r.isActive).slice(0, 5).map((r) => (
+                        {activeRoutingRules.slice(0, 5).map((r) => (
                           <span key={r.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-mono">
                             {r.senderMatchType === 'DOMAIN_SUFFIX' ? <Globe size={10} /> : <AtSign size={10} />}
                             {r.senderMatchValue}
                           </span>
                         ))}
-                        {routingRules.filter((r) => r.isActive).length > 5 && (
-                          <span className="text-xs text-gray-400">+{routingRules.filter((r) => r.isActive).length - 5} more</span>
+                        {activeRoutingRules.length > 5 && (
+                          <span className="text-xs text-gray-400">+{activeRoutingRules.length - 5} more</span>
                         )}
                       </div>
                     </div>
@@ -379,6 +416,65 @@ export function CustomerDetailPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'report' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <ReportStatCard label="Total" value={customerReport?.totalCount ?? 0} isLoading={customerReportLoading} />
+            <ReportStatCard label="Open" value={customerReport?.openCount ?? 0} isLoading={customerReportLoading} />
+            <ReportStatCard label="Resolved" value={customerReport?.resolvedCount ?? 0} isLoading={customerReportLoading} />
+            <ReportStatCard label="Waiting Customer" value={customerReport?.waitingCustomerCount ?? 0} isLoading={customerReportLoading} />
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+              <BarChart2 className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-700">Backend Customer Report</h2>
+            </div>
+            {customerReportLoading ? (
+              <div className="p-5">
+                <table className="w-full">
+                  <tbody>
+                    <SkeletonRow colCount={3} />
+                  </tbody>
+                </table>
+              </div>
+            ) : customerReportError ? (
+              <div className="p-5 text-sm text-amber-700">{getErrorMessage(customerReportQueryError, 'Failed to load customer report.')}</div>
+            ) : !customerReport ? (
+              <div className="p-5 text-sm text-gray-400">No report data available.</div>
+            ) : (
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+                  <InfoRow label="Closed" value={String(customerReport.closedCount)} />
+                  <InfoRow label="New" value={String(customerReport.newCount)} />
+                  <InfoRow label="In Progress" value={String(customerReport.inProgressCount)} />
+                  <InfoRow label="Reopened" value={String(customerReport.reopenedCount)} />
+                </div>
+
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Tag Breakdown</div>
+                  {customerReport.byTag.length === 0 ? (
+                    <p className="text-sm text-gray-400">No tag breakdown returned by the backend.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {customerReport.byTag.map((item) => (
+                        <div key={`${item.tagId}:${item.tagCode}`} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: item.tagColor ?? '#94a3b8' }} />
+                            <span className="truncate text-gray-800">{item.tagName}</span>
+                          </div>
+                          <span className="font-medium text-gray-700">{item.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -542,6 +638,7 @@ export function CustomerDetailPage() {
                   <tr className="bg-gray-50 border-b border-gray-200">
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Type</th>
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Pattern</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Subdomains</th>
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Mailbox</th>
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Priority</th>
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Status</th>
@@ -553,10 +650,11 @@ export function CustomerDetailPage() {
                     <tr key={rule.id} className="hover:bg-gray-50">
                       <td className="px-4 py-2">
                         <Badge variant={rule.senderMatchType === 'EXACT_EMAIL' ? 'info' : 'default'} size="sm">
-                          {rule.senderMatchType === 'EXACT_EMAIL' ? 'Exact Email' : 'Domain'}
+                          {getRoutingRuleTypeLabel(rule.senderMatchType)}
                         </Badge>
                       </td>
                       <td className="px-4 py-2 font-mono text-xs text-gray-700">{rule.senderMatchValue}</td>
+                      <td className="px-4 py-2 text-gray-600 text-xs">{getRoutingRuleAllowSubdomains(rule, emailSettings?.allowSubdomains ?? null)}</td>
                       <td className="px-4 py-2 text-gray-600 text-xs">{rule.recipientMailboxName ?? '—'}</td>
                       <td className="px-4 py-2 text-gray-600 text-xs">{rule.priority}</td>
                       <td className="px-4 py-2">
@@ -719,6 +817,17 @@ export function CustomerDetailPage() {
         isDestructive
         onConfirm={() => deletingRuleId && handleDeleteRule(deletingRuleId)}
       />
+
+      <ConfirmModal
+        isOpen={showDeleteCustomerConfirm}
+        onClose={() => setShowDeleteCustomerConfirm(false)}
+        title="Delete Customer"
+        message="This customer will be permanently deleted. Continue?"
+        confirmLabel="Delete Customer"
+        isDestructive
+        isLoading={deleteCustomer.isPending}
+        onConfirm={handleDeleteCustomer}
+      />
     </div>
   )
 }
@@ -728,6 +837,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between">
       <span className="text-gray-500">{label}</span>
       <span className="text-gray-800 font-medium">{value}</span>
+    </div>
+  )
+}
+
+function ReportStatCard({ label, value, isLoading }: { label: string; value: number; isLoading: boolean }) {
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</div>
+      <div className="mt-2 text-2xl font-semibold text-gray-900">{isLoading ? '...' : value}</div>
     </div>
   )
 }

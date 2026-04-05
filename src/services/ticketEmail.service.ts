@@ -1,19 +1,24 @@
 ﻿import type {
-  DispatchResponse,
+  EmailDocumentResponse,
   EmailThreadItemResponse,
-  IngressEventResponse,
   SendTicketReplyResponse,
+  TicketEmailReplyPreviewResponse,
   TicketEmailMessageResponse,
+  UnifiedTicketEmailDetailResponse,
 } from '@/types/api.types'
 import type {
+  TicketReplyPreview,
+  TicketReplyPreviewRequest,
   SendTicketReplyRequest,
   SendTicketReplyResult,
   TicketEmailMessage,
 } from '@/types/email.types'
 import { apiClient } from './api.client'
 import {
+  normalizeTicketReplyPreview,
   normalizeSendTicketReplyResult,
   normalizeTicketEmailMessage,
+  normalizeUnifiedTicketEmailDetail,
 } from './email-platform.normalizers'
 
 function extractEmailAddress(raw: string): string {
@@ -29,48 +34,30 @@ function extractEmailAddress(raw: string): string {
   return emailMatch?.[0]?.trim() ?? ''
 }
 
-function toInboundMessage(ticketId: string, event: IngressEventResponse): TicketEmailMessageResponse {
-  const detail = event as IngressEventResponse & {
-    bodyText?: string | null
-    bodyHtml?: string | null
-    sanitizedHtmlBody?: string | null
-    rawHtmlBody?: string | null
-    bodyPreview?: string | null
-    attachments?: TicketEmailMessageResponse['attachments']
+function inferEmailDocumentId(item: EmailThreadItemResponse): string | null {
+  const explicitEmailDocumentId = item.emailDocumentId ?? item.emailId ?? item.documentId ?? item.inboundEmailId ?? item.outboundEmailId ?? null
+  if (explicitEmailDocumentId != null) {
+    return String(explicitEmailDocumentId)
   }
 
-  return {
-    id: String(event.id),
-    ticketId,
-    threadKey: null,
-    messageId: event.messageId ?? '',
-    providerMessageId: null,
-    mailboxId: event.mailboxId != null ? String(event.mailboxId) : null,
-    mailboxName: null,
-    sourceEventId: String(event.id),
-    direction: 'INBOUND',
-    subject: event.rawSubject ?? event.subject ?? null,
-    from: event.rawFrom ?? event.sender ?? null,
-    to: [],
-    cc: [],
-    bcc: [],
-    bodyText: detail.bodyText ?? null,
-    bodyHtml: detail.bodyHtml ?? null,
-    sanitizedHtmlBody: detail.sanitizedHtmlBody ?? null,
-    rawHtmlBody: detail.rawHtmlBody ?? detail.bodyHtml ?? null,
-    bodyPreview: detail.bodyPreview ?? event.failureReason ?? null,
-    sentAt: null,
-    receivedAt: event.receivedAt,
-    processingStatus: (event.status ?? event.processingStatus ?? null) as TicketEmailMessageResponse['processingStatus'],
-    dispatchStatus: null,
-    attachmentCount: detail.attachments?.length ?? 0,
-    attachments: detail.attachments ?? [],
-  }
+  const rawId = String(item.id ?? '').trim()
+  if (!rawId) return null
+  if (/^\d+$/.test(rawId)) return null
+  if (/^evt[-_:]/i.test(rawId)) return null
+  if (/^event[-_:]/i.test(rawId)) return null
+  if (/^ingress[-_:]/i.test(rawId)) return null
+
+  return rawId
 }
 
 function toThreadMessage(ticketId: string, item: EmailThreadItemResponse): TicketEmailMessageResponse {
+  const emailDocumentId = inferEmailDocumentId(item)
+  const detailType = item.detailType ?? item.direction
+  const detailId = item.detailId != null ? String(item.detailId) : emailDocumentId ?? String(item.id)
+
   return {
     id: String(item.id),
+    emailDocumentId: emailDocumentId != null ? String(emailDocumentId) : null,
     ticketId,
     threadKey: null,
     messageId: item.messageId ?? '',
@@ -84,46 +71,69 @@ function toThreadMessage(ticketId: string, item: EmailThreadItemResponse): Ticke
     to: item.toAddress ? [item.toAddress] : [],
     cc: [],
     bcc: [],
+    replyTo: [],
     bodyText: null,
     bodyHtml: null,
     sanitizedHtmlBody: null,
     rawHtmlBody: null,
     bodyPreview: item.bodyPreview ?? null,
+    status: item.status ?? null,
+    failureReason: item.failureReason ?? null,
     sentAt: item.direction === 'OUTBOUND' ? item.timestamp : null,
     receivedAt: item.direction === 'INBOUND' ? item.timestamp : null,
     processingStatus: item.direction === 'INBOUND' ? (item.status as TicketEmailMessageResponse['processingStatus']) : null,
     dispatchStatus: item.direction === 'OUTBOUND' ? (item.status as TicketEmailMessageResponse['dispatchStatus']) : null,
     attachmentCount: item.attachmentCount ?? 0,
     attachments: [],
+    resolvedReplyTarget: item.resolvedReplyTarget ?? null,
+    detailType,
+    detailId,
+    hasAttachments: item.hasAttachments ?? ((item.attachmentCount ?? 0) > 0),
+    isPreviewAvailable: item.isPreviewAvailable ?? true,
   }
 }
 
-function toOutboundMessage(dispatch: DispatchResponse): TicketEmailMessageResponse {
+function toEmailDocumentMessage(email: EmailDocumentResponse, direction: 'INBOUND' | 'OUTBOUND' = 'INBOUND'): TicketEmailMessageResponse {
+  const timestamp = email.receivedAt ?? email.parsedAt ?? null
+
   return {
-    id: String(dispatch.id),
-    ticketId: String(dispatch.ticketId),
-    threadKey: null,
-    messageId: dispatch.messageId ?? '',
+    id: String(email.id),
+    emailDocumentId: String(email.id),
+    ticketId: String(email.ticketId),
+    threadKey: email.threadKey ?? null,
+    messageId: email.messageId ?? '',
     providerMessageId: null,
-    mailboxId: dispatch.mailboxId != null ? String(dispatch.mailboxId) : null,
-    mailboxName: dispatch.mailboxName ?? null,
-    direction: 'OUTBOUND',
-    subject: dispatch.subject ?? null,
-    from: dispatch.fromAddress ?? null,
-    to: dispatch.toAddress ? [dispatch.toAddress] : [],
-    cc: [],
+    mailboxId: null,
+    mailboxName: null,
+    direction,
+    subject: email.subject ?? null,
+    from: email.from ?? null,
+    to: email.to ?? [],
+    cc: email.cc ?? [],
     bcc: [],
-    bodyText: dispatch.bodyText ?? null,
-    bodyHtml: dispatch.bodyHtml ?? null,
-    sanitizedHtmlBody: dispatch.sanitizedHtmlBody ?? null,
-    rawHtmlBody: dispatch.rawHtmlBody ?? dispatch.bodyHtml ?? null,
-    bodyPreview: dispatch.bodyPreview ?? dispatch.failureReason ?? null,
-    sentAt: dispatch.sentAt ?? dispatch.createdAt ?? null,
-    receivedAt: null,
+    bodyText: email.textBody ?? null,
+    bodyHtml: email.htmlBody ?? email.sanitizedHtmlBody ?? null,
+    sanitizedHtmlBody: email.sanitizedHtmlBody ?? null,
+    rawHtmlBody: email.htmlBody ?? null,
+    bodyPreview: email.textBody ?? email.sanitizedHtmlBody ?? null,
+    failureReason: null,
+    sentAt: direction === 'OUTBOUND' ? timestamp : null,
+    receivedAt: direction === 'INBOUND' ? timestamp : null,
     processingStatus: null,
-    dispatchStatus: (dispatch.status ?? null) as TicketEmailMessageResponse['dispatchStatus'],
-    attachmentCount: dispatch.attachments?.length ?? 0,
-    attachments: dispatch.attachments ?? [],
+    dispatchStatus: null,
+    attachmentCount: email.attachments?.length ?? 0,
+    attachments: (email.attachments ?? []).map((attachment) => ({
+      id: attachment.id ?? null,
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      size: attachment.size,
+      sizeBytes: attachment.size,
+      previewSupported: attachment.previewSupported ?? null,
+      previewUrl: attachment.downloadPath ?? null,
+      openUrl: attachment.downloadPath ?? null,
+      downloadPath: attachment.downloadPath ?? null,
+      downloadUrl: attachment.downloadPath ?? null,
+    })),
   }
 }
 
@@ -131,10 +141,12 @@ function buildReplyPayload(payload: SendTicketReplyRequest): {
   mailboxId: number
   subject: string
   sourceEventId?: string
+  templateId?: string
   toAddress?: string
   textBody?: string
   htmlBody?: string
   inReplyToMessageId?: string
+  contentWasEdited?: boolean
 } {
   if (!payload.mailboxId) {
     throw new Error('mailboxId is required for ticket email replies')
@@ -162,20 +174,24 @@ function buildReplyPayload(payload: SendTicketReplyRequest): {
     mailboxId: number
     subject: string
     sourceEventId?: string
+    templateId?: string
     toAddress?: string
     textBody?: string
     htmlBody?: string
     inReplyToMessageId?: string
+    contentWasEdited?: boolean
   } = {
     mailboxId,
     subject: payload.subject,
   }
 
   if (sourceEventId) requestBody.sourceEventId = sourceEventId
+  if (payload.templateId?.trim()) requestBody.templateId = payload.templateId.trim()
   if (toAddress) requestBody.toAddress = toAddress
   if (textBody && textBody.trim().length > 0) requestBody.textBody = textBody
   if (htmlBody && htmlBody.trim().length > 0) requestBody.htmlBody = htmlBody
   if (payload.inReplyToMessageId) requestBody.inReplyToMessageId = payload.inReplyToMessageId
+  if (typeof payload.contentWasEdited === 'boolean') requestBody.contentWasEdited = payload.contentWasEdited
 
   return requestBody
 }
@@ -189,23 +205,19 @@ export const ticketEmailService = {
       .sort((a, b) => (a.receivedAt ?? a.sentAt ?? '').localeCompare(b.receivedAt ?? b.sentAt ?? ''))
   },
 
-  getInboundDetail: async (ticketId: string, eventId: string): Promise<TicketEmailMessage | null> => {
-    const event = await apiClient.get<IngressEventResponse | null>(`/tickets/${ticketId}/email/inbound/${eventId}`)
-    return event ? normalizeTicketEmailMessage(toInboundMessage(ticketId, event)) : null
+  getDetail: async (ticketPublicId: string, detailId: string, detailType: 'INBOUND' | 'OUTBOUND' = 'INBOUND'): Promise<TicketEmailMessage | null> => {
+    const detail = await apiClient.get<UnifiedTicketEmailDetailResponse | null>(`/tickets/${ticketPublicId}/email/detail/${detailType}/${detailId}`)
+    return detail ? normalizeUnifiedTicketEmailDetail(detail) : null
   },
 
-  getOutboundDetail: async (ticketId: string, dispatchId: string): Promise<TicketEmailMessage | null> => {
-    const dispatch = await apiClient.get<DispatchResponse | null>(`/tickets/${ticketId}/email/outbound/${dispatchId}`)
-    return dispatch ? normalizeTicketEmailMessage(toOutboundMessage(dispatch)) : null
+  getLegacyEmailDetail: async (_ticketId: string, emailId: string, direction?: 'INBOUND' | 'OUTBOUND'): Promise<TicketEmailMessage | null> => {
+    const email = await apiClient.get<EmailDocumentResponse | null>(`/emails/${emailId}`)
+    return email ? normalizeTicketEmailMessage(toEmailDocumentMessage(email, direction ?? 'INBOUND')) : null
   },
 
-  /** Convenience: route to inbound or outbound detail based on direction */
-  getDetail: async (ticketId: string, emailId: string, direction?: 'INBOUND' | 'OUTBOUND'): Promise<TicketEmailMessage | null> => {
-    if (direction === 'OUTBOUND') {
-      return ticketEmailService.getOutboundDetail(ticketId, emailId)
-    }
-    // Default to inbound — covers legacy callers that don't pass direction
-    return ticketEmailService.getInboundDetail(ticketId, emailId)
+  previewReply: async (ticketPublicId: string, payload: TicketReplyPreviewRequest): Promise<TicketReplyPreview> => {
+    const response = await apiClient.post<TicketEmailReplyPreviewResponse>(`/tickets/${ticketPublicId}/email/reply/preview`, payload)
+    return normalizeTicketReplyPreview(response)
   },
 
   sendReply: async (ticketId: string, payload: SendTicketReplyRequest): Promise<SendTicketReplyResult> => {

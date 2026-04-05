@@ -41,7 +41,7 @@ function emailToMessage(e: EmailDocumentResponse): TicketMessage {
     type: 'public_inbound',
     authorId: null,
     authorName: e.from ?? '',
-    content: e.textBody ?? e.htmlBody ?? '',
+    content: e.textBody ?? e.sanitizedHtmlBody ?? e.htmlBody ?? '',
     createdAt: e.receivedAt ?? new Date().toISOString(),
     attachments: (e.attachments ?? []).map((a) => a.fileName),
   }

@@ -1,6 +1,7 @@
-import { Users, CheckCircle, XCircle, RotateCcw, ArrowRight } from 'lucide-react'
+import { Users, CheckCircle, XCircle, RotateCcw, Paperclip } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { Ticket, TicketStatus, TicketPriority, TicketActivityItem } from '@/types/ticket.types'
+import type { ReactNode } from 'react'
+import type { Ticket, TicketStatus, TicketPriority, TicketActivityItem, TicketAttachment } from '@/types/ticket.types'
 import { SLAIndicator } from './SLAIndicator'
 import { Button } from '@/components/shared/Button'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -13,6 +14,12 @@ interface TicketSidePanelProps {
   ticket: Ticket
   allowedTransitions: TicketStatus[]
   activities: TicketActivityItem[]
+  attachments?: TicketAttachment[]
+  tagsCard?: ReactNode
+  attachmentEmptyMessage?: string
+  isActivityLoading?: boolean
+  isAttachmentLoading?: boolean
+  onViewAttachments?: () => void
   onAssign: () => void
   onChangeStatus: (status: TicketStatus) => void
   onChangePriority: (priority: TicketPriority) => void
@@ -25,6 +32,12 @@ export function TicketSidePanel({
   ticket,
   allowedTransitions,
   activities,
+  attachments = [],
+  tagsCard,
+  attachmentEmptyMessage = 'No attachments on this email.',
+  isActivityLoading = false,
+  isAttachmentLoading = false,
+  onViewAttachments,
   onAssign,
   onChangeStatus,
   onChangePriority,
@@ -107,6 +120,50 @@ export function TicketSidePanel({
         </div>
       </div>
 
+      {tagsCard}
+
+      <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Attachments</h3>
+          {onViewAttachments ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:text-gray-400"
+              onClick={onViewAttachments}
+              disabled={attachments.length === 0}
+            >
+              <Paperclip size={12} />
+              View Attachments
+            </button>
+          ) : null}
+        </div>
+        <div className="px-4 py-3 space-y-3">
+          {isAttachmentLoading ? (
+            <p className="text-xs text-gray-400">Loading attachments...</p>
+          ) : attachments.length > 0 ? (
+            <>
+              <div className="text-xs text-gray-500">{attachments.length} file{attachments.length === 1 ? '' : 's'}</div>
+              <div className="space-y-2">
+                {attachments.slice(0, 4).map((attachment) => (
+                  <div key={attachment.id} className="flex items-start gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700">
+                    <Paperclip size={12} className="mt-0.5 shrink-0 text-gray-400" />
+                    <div className="min-w-0">
+                      <div className="truncate font-medium text-gray-800">{attachment.fileName}</div>
+                      <div className="mt-0.5 text-gray-500">{attachment.contentType ?? 'Unknown content type'}</div>
+                    </div>
+                  </div>
+                ))}
+                {attachments.length > 4 ? (
+                  <div className="text-xs text-gray-400">+{attachments.length - 4} more attachments</div>
+                ) : null}
+              </div>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400">{attachmentEmptyMessage}</p>
+          )}
+        </div>
+      </div>
+
       {/* SLA */}
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
@@ -126,11 +183,11 @@ export function TicketSidePanel({
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
           <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            Operation Logs / Historical
+            Operation Log
           </h3>
         </div>
         <div className="px-4 py-3 space-y-3 max-h-72 overflow-y-auto">
-          <TicketActivityTimeline activities={activities} />
+          <TicketActivityTimeline activities={activities} isLoading={isActivityLoading} />
         </div>
       </div>
 

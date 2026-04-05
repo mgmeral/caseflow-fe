@@ -32,7 +32,7 @@ describe('customerEmailSettingsService routing-owner contract', () => {
       customerId: 'c1',
       isActive: true,
       allowSubdomains: true,
-      unknownSenderPolicy: 'CREATE_UNMATCHED_TICKET',
+      unknownSenderPolicy: 'MANUAL_REVIEW',
       defaultGroupId: null,
       defaultGroupName: null,
       defaultPriority: null,
@@ -50,41 +50,34 @@ describe('customerEmailSettingsService routing-owner contract', () => {
     expect(mockPut).toHaveBeenCalledWith('/customers/c1/email-settings', {
       isActive: true,
       allowSubdomains: true,
-      unknownSenderPolicy: 'CREATE_UNMATCHED_TICKET',
+      unknownSenderPolicy: 'MANUAL_REVIEW',
       defaultGroupId: null,
       defaultPriority: null,
     })
   })
 
-  it('lists routing rules from /customers/{id}/email-settings response', async () => {
-    mockGet.mockResolvedValueOnce({
-      customerId: 'c1',
-      isActive: true,
-      allowSubdomains: true,
-      unknownSenderPolicy: 'MANUAL_REVIEW',
-      defaultGroupId: null,
-      defaultPriority: null,
-      updatedAt: '2025-01-01T00:00:00Z',
-      rules: [
-        {
-          id: 'r1',
-          customerId: 'c1',
-          senderMatchType: 'DOMAIN',
-          matchValue: '@akbank.com',
-          priority: 10,
-          isActive: true,
-          createdAt: '2025-01-01T00:00:00Z',
-          updatedAt: '2025-01-01T00:00:00Z',
-        },
-      ],
-    })
+  it('lists routing rules from the dedicated /customers/{id}/email-settings/rules endpoint', async () => {
+    mockGet.mockResolvedValueOnce([
+      {
+        id: 'r1',
+        customerId: 'c1',
+        senderMatchType: 'DOMAIN',
+        matchValue: '@akbank.com',
+        priority: 10,
+        isActive: true,
+        allowSubdomains: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
+      },
+    ])
 
     const rules = await customerEmailSettingsService.listRoutingRules('c1')
 
-    expect(mockGet).toHaveBeenCalledWith('/customers/c1/email-settings')
+    expect(mockGet).toHaveBeenCalledWith('/customers/c1/email-settings/rules')
     expect(rules).toHaveLength(1)
     expect(rules[0].senderMatchType).toBe('DOMAIN_SUFFIX')
     expect(rules[0].senderMatchValue).toBe('@akbank.com')
+    expect(rules[0].allowSubdomains).toBe(true)
   })
 
   it('performs sender pattern rule CRUD under customer context', async () => {
@@ -114,27 +107,18 @@ describe('customerEmailSettingsService routing-owner contract', () => {
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-02T00:00:00Z',
     })
-    mockGet.mockResolvedValueOnce({
-      customerId: 'c1',
-      isActive: true,
-      allowSubdomains: true,
-      unknownSenderPolicy: 'MANUAL_REVIEW',
-      defaultGroupId: null,
-      defaultPriority: null,
-      updatedAt: '2025-01-02T00:00:00Z',
-      rules: [
-        {
-          id: 'r1',
-          customerId: 'c1',
-          senderMatchType: 'EXACT_EMAIL',
-          matchValue: 'ops@akbank.com',
-          priority: 10,
-          isActive: true,
-          createdAt: '2025-01-01T00:00:00Z',
-          updatedAt: '2025-01-02T00:00:00Z',
-        },
-      ],
-    })
+    mockGet.mockResolvedValueOnce([
+      {
+        id: 'r1',
+        customerId: 'c1',
+        senderMatchType: 'EXACT_EMAIL',
+        matchValue: 'ops@akbank.com',
+        priority: 10,
+        isActive: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-02T00:00:00Z',
+      },
+    ])
     mockPut.mockResolvedValueOnce({
       id: 'r1',
       customerId: 'c1',

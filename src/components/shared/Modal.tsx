@@ -40,7 +40,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
       {/* Panel */}
       <div
         className={clsx(
-          'relative w-full bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh]',
+          'relative w-full overflow-hidden bg-white rounded-xl shadow-xl flex flex-col max-h-[90vh]',
           SIZE_CLASSES[size],
           'animate-in fade-in zoom-in-95 duration-150',
         )}
@@ -63,7 +63,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto flex-1 px-6 py-4">{children}</div>
+        <div className="min-w-0 overflow-y-auto overflow-x-hidden flex-1 px-4 py-4 sm:px-6">{children}</div>
 
         {/* Footer */}
         {footer && (

@@ -71,6 +71,7 @@ describe('CustomerListPage', () => {
     expect(screen.getByText('Akbank')).toBeInTheDocument()
     expect(screen.getByText('Yapi Kredi')).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: 'Manage' })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
   })
 
   it('shows actionable empty state CTA for creating customer', () => {

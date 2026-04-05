@@ -1,28 +1,30 @@
 import type { TicketActivityItem, TicketMessage, TransferRecord, Ticket } from '@/types/ticket.types'
 import type { TicketEmailMessage } from '@/types/email.types'
+import { getDispatchStatusMeta } from './ticketEmailUi'
 
 function classifySystemEvent(content: string): TicketActivityItem['kind'] {
   const value = content.toLowerCase()
 
   if (value.includes('template') || value.includes('şablon')) return 'template_used'
   if (value.includes('assign') || value.includes('atandı')) return 'assigned'
+  if (value.includes('priority') || value.includes('öncelik')) return 'priority_changed'
   if (value.includes('status') || value.includes('durum')) return 'status_changed'
   return 'system'
 }
 
 function buildReplySummary(email: TicketEmailMessage): Pick<TicketActivityItem, 'kind' | 'summary'> {
-  switch (email.dispatchStatus) {
-    case 'QUEUED':
+  const status = getDispatchStatusMeta(email.dispatchStatus)
+
+  switch (status?.label) {
+    case 'Queued':
       return { kind: 'reply_queued', summary: 'Reply queued for outbound delivery.' }
-    case 'PROCESSING':
-    case 'SENDING':
+    case 'Sending':
+    case 'Dispatched':
       return { kind: 'reply_sending', summary: 'Reply is being sent.' }
-    case 'SENT':
-    case 'DISPATCHED':
-    case 'DELIVERED':
+    case 'Sent':
+    case 'Delivered':
       return { kind: 'reply_sent', summary: 'Reply sent successfully.' }
-    case 'FAILED':
-    case 'PERMANENTLY_FAILED':
+    case 'Failed':
       return { kind: 'reply_failed', summary: 'Reply failed to send.' }
     default:
       return { kind: 'system', summary: 'Reply activity updated.' }
@@ -49,12 +51,15 @@ export function buildTicketActivityItems(params: {
   ]
 
   for (const transfer of transfers) {
+    const hasNamedGroups = Boolean(transfer.fromGroupName || transfer.toGroupName)
     items.push({
       id: `transfer-${transfer.id}`,
       kind: 'transferred',
       actor: transfer.transferredByName || null,
       timestamp: transfer.createdAt,
-      summary: `Transferred from ${transfer.fromGroupName} to ${transfer.toGroupName}.`,
+      summary: hasNamedGroups
+        ? `Transferred from ${transfer.fromGroupName || 'previous group'} to ${transfer.toGroupName || 'new group'}.`
+        : 'Transferred between groups.',
       detail: transfer.reason || transfer.note,
     })
   }
@@ -107,7 +112,7 @@ export function buildTicketActivityItems(params: {
       actor: email.from || email.mailboxName || null,
       timestamp,
       summary: reply.summary,
-      detail: email.subject,
+        detail: email.failureReason ?? email.subject,
     })
   }
 

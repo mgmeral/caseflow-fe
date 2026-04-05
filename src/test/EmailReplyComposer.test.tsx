@@ -4,13 +4,50 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 const mockMutate = vi.hoisted(() => vi.fn())
 const mockSuccess = vi.hoisted(() => vi.fn())
 const mockError = vi.hoisted(() => vi.fn())
+const mockInfo = vi.hoisted(() => vi.fn())
 const mockTemplatesError = vi.hoisted(() => ({ value: false }))
+const mockReplyPreviewState = vi.hoisted(() => ({
+  data: {
+    subject: 'Preview Subject',
+    bodyHtml: '<p>Preview HTML</p>',
+    bodyText: 'Preview text',
+    derivedToAddress: 'customer@example.com',
+    derivedFromAddress: 'support@caseflow.com',
+    warnings: [],
+    placeholderDiagnostics: [],
+    mailboxName: 'Main',
+    mailboxAddress: 'support@caseflow.com',
+    isEditable: true,
+  } as {
+    subject: string
+    bodyHtml: string
+    bodyText: string
+    derivedToAddress: string
+    derivedFromAddress: string
+    warnings: string[]
+    placeholderDiagnostics: Array<{ placeholder: string; status: 'EMPTY' | 'UNKNOWN'; message: string }>
+    mailboxName: string
+    mailboxAddress: string
+    isEditable: boolean
+  } | undefined,
+  isLoading: false,
+  isError: false,
+}))
+const previewHookCalls = vi.hoisted(() => [] as Array<{ ticketPublicId: string; enabled: boolean }>)
 
 vi.mock('@/hooks/useTicketEmails', () => ({
   useSendTicketReply: () => ({
     mutate: mockMutate,
     isPending: false,
   }),
+  useTicketReplyPreview: (ticketPublicId: string, _payload: unknown, enabled = true) => (
+    previewHookCalls.push({ ticketPublicId, enabled }),
+    {
+      data: mockReplyPreviewState.data,
+      isLoading: mockReplyPreviewState.isLoading,
+      isError: mockReplyPreviewState.isError,
+    }
+  ),
 }))
 
 vi.mock('@/hooks/useMailboxes', () => ({
@@ -24,7 +61,7 @@ vi.mock('@/hooks/useMailboxes', () => ({
 }))
 
 vi.mock('@/hooks/useToast', () => ({
-  useToast: () => ({ success: mockSuccess, error: mockError }),
+  useToast: () => ({ success: mockSuccess, error: mockError, info: mockInfo }),
 }))
 
 vi.mock('@/hooks/useTemplates', () => ({
@@ -47,15 +84,6 @@ vi.mock('@/hooks/useTemplates', () => ({
     ],
     isError: mockTemplatesError.value,
   }),
-  useTemplatePreview: () => ({
-    data: {
-      subject: 'Preview Subject',
-      html: '<p>Preview HTML</p>',
-      plainText: 'Preview text',
-    },
-    isLoading: false,
-    isError: false,
-  }),
 }))
 
 const { EmailReplyComposer } = await import('@/components/ticket-detail/EmailReplyComposer')
@@ -63,6 +91,7 @@ const { EmailReplyComposer } = await import('@/components/ticket-detail/EmailRep
 function buildInboundReplyContext() {
   return {
     id: 'e1',
+    emailDocumentId: 'email-1',
     ticketId: 't1',
     threadKey: null,
     messageId: '<m1>',
@@ -70,6 +99,12 @@ function buildInboundReplyContext() {
     mailboxId: 'm1',
     mailboxName: 'Main',
     sourceEventId: 'evt-1',
+    resolvedReplyTarget: 'customer@example.com',
+    replyContext: {
+      sourceEventId: 'evt-1',
+      sourceEmailDocumentId: 'email-1',
+      resolvedReplyTarget: 'customer@example.com',
+    },
     direction: 'INBOUND' as const,
     subject: 'Need help',
     from: 'Customer Name <customer@example.com>',
@@ -95,7 +130,23 @@ describe('EmailReplyComposer', () => {
     mockMutate.mockReset()
     mockSuccess.mockReset()
     mockError.mockReset()
+    mockInfo.mockReset()
     mockTemplatesError.value = false
+    mockReplyPreviewState.data = {
+      subject: 'Preview Subject',
+      bodyHtml: '<p>Preview HTML</p>',
+      bodyText: 'Preview text',
+      derivedToAddress: 'customer@example.com',
+      derivedFromAddress: 'support@caseflow.com',
+      warnings: [],
+      placeholderDiagnostics: [],
+      mailboxName: 'Main',
+      mailboxAddress: 'support@caseflow.com',
+      isEditable: true,
+    }
+    mockReplyPreviewState.isLoading = false
+    mockReplyPreviewState.isError = false
+    previewHookCalls.length = 0
   })
 
   it('hides unsupported fields, removes manual To entry, and submits a source-event reply payload', () => {
@@ -104,6 +155,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
@@ -125,9 +177,11 @@ describe('EmailReplyComposer', () => {
       {
         mailboxId: 'm1',
         sourceEventId: 'evt-1',
-        subject: 'Re: Need help',
+        subject: 'Preview Subject',
         textBody: 'Reply body',
         inReplyToMessageId: '<m1>',
+        contentWasEdited: true,
+        templateId: null,
       },
       expect.any(Object),
     )
@@ -139,6 +193,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
       />,
     )
@@ -155,6 +210,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={onClose}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
@@ -168,8 +224,8 @@ describe('EmailReplyComposer', () => {
       queuedOptions.onSuccess({ requestId: 'r1', ticketId: 't1', outboundEmailId: null, mailboxId: 'm1', status: 'QUEUED', acceptedAt: null, message: null })
     })
 
-    expect(screen.getByText('Reply accepted and queued for delivery.')).toBeInTheDocument()
-    expect(mockSuccess).toHaveBeenCalledWith('Reply accepted and queued for delivery.')
+    expect(screen.getByText('Reply queued for delivery.')).toBeInTheDocument()
+    expect(mockInfo).toHaveBeenCalledWith('Reply queued for delivery.')
     expect(onClose).not.toHaveBeenCalled()
   })
 
@@ -179,6 +235,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
@@ -201,6 +258,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
@@ -214,7 +272,7 @@ describe('EmailReplyComposer', () => {
       dispatchedOptions.onSuccess({ requestId: 'r2', ticketId: 't1', outboundEmailId: 'o1', mailboxId: 'm1', status: 'DISPATCHED', acceptedAt: null, message: null })
     })
 
-    expect(mockSuccess).toHaveBeenCalledWith('Reply dispatched to outbound delivery.')
+    expect(mockInfo).toHaveBeenCalledWith('Reply dispatched to outbound delivery.')
   })
 
   it('shows failed feedback without pretending the reply was sent', () => {
@@ -223,6 +281,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
@@ -246,6 +305,7 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
@@ -253,13 +313,14 @@ describe('EmailReplyComposer', () => {
 
     fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tpl-1' } })
 
-    expect(screen.getByDisplayValue('Template Subject')).toBeInTheDocument()
-    expect(screen.getByDisplayValue('Template body')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Preview Subject')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Preview text')).toBeInTheDocument()
+    expect(screen.getByText('Using backend reply preview for subject, body, and recipient resolution.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /preview/i }))
 
     expect(screen.getByText('Preview Subject')).toBeInTheDocument()
-    expect(screen.getByText('Preview text')).toBeInTheDocument()
+    expect(screen.getAllByText('Preview text').length).toBeGreaterThan(0)
   })
 
   it('shows an honest template availability error when backend template list is unavailable', () => {
@@ -270,11 +331,52 @@ describe('EmailReplyComposer', () => {
         isOpen
         onClose={vi.fn()}
         ticketId="t1"
+        ticketPublicId="ticket-public-1"
         ticketSubject="Need help"
         lastInbound={buildInboundReplyContext()}
       />,
     )
 
     expect(screen.getByText('Template list is unavailable for this session.')).toBeInTheDocument()
+  })
+
+  it('falls back to saved template content when preview is unavailable', () => {
+    mockReplyPreviewState.data = undefined
+    mockReplyPreviewState.isError = true
+
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tpl-1' } })
+
+    expect(screen.getByDisplayValue('Template Subject')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Template body')).toBeInTheDocument()
+    expect(screen.getByText('Template preview is unavailable. Using saved template content.')).toBeInTheDocument()
+  })
+
+  it('uses ticketPublicId for preview calls', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="53"
+        ticketPublicId="550e8400-e29b-41d4-a716-446655440000"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    expect(previewHookCalls).toContainEqual({
+      ticketPublicId: '550e8400-e29b-41d4-a716-446655440000',
+      enabled: true,
+    })
   })
 })

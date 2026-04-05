@@ -1,0 +1,247 @@
+import { useMemo, useState } from 'react'
+import { AlertTriangle, Plus, RefreshCw, Tags, X } from 'lucide-react'
+import { ApiError } from '@/services/api.client'
+import { useActiveTags, useAddTicketTag, useRemoveTicketTag, useTicketTags } from '@/hooks/useTags'
+import { useToast } from '@/hooks/useToast'
+import { Button } from '@/components/shared/Button'
+
+interface TicketTagsCardProps {
+  ticketId: string
+}
+
+function formatTagMutationError(error: unknown, fallback: string): string {
+  if (typeof error === 'object' && error !== null) {
+    const status = 'status' in error ? Number((error as { status?: unknown }).status) : null
+    const message = 'message' in error ? String((error as { message?: unknown }).message ?? '') : ''
+
+    if (status === 409 || /duplicate|already/i.test(message)) {
+      return 'This tag is already assigned to the ticket.'
+    }
+
+    if (message.trim()) {
+      return message.trim()
+    }
+  }
+
+  if (error instanceof ApiError) {
+    const message = error.message?.trim()
+    if (error.status === 409 || /duplicate|already/i.test(message)) {
+      return 'This tag is already assigned to the ticket.'
+    }
+    return message || fallback
+  }
+
+  if (error instanceof Error) {
+    return error.message || fallback
+  }
+
+  return fallback
+}
+
+function getAssignedTagLabel(assignment: { tagId: string; tagName: string | null; tagCode: string | null }): string | null {
+  const tagName = assignment.tagName?.trim()
+  if (tagName) return tagName
+
+  const tagCode = assignment.tagCode?.trim()
+  if (tagCode) return tagCode
+
+  const tagId = assignment.tagId.trim()
+  if (tagId) return `Tag #${tagId}`
+
+  return null
+}
+
+export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
+  const { success, error: showError } = useToast()
+  const {
+    data: assignments = [],
+    isLoading: isAssignedLoading,
+    isError: isAssignedError,
+    refetch: refetchAssigned,
+  } = useTicketTags(ticketId)
+  const {
+    data: activeTags = [],
+    isLoading: isActiveLoading,
+    isError: isActiveError,
+    refetch: refetchActive,
+  } = useActiveTags()
+  const addTagMutation = useAddTicketTag(ticketId)
+  const removeTagMutation = useRemoveTicketTag(ticketId)
+
+  const [selectedTagId, setSelectedTagId] = useState('')
+  const [inlineError, setInlineError] = useState<string | null>(null)
+
+  const assignedTags = useMemo(
+    () => assignments.map((assignment) => assignment.tag).filter((tag): tag is NonNullable<typeof tag> => tag !== null),
+    [assignments],
+  )
+
+  const visibleAssignments = useMemo(() => {
+    return assignments
+      .map((assignment) => {
+        const label = getAssignedTagLabel(assignment)
+        if (!label) return null
+
+        const tagCode = assignment.tagCode?.trim() || null
+        const showCode = Boolean(tagCode && assignment.tagName?.trim() && tagCode !== label)
+
+        return {
+          ...assignment,
+          label,
+          showCode,
+          accentColor: assignment.tagColor ?? assignment.tag?.color ?? null,
+        }
+      })
+      .filter((assignment): assignment is NonNullable<typeof assignment> => assignment !== null)
+  }, [assignments])
+
+  const availableTags = useMemo(() => {
+    const assignedIds = new Set(assignments.map((assignment) => assignment.tagId).filter(Boolean))
+    return activeTags.filter((tag) => tag.isActive && !assignedIds.has(tag.id))
+  }, [activeTags, assignments])
+
+  const handleRetry = () => {
+    void refetchAssigned()
+    void refetchActive()
+  }
+
+  const handleAddTag = () => {
+    if (!selectedTagId) return
+
+    setInlineError(null)
+    addTagMutation.mutate(selectedTagId, {
+      onSuccess: () => {
+        success('Tag added to ticket.')
+        setSelectedTagId('')
+      },
+      onError: (error) => {
+        const message = formatTagMutationError(error, 'Failed to add tag to ticket.')
+        setInlineError(message)
+        showError(message)
+      },
+    })
+  }
+
+  const handleRemoveTag = (tagId: string) => {
+    setInlineError(null)
+    removeTagMutation.mutate(tagId, {
+      onSuccess: () => {
+        success('Tag removed from ticket.')
+      },
+      onError: (error) => {
+        const message = formatTagMutationError(error, 'Failed to remove tag from ticket.')
+        setInlineError(message)
+        showError(message)
+      },
+    })
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-lg overflow-hidden">
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+        <Tags size={14} className="text-gray-400" />
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tags</h3>
+        {visibleAssignments.length > 0 ? (
+          <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-500 border border-gray-200">
+            {visibleAssignments.length} assigned
+          </span>
+        ) : null}
+      </div>
+
+      <div className="px-4 py-3 space-y-3">
+        {isAssignedError ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-800 space-y-2">
+            <div>Ticket tags could not be loaded.</div>
+            <Button variant="secondary" size="sm" onClick={handleRetry} leftIcon={<RefreshCw size={12} />}>
+              Retry
+            </Button>
+          </div>
+        ) : isAssignedLoading ? (
+          <p className="text-xs text-gray-400">Loading ticket tags...</p>
+        ) : visibleAssignments.length === 0 ? (
+          <p className="text-xs text-gray-400">No tags assigned to this ticket.</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-600">Assigned Tags</div>
+            <div className="flex flex-wrap gap-2" aria-label="Assigned tag list">
+            {visibleAssignments.map((assignment) => (
+              <div
+                key={assignment.id}
+                className="inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs"
+                style={{
+                  borderColor: assignment.accentColor ?? '#d1d5db',
+                  backgroundColor: assignment.accentColor ? `${assignment.accentColor}1A` : '#ffffff',
+                }}
+              >
+                <span className="font-medium text-gray-700">{assignment.label}</span>
+                {assignment.showCode ? <span className="text-gray-400">{assignment.tagCode}</span> : null}
+                <button
+                  type="button"
+                  aria-label={`Remove ${assignment.label}`}
+                  onClick={() => handleRemoveTag(assignment.tagId)}
+                  disabled={removeTagMutation.isPending}
+                  className="text-gray-400 hover:text-red-600 disabled:cursor-not-allowed disabled:text-gray-300"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-2 border-t border-gray-100 pt-3">
+          <div className="space-y-1">
+            <label htmlFor="ticket-tag-select" className="block text-xs font-medium text-gray-600">Add Tag</label>
+            <p className="text-xs text-gray-400">Tickets support multiple tags. Add one tag at a time and manage assigned tags from the chip list above.</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              id="ticket-tag-select"
+              aria-label="Add tag"
+              value={selectedTagId}
+              onChange={(event) => setSelectedTagId(event.target.value)}
+              disabled={isActiveLoading || addTagMutation.isPending || isAssignedError}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400"
+            >
+              <option value="">Select a tag</option>
+              {availableTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>{tag.name} ({tag.code})</option>
+              ))}
+            </select>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Plus size={12} />}
+              onClick={handleAddTag}
+              disabled={!selectedTagId || addTagMutation.isPending || isActiveLoading}
+              isLoading={addTagMutation.isPending}
+            >
+              Add Another Tag
+            </Button>
+          </div>
+
+          {isActiveError ? (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2">
+              <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+              <div>
+                Active tag options could not be loaded.
+                <button type="button" onClick={handleRetry} className="ml-2 font-semibold text-amber-900 hover:text-amber-950">Retry</button>
+              </div>
+            </div>
+          ) : isActiveLoading ? (
+            <p className="text-xs text-gray-400">Loading active tags...</p>
+          ) : availableTags.length === 0 ? (
+            <p className="text-xs text-gray-400">No active tags are available to add.</p>
+          ) : (
+            <p className="text-xs text-gray-400">Only active backend-managed tags are available here.</p>
+          )}
+
+          {inlineError ? (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{inlineError}</div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -6,48 +6,96 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import type { TicketEmailMessage } from '@/types/email.types'
-import { Badge } from '@/components/shared/Badge'
-import { AttachmentViewerModal } from './AttachmentViewerModal'
-
-function getDisplayHtml(email: TicketEmailMessage): string | null {
-  return email.sanitizedHtmlBody ?? null
-}
-
-function getDisplayText(email: TicketEmailMessage): string | null {
-  return email.bodyText ?? email.bodyPreview ?? null
-}
+import type { TicketMessage } from '@/types/ticket.types'
+import { useTicketEmailDetailByDirection } from '@/hooks/useTicketEmails'
+import { getDispatchStatusMeta, getEmailDisplayHtml, getEmailDisplayText, isFailedDispatch } from '@/lib/ticketEmailUi'
 
 interface EmailThreadProps {
+  ticketPublicId: string | null
   emails: TicketEmailMessage[]
+  messageFallbacks?: TicketMessage[]
   onSelectEmail?: (email: TicketEmailMessage) => void
 }
 
+function normalizeValue(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase()
+}
+
+function getEmailDirectionMessageType(direction: TicketEmailMessage['direction']): TicketMessage['type'] {
+  return direction === 'INBOUND' ? 'public_inbound' : 'public_outbound'
+}
+
+function getEmailTimestamp(email: TicketEmailMessage): string {
+  return email.receivedAt ?? email.sentAt ?? ''
+}
+
+function findMessageFallback(email: TicketEmailMessage, messages: TicketMessage[]): TicketMessage | null {
+  const expectedType = getEmailDirectionMessageType(email.direction)
+  const emailTimestamp = getEmailTimestamp(email)
+  const emailAuthor = normalizeValue(email.from)
+
+  return messages.find((message) => {
+    if (message.type !== expectedType) return false
+    if (message.id === email.id) return true
+
+    const messageAuthor = normalizeValue(message.authorName)
+    const sameTimestamp = emailTimestamp && message.createdAt === emailTimestamp
+    const sameAuthor = emailAuthor && messageAuthor && (
+      messageAuthor === emailAuthor
+      || messageAuthor.includes(emailAuthor)
+      || emailAuthor.includes(messageAuthor)
+    )
+
+    return Boolean(sameTimestamp && sameAuthor)
+  }) ?? null
+}
+
 function dispatchStatusDisplay(status: string | null) {
-  switch (status) {
-    case 'QUEUED': return { icon: <Clock size={10} />, label: 'Queued', color: 'text-gray-500' }
-    case 'PROCESSING':
-    case 'SENDING':
-      return { icon: <Clock size={10} />, label: 'Sending', color: 'text-blue-500' }
-    case 'SENT': return { icon: <CheckCircle2 size={10} />, label: 'Sent', color: 'text-green-600' }
-    case 'DISPATCHED': return { icon: <CheckCircle2 size={10} />, label: 'Dispatched', color: 'text-green-600' }
-    case 'DELIVERED': return { icon: <CheckCircle2 size={10} />, label: 'Delivered', color: 'text-green-600' }
-    case 'FAILED':
-    case 'PERMANENTLY_FAILED':
-      return { icon: <AlertCircle size={10} />, label: 'Failed', color: 'text-red-500' }
-    default: return null
+  const meta = getDispatchStatusMeta(status)
+
+  if (!meta) return null
+
+  switch (meta.category) {
+    case 'pending':
+      return { icon: <Clock size={10} />, label: meta.label, color: 'text-gray-500' }
+    case 'active':
+      return { icon: <Clock size={10} />, label: meta.label, color: 'text-blue-500' }
+    case 'success':
+      return { icon: <CheckCircle2 size={10} />, label: meta.label, color: 'text-green-600' }
+    case 'error':
+      return { icon: <AlertCircle size={10} />, label: meta.label, color: 'text-red-500' }
+    default:
+      return null
   }
 }
 
-function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: () => void }) {
+function EmailCard({ ticketPublicId, email, messageFallbacks, onSelect }: { ticketPublicId: string | null; email: TicketEmailMessage; messageFallbacks: TicketMessage[]; onSelect?: () => void }) {
   const [expanded, setExpanded] = useState(false)
-  const [showAttachments, setShowAttachments] = useState(false)
   const isInbound = email.direction === 'INBOUND'
+  const detailLookupId = email.detailId ?? email.emailDocumentId ?? ''
+  const needsHydration = expanded
+  const shouldLoadDetail = needsHydration && (
+    email.attachments.length === 0
+    || (!email.sanitizedHtmlBody && !email.bodyText)
+    || (isFailedDispatch(email.dispatchStatus) && !email.failureReason)
+  )
+  const { data: hydratedEmail, isLoading: isHydrating } = useTicketEmailDetailByDirection(
+    ticketPublicId ?? '',
+    detailLookupId,
+    email.detailType ?? email.direction,
+    shouldLoadDetail && !!ticketPublicId && !!detailLookupId,
+  )
+  const displayEmail = hydratedEmail
+    ? { ...email, ...hydratedEmail, sourceEventId: email.sourceEventId ?? hydratedEmail.sourceEventId }
+    : email
+  const fallbackMessage = findMessageFallback(displayEmail, messageFallbacks)
 
-  const timestamp = email.receivedAt ?? email.sentAt ?? ''
-  const htmlContent = getDisplayHtml(email)
-  const textContent = getDisplayText(email)
+  const timestamp = displayEmail.receivedAt ?? displayEmail.sentAt ?? ''
+  const htmlContent = getEmailDisplayHtml(displayEmail)
+  const textContent = getEmailDisplayText(displayEmail) ?? fallbackMessage?.content ?? null
 
-  const dispatch = !isInbound ? dispatchStatusDisplay(email.dispatchStatus) : null
+  const dispatch = !isInbound ? dispatchStatusDisplay(displayEmail.dispatchStatus) : null
+  const failedReason = !isInbound && isFailedDispatch(displayEmail.dispatchStatus) ? displayEmail.failureReason : null
 
   return (
     <div
@@ -79,9 +127,9 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
               <MailCheck size={10} /> Outbound
             </span>
           )}
-          <span className="text-sm font-medium text-gray-800 truncate">{email.from ?? 'Unknown'}</span>
-          {email.subject && (
-            <span className="text-xs text-gray-400 truncate hidden sm:inline">— {email.subject}</span>
+          <span className="text-sm font-medium text-gray-800 truncate">{displayEmail.from ?? 'Unknown'}</span>
+          {displayEmail.subject && (
+            <span className="text-xs text-gray-400 truncate hidden sm:inline">— {displayEmail.subject}</span>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
@@ -104,9 +152,9 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
               {dispatch.icon} {dispatch.label}
             </span>
           )}
-          {email.attachmentCount > 0 && (
+          {displayEmail.attachmentCount > 0 && (
             <span className="inline-flex items-center gap-0.5 text-gray-400 text-xs">
-              <Paperclip size={10} /> {email.attachmentCount}
+              <Paperclip size={10} /> {displayEmail.attachmentCount}
             </span>
           )}
           <span className="text-xs text-gray-400">
@@ -117,8 +165,8 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
       </div>
 
       {/* Preview — always shown */}
-      {!expanded && email.bodyPreview && (
-        <div className="px-4 pb-3 text-xs text-gray-500 line-clamp-2">{email.bodyPreview}</div>
+      {!expanded && displayEmail.bodyPreview && (
+        <div className="px-4 pb-3 text-xs text-gray-500 line-clamp-2">{displayEmail.bodyPreview}</div>
       )}
 
       {/* Expanded detail */}
@@ -126,60 +174,50 @@ function EmailCard({ email, onSelect }: { email: TicketEmailMessage; onSelect?: 
         <div className="border-t border-gray-100">
           {/* Address info */}
           <div className="px-4 py-2 bg-gray-50/60 text-xs space-y-0.5">
-            <div><span className="text-gray-400 w-10 inline-block">From:</span> <span className="text-gray-700">{email.from ?? '—'}</span></div>
-            <div><span className="text-gray-400 w-10 inline-block">To:</span> <span className="text-gray-700">{email.to.join(', ') || '—'}</span></div>
-            {email.cc.length > 0 && (
-              <div><span className="text-gray-400 w-10 inline-block">Cc:</span> <span className="text-gray-700">{email.cc.join(', ')}</span></div>
+            <div><span className="text-gray-400 w-10 inline-block">From:</span> <span className="text-gray-700">{displayEmail.from ?? '—'}</span></div>
+            <div><span className="text-gray-400 w-10 inline-block">To:</span> <span className="text-gray-700">{displayEmail.to.join(', ') || '—'}</span></div>
+            {displayEmail.cc.length > 0 && (
+              <div><span className="text-gray-400 w-10 inline-block">Cc:</span> <span className="text-gray-700">{displayEmail.cc.join(', ')}</span></div>
             )}
-            {email.bcc.length > 0 && (
-              <div><span className="text-gray-400 w-10 inline-block">Bcc:</span> <span className="text-gray-700">{email.bcc.join(', ')}</span></div>
+            {displayEmail.bcc.length > 0 && (
+              <div><span className="text-gray-400 w-10 inline-block">Bcc:</span> <span className="text-gray-700">{displayEmail.bcc.join(', ')}</span></div>
             )}
-            {email.mailboxName && (
-              <div><span className="text-gray-400 w-10 inline-block">Via:</span> <span className="text-gray-700">{email.mailboxName}</span></div>
+            {displayEmail.mailboxName && (
+              <div><span className="text-gray-400 w-10 inline-block">Via:</span> <span className="text-gray-700">{displayEmail.mailboxName}</span></div>
+            )}
+            {displayEmail.mailboxAddress && (
+              <div><span className="text-gray-400 w-10 inline-block">Box:</span> <span className="text-gray-700">{displayEmail.mailboxAddress}</span></div>
+            )}
+            {displayEmail.resolvedReplyTarget && (
+              <div><span className="text-gray-400 w-10 inline-block">Reply:</span> <span className="text-gray-700 break-all">{displayEmail.resolvedReplyTarget}</span></div>
             )}
           </div>
 
           {/* Body */}
           <div className="px-4 py-3">
-            {htmlContent ? (
+            {isHydrating && !hydratedEmail && !htmlContent && !textContent ? (
+              <p className="text-sm text-gray-400 italic">Loading message details...</p>
+            ) : htmlContent ? (
               <div className="prose prose-sm max-w-none text-gray-800 overflow-x-auto" dangerouslySetInnerHTML={{ __html: htmlContent }} />
             ) : textContent ? (
               <pre className="text-sm text-gray-800 whitespace-pre-wrap font-sans">{textContent}</pre>
             ) : (
               <p className="text-sm text-gray-400 italic">No body content available.</p>
             )}
+            {failedReason && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+                Delivery failed: {failedReason}
+              </div>
+            )}
           </div>
 
-          {/* Attachments */}
-          {email.attachmentCount > 0 && (
-            <div className="px-4 py-2 border-t border-gray-100 bg-gray-50/40">
-              <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800" onClick={() => setShowAttachments(true)}>
-                <Paperclip size={12} />
-                View Attachments
-              </button>
-            </div>
-          )}
         </div>
       )}
-
-      <AttachmentViewerModal
-        isOpen={showAttachments}
-        onClose={() => setShowAttachments(false)}
-        title="Email Attachments"
-        attachments={email.attachments.map((att) => ({
-          id: att.id,
-          fileName: att.fileName,
-          contentType: att.contentType,
-          size: att.sizeBytes ?? att.size,
-          downloadUrl: att.downloadUrl,
-        }))}
-        unavailableMessage="Attachment metadata is not available for this message."
-      />
     </div>
   )
 }
 
-export function EmailThread({ emails, onSelectEmail }: EmailThreadProps) {
+export function EmailThread({ ticketPublicId, emails, messageFallbacks = [], onSelectEmail }: EmailThreadProps) {
   if (emails.length === 0) {
     return (
       <div className="p-6 text-center text-sm text-gray-400">
@@ -212,7 +250,7 @@ export function EmailThread({ emails, onSelectEmail }: EmailThreadProps) {
         return (
           <div key={email.id}>
             {divider}
-            <EmailCard email={email} onSelect={onSelectEmail ? () => onSelectEmail(email) : undefined} />
+            <EmailCard ticketPublicId={ticketPublicId} email={email} messageFallbacks={messageFallbacks} onSelect={onSelectEmail ? () => onSelectEmail(email) : undefined} />
           </div>
         )
       })}

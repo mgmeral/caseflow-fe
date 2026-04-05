@@ -24,8 +24,6 @@ const P = {
   // Email platform permissions
   EMAIL_CONFIG_VIEW:         'EMAIL_CONFIG_VIEW',
   EMAIL_CONFIG_MANAGE:       'EMAIL_CONFIG_MANAGE',
-  EMAIL_OPERATIONS_VIEW:     'EMAIL_OPERATIONS_VIEW',
-  EMAIL_OPERATIONS_MANAGE:   'EMAIL_OPERATIONS_MANAGE',
   TICKET_EMAIL_VIEW:         'TICKET_EMAIL_VIEW',
   TICKET_EMAIL_REPLY_SEND:   'TICKET_EMAIL_REPLY_SEND',
 } as const
@@ -46,6 +44,7 @@ export function usePermissions() {
     canManageUsers:     has(P.USER_MANAGE),
     canManageRoles:     has(P.ROLE_MANAGE),
     canManageGroups:    has(P.GROUP_MANAGE),
+    canManageAdminConfig: has(P.ADMIN_CONFIG),
     canViewAdminPool:   has(P.ADMIN_POOL_VIEW),
     canAssignTickets:   has(P.TICKET_ASSIGN),
     canTransferTickets: has(P.TICKET_TRANSFER),
@@ -59,11 +58,9 @@ export function usePermissions() {
     // Email platform — driven by dedicated permission codes from backend
     canViewEmailConfig:         has(P.EMAIL_CONFIG_VIEW) || has(P.EMAIL_CONFIG_MANAGE),
     canManageEmailConfig:       has(P.EMAIL_CONFIG_MANAGE),
-    canViewIngressEvents:       has(P.EMAIL_OPERATIONS_VIEW) || has(P.EMAIL_OPERATIONS_MANAGE),
-    canManageIngressEvents:     has(P.EMAIL_OPERATIONS_MANAGE),
     canViewTicketEmail:         has(P.TICKET_EMAIL_VIEW),
     canSendTicketEmailReply:    has(P.TICKET_EMAIL_REPLY_SEND),
     /** Shorthand: can access any email admin/config screen */
-    canAccessEmailAdmin:        has(P.EMAIL_CONFIG_VIEW) || has(P.EMAIL_CONFIG_MANAGE) || has(P.EMAIL_OPERATIONS_VIEW) || has(P.EMAIL_OPERATIONS_MANAGE),
+    canAccessEmailAdmin:        has(P.EMAIL_CONFIG_VIEW) || has(P.EMAIL_CONFIG_MANAGE),
   }
 }

@@ -1,7 +1,6 @@
 import { Tag } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { Ticket } from '@/types/ticket.types'
-import { Badge } from '@/components/shared/Badge'
 
 interface CustomerInfoCardProps {
   ticket: Ticket
@@ -35,10 +34,10 @@ export function CustomerInfoCard({ ticket }: CustomerInfoCardProps) {
           <div className="flex items-center gap-2 flex-wrap mt-2 pt-2 border-t border-gray-100">
             {ticket.tags.map((tag) => (
               <span
-                key={tag}
+                key={tag.id}
                 className="px-1.5 py-0.5 bg-gray-100 text-gray-600 text-xs rounded border border-gray-200"
               >
-                {tag}
+                {tag.name}
               </span>
             ))}
           </div>

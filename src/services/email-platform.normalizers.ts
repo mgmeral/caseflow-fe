@@ -1,26 +1,29 @@
 import type {
+  AdminCustomerTicketAggregateItemResponse,
+  CustomerTicketReportResponse,
   CustomerEmailRoutingRuleResponse,
   CustomerEmailSettingsResponse,
-  IngressEventDetailResponse,
-  IngressEventResponse,
   InitialSyncStrategy,
   MailboxResponse,
   SendTicketReplyResponse,
+  TagResponse,
+  TicketTagResponse,
   TicketEmailAttachmentResponse,
+  TicketEmailReplyPreviewResponse,
   TicketEmailMessageResponse,
+  UnifiedTicketEmailDetailResponse,
 } from '@/types/api.types'
 import type {
   CustomerEmailRoutingRule,
   CustomerEmailSettings,
   EmailAttachment,
-  IngressEvent,
-  IngressEventDetail,
-  IngressEventListResult,
   Mailbox,
   MailboxListResult,
   SendTicketReplyResult,
+  TicketReplyPreview,
   TicketEmailMessage,
 } from '@/types/email.types'
+import type { AdminCustomerTicketAggregateReport, AdminCustomerTicketAggregateItem, CustomerTicketReport, TicketTag, TicketTagAssignment, TicketTagBreakdown } from '@/types/ticket.types'
 
 const LEGACY_INITIAL_SYNC_STRATEGY_MAP = {
   START_FROM_LATEST: 'NEW_MESSAGES_ONLY',
@@ -39,7 +42,10 @@ function normalizeAttachment(attachment: TicketEmailAttachmentResponse): EmailAt
     contentType: attachment.contentType ?? null,
     size: attachment.sizeBytes ?? attachment.size ?? null,
     sizeBytes: attachment.sizeBytes ?? attachment.size ?? null,
-    downloadUrl: attachment.downloadUrl ?? null,
+    previewSupported: attachment.previewSupported ?? null,
+    previewUrl: attachment.previewUrl ?? attachment.downloadPath ?? attachment.downloadUrl ?? null,
+    openUrl: attachment.openUrl ?? attachment.downloadUrl ?? attachment.downloadPath ?? null,
+    downloadUrl: attachment.downloadUrl ?? attachment.downloadPath ?? null,
   }
 }
 
@@ -122,8 +128,9 @@ export function normalizeCustomerEmailSettings(settings: CustomerEmailSettingsRe
 }
 
 export function normalizeCustomerEmailRoutingRule(rule: CustomerEmailRoutingRuleResponse): CustomerEmailRoutingRule {
-  const senderMatchType = rule.senderMatchType === 'DOMAIN' ? 'DOMAIN_SUFFIX' : rule.senderMatchType
-  const senderMatchValue = rule.senderMatchValue ?? rule.matchValue ?? ''
+  const rawSenderMatchType = rule.senderMatchType ?? rule.ruleType ?? 'EXACT_EMAIL'
+  const senderMatchType = (rawSenderMatchType === 'DOMAIN' ? 'DOMAIN_SUFFIX' : rawSenderMatchType) as CustomerEmailRoutingRule['senderMatchType']
+  const senderMatchValue = rule.senderMatchValue ?? rule.matchValue ?? rule.pattern ?? rule.value ?? ''
   return {
     id: rule.id,
     customerId: rule.customerId,
@@ -131,53 +138,96 @@ export function normalizeCustomerEmailRoutingRule(rule: CustomerEmailRoutingRule
     recipientMailboxName: rule.recipientMailboxName ?? null,
     senderMatchType,
     senderMatchValue,
-    priority: rule.priority,
-    isActive: rule.isActive,
+    priority: rule.priority ?? 0,
+    isActive: rule.isActive ?? rule.active ?? true,
+    allowSubdomains: rule.allowSubdomains ?? null,
     notes: rule.notes ?? null,
     createdAt: rule.createdAt,
     updatedAt: rule.updatedAt,
   }
 }
 
-export function normalizeIngressEvent(event: IngressEventResponse): IngressEvent {
-  const processingStatus = (event.processingStatus ?? event.status ?? 'RECEIVED') as IngressEvent['processingStatus']
+export function normalizeTag(tag: TagResponse): TicketTag {
   return {
-    id: String(event.id),
-    publicId: event.publicId ?? null,
-    mailboxId: event.mailboxId != null ? String(event.mailboxId) : null,
-    mailboxName: event.mailboxName ?? null,
-    mailboxEmail: event.mailboxEmail ?? null,
-    sourceType: event.sourceType ?? null,
-    sourceUid: event.sourceUid ?? null,
-    internetMessageId: event.internetMessageId ?? null,
-    subject: event.subject ?? null,
-    sender: event.sender ?? null,
-    processingStatus,
-    receivedAt: event.receivedAt,
-    processedAt: event.processedAt ?? null,
-    lastError: event.lastError ?? event.failureReason ?? null,
-    failureReason: event.failureReason ?? null,
-    processingAttempts: event.processingAttempts ?? null,
-    lastAttemptAt: event.lastAttemptAt ?? null,
-    relatedTicketId: event.ticketId != null ? String(event.ticketId) : null,
+    id: String(tag.id),
+    code: tag.code,
+    name: tag.name,
+    color: tag.color ?? null,
+    isActive: tag.isActive !== false,
   }
 }
 
-export function normalizeIngressEventList(
-  response: IngressEventResponse[] | { items: IngressEventResponse[]; page: number; size: number; totalElements: number; totalPages: number },
-): IngressEventListResult {
-  if (Array.isArray(response)) {
-    return {
-      items: response.map(normalizeIngressEvent),
-      page: 0,
-      size: response.length,
-      total: response.length,
-      totalPages: response.length > 0 ? 1 : 0,
-    }
-  }
+export function normalizeTicketTagResponse(response: TicketTagResponse): TicketTagAssignment {
+  const nestedTag = response.tag
+  const normalizedTagId = String(response.tagId ?? nestedTag?.id ?? response.id ?? '')
+  const tagCode = response.tagCode ?? response.code ?? nestedTag?.code ?? null
+  const tagName = response.tagName ?? response.name ?? nestedTag?.name ?? null
+  const tagColor = response.tagColor ?? response.color ?? nestedTag?.color ?? null
+  const tagIsActive = nestedTag?.isActive ?? response.isActive ?? true
+  const hasTagData = Boolean(normalizedTagId || tagCode || tagName || tagColor || nestedTag)
+  const normalizedTag = normalizeTag({
+    id: normalizedTagId,
+    code: tagCode ?? '',
+    name: tagName ?? tagCode ?? '',
+    color: tagColor,
+    isActive: tagIsActive,
+  })
 
   return {
-    items: response.items.map(normalizeIngressEvent),
+    id: String(response.id ?? `${response.ticketId ?? ''}:${normalizedTagId}`),
+    ticketId: String(response.ticketId ?? ''),
+    tagId: normalizedTagId,
+    taggedAt: response.taggedAt ?? null,
+    taggedBy: response.taggedBy != null ? String(response.taggedBy) : null,
+    taggedByName: response.taggedByName ?? null,
+    tagCode,
+    tagName,
+    tagColor,
+    tagIsActive,
+    tag: hasTagData ? normalizedTag : null,
+  }
+}
+
+function normalizeTagBreakdown(item: { tagId?: string | number | null; tagCode?: string | null; tagName?: string | null; tagColor?: string | null; count?: number | null }): TicketTagBreakdown {
+  return {
+    tagId: item.tagId != null ? String(item.tagId) : '',
+    tagCode: item.tagCode ?? item.tagName ?? '',
+    tagName: item.tagName ?? item.tagCode ?? '',
+    tagColor: item.tagColor ?? null,
+    count: item.count ?? 0,
+  }
+}
+
+export function normalizeCustomerTicketReport(response: CustomerTicketReportResponse): CustomerTicketReport {
+  return {
+    totalCount: response.totalCount ?? 0,
+    openCount: response.openCount ?? 0,
+    closedCount: response.closedCount ?? 0,
+    resolvedCount: response.resolvedCount ?? 0,
+    newCount: response.newCount ?? 0,
+    inProgressCount: response.inProgressCount ?? 0,
+    waitingCustomerCount: response.waitingCustomerCount ?? 0,
+    reopenedCount: response.reopenedCount ?? 0,
+    byTag: (response.byTag ?? []).map(normalizeTagBreakdown),
+  }
+}
+
+function normalizeAdminCustomerTicketAggregateItem(response: AdminCustomerTicketAggregateItemResponse): AdminCustomerTicketAggregateItem {
+  return {
+    customerId: response.customerId != null ? String(response.customerId) : '',
+    customerName: response.customerName ?? 'Unknown customer',
+    totalCount: response.totalCount ?? 0,
+    openCount: response.openCount ?? 0,
+    closedCount: response.closedCount ?? 0,
+    resolvedCount: response.resolvedCount ?? 0,
+    waitingCustomerCount: response.waitingCustomerCount ?? 0,
+    byTag: (response.byTag ?? []).map(normalizeTagBreakdown),
+  }
+}
+
+export function normalizeAdminCustomerTicketAggregateReport(response: { items: AdminCustomerTicketAggregateItemResponse[]; page: number; size: number; totalElements: number; totalPages: number }): AdminCustomerTicketAggregateReport {
+  return {
+    items: response.items.map(normalizeAdminCustomerTicketAggregateItem),
     page: response.page,
     size: response.size,
     total: response.totalElements,
@@ -185,16 +235,85 @@ export function normalizeIngressEventList(
   }
 }
 
-export function normalizeIngressEventDetail(event: IngressEventDetailResponse): IngressEventDetail {
+export function normalizeTicketReplyPreview(response: TicketEmailReplyPreviewResponse): TicketReplyPreview {
   return {
-    ...normalizeIngressEvent(event),
-    recipients: event.recipients ?? [],
-    cc: event.cc ?? [],
-    rawHeaders: event.rawHeaders ?? {},
-    payloadExcerpt: event.payloadExcerpt ?? null,
-    retryCount: event.retryCount ?? 0,
-    relatedTicketId: event.relatedTicketId ?? (event.ticketId != null ? String(event.ticketId) : null),
+    derivedToAddress: response.derivedToAddress ?? null,
+    derivedFromAddress: response.derivedFromAddress ?? null,
+    subject: response.subject,
+    bodyText: response.bodyText ?? null,
+    bodyHtml: response.bodyHtml ?? null,
+    templateInfo: response.templateInfo
+      ? {
+          templateId: response.templateInfo.templateId != null ? String(response.templateInfo.templateId) : null,
+          templateCode: response.templateInfo.templateCode ?? null,
+          templateName: response.templateInfo.templateName ?? null,
+        }
+      : null,
+    placeholderDiagnostics: (response.placeholderDiagnostics ?? []).map((item) => ({
+      placeholder: item.placeholder,
+      status: item.status,
+      message: item.message,
+    })),
+    warnings: response.warnings ?? [],
+    mailboxName: response.mailboxName ?? null,
+    mailboxAddress: response.mailboxAddress ?? null,
+    isEditable: response.isEditable !== false,
   }
+}
+
+export function normalizeUnifiedTicketEmailDetail(response: UnifiedTicketEmailDetailResponse): TicketEmailMessage {
+  return normalizeTicketEmailMessage({
+    id: response.id,
+    emailDocumentId: response.detailType === 'INBOUND' ? String(response.id) : null,
+    ticketId: response.ticketPublicId,
+    threadKey: null,
+    messageId: response.messageId ?? '',
+    providerMessageId: null,
+    mailboxId: response.mailboxId != null ? String(response.mailboxId) : null,
+    mailboxName: response.mailboxName ?? null,
+    mailboxAddress: response.mailboxAddress ?? null,
+    direction: response.direction,
+    subject: response.subject ?? null,
+    from: response.fromAddress ?? null,
+    fromAddress: response.fromAddress ?? null,
+    to: response.toAddress ?? [],
+    cc: response.cc ?? [],
+    bcc: response.bcc ?? [],
+    replyTo: response.replyTo ?? null,
+    bodyText: response.bodyText ?? null,
+    bodyHtml: response.bodyHtml ?? null,
+    sanitizedHtmlBody: response.bodyHtml ?? null,
+    rawHtmlBody: response.bodyHtml ?? null,
+    bodyPreview: response.bodyPreview ?? null,
+    failureReason: response.failureReason ?? null,
+    sentAt: response.sentAt ?? null,
+    receivedAt: response.receivedAt ?? null,
+    createdAt: response.createdAt ?? null,
+    status: response.status ?? null,
+    dispatchStatus: response.direction === 'OUTBOUND' ? (response.status ?? null) : null,
+    detailType: response.detailType,
+    detailId: String(response.id),
+    attachmentCount: response.attachments?.length ?? 0,
+    attachments: response.attachments ?? [],
+    hasAttachments: (response.attachments?.length ?? 0) > 0,
+    isPreviewAvailable: Boolean(response.bodyHtml ?? response.bodyText),
+    threadMessageId: response.threadMessageId ?? null,
+    templateInfo: response.templateInfo
+      ? {
+          templateId: response.templateInfo.templateId != null ? String(response.templateInfo.templateId) : null,
+          templateCode: response.templateInfo.templateCode ?? null,
+          templateName: response.templateInfo.templateName ?? null,
+        }
+      : null,
+    replyContext: response.replyContext
+      ? {
+          sourceEventId: response.replyContext.sourceEventId != null ? String(response.replyContext.sourceEventId) : null,
+          sourceEmailDocumentId: response.replyContext.sourceEmailDocumentId != null ? String(response.replyContext.sourceEmailDocumentId) : null,
+          resolvedReplyTarget: response.replyContext.resolvedReplyTarget ?? null,
+        }
+      : null,
+    contentWasEdited: response.contentWasEdited ?? null,
+  })
 }
 
 export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse): TicketEmailMessage {
@@ -205,21 +324,25 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
   const to = message.to ?? (message.toAddress ? [message.toAddress] : [])
   const subject = message.subject ?? null
   const bodyPreview = message.bodyPreview ?? null
+  const failureReason = message.failureReason ?? message.lastError ?? null
   const sentAt = message.sentAt ?? (direction === 'OUTBOUND' ? timestamp : null)
   const receivedAt = message.receivedAt ?? (direction === 'INBOUND' ? timestamp : null)
   const processingStatus = message.processingStatus ?? (direction === 'INBOUND' ? (status as TicketEmailMessage['processingStatus']) : null)
   const dispatchStatus = message.dispatchStatus ?? (direction === 'OUTBOUND' ? (status as TicketEmailMessage['dispatchStatus']) : null)
   const attachments = (message.attachments ?? []).map(normalizeAttachment)
   const sourceEventId = message.sourceEventId ?? message.sourceEmailEventId ?? message.ingressEventId ?? (direction === 'INBOUND' ? String(message.id) : null)
+  const emailDocumentId = message.emailDocumentId ?? message.emailId ?? message.documentId ?? null
 
   return {
     id: String(message.id),
+    emailDocumentId: emailDocumentId != null ? String(emailDocumentId) : null,
     ticketId: String(message.ticketId),
     threadKey: message.threadKey ?? null,
     messageId: message.messageId,
     providerMessageId: message.providerMessageId ?? null,
     mailboxId: message.mailboxId ?? null,
     mailboxName: message.mailboxName ?? null,
+    mailboxAddress: message.mailboxAddress ?? null,
     sourceEventId: sourceEventId != null ? String(sourceEventId) : null,
     direction,
     subject,
@@ -227,17 +350,42 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
     to,
     cc: message.cc ?? [],
     bcc: message.bcc ?? [],
+    replyTo: message.replyTo ?? null,
     bodyText: message.bodyText ?? null,
     bodyHtml: message.bodyHtml ?? null,
     sanitizedHtmlBody: message.sanitizedHtmlBody ?? null,
     rawHtmlBody: message.rawHtmlBody ?? message.bodyHtml ?? null,
     bodyPreview,
+    status,
+    failureReason,
     sentAt,
     receivedAt,
+    createdAt: message.createdAt ?? null,
     processingStatus,
     dispatchStatus,
     attachmentCount: message.attachmentCount ?? attachments.length,
     attachments,
+    resolvedReplyTarget: message.resolvedReplyTarget ?? null,
+    detailType: message.detailType ?? null,
+    detailId: message.detailId ?? null,
+    hasAttachments: message.hasAttachments ?? ((message.attachmentCount ?? attachments.length) > 0),
+    isPreviewAvailable: message.isPreviewAvailable ?? Boolean(bodyPreview ?? message.bodyText ?? message.bodyHtml),
+    threadMessageId: message.threadMessageId ?? null,
+    templateInfo: message.templateInfo
+      ? {
+          templateId: message.templateInfo.templateId != null ? String(message.templateInfo.templateId) : null,
+          templateCode: message.templateInfo.templateCode ?? null,
+          templateName: message.templateInfo.templateName ?? null,
+        }
+      : null,
+    replyContext: message.replyContext
+      ? {
+          sourceEventId: message.replyContext.sourceEventId != null ? String(message.replyContext.sourceEventId) : null,
+          sourceEmailDocumentId: message.replyContext.sourceEmailDocumentId != null ? String(message.replyContext.sourceEmailDocumentId) : null,
+          resolvedReplyTarget: message.replyContext.resolvedReplyTarget ?? null,
+        }
+      : null,
+    contentWasEdited: message.contentWasEdited ?? null,
   }
 }
 

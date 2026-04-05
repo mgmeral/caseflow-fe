@@ -31,24 +31,6 @@ describe('usePermissions – email platform permissions', () => {
     expect(result.current.canAccessEmailAdmin).toBe(true)
   })
 
-  it('grants ingress event view via EMAIL_OPERATIONS_VIEW', () => {
-    mockAuthState.currentUser = { permissionCodes: ['EMAIL_OPERATIONS_VIEW'] }
-    const { result } = renderHook(() => usePermissions())
-
-    expect(result.current.canViewIngressEvents).toBe(true)
-    expect(result.current.canManageIngressEvents).toBe(false)
-    expect(result.current.canAccessEmailAdmin).toBe(true)
-  })
-
-  it('grants ingress event manage (implies view) via EMAIL_OPERATIONS_MANAGE', () => {
-    mockAuthState.currentUser = { permissionCodes: ['EMAIL_OPERATIONS_MANAGE'] }
-    const { result } = renderHook(() => usePermissions())
-
-    expect(result.current.canViewIngressEvents).toBe(true)
-    expect(result.current.canManageIngressEvents).toBe(true)
-    expect(result.current.canAccessEmailAdmin).toBe(true)
-  })
-
   it('grants ticket email view via TICKET_EMAIL_VIEW', () => {
     mockAuthState.currentUser = { permissionCodes: ['TICKET_EMAIL_VIEW'] }
     const { result } = renderHook(() => usePermissions())
@@ -78,15 +60,13 @@ describe('usePermissions – email platform permissions', () => {
 
     expect(result.current.canViewEmailConfig).toBe(false)
     expect(result.current.canManageEmailConfig).toBe(false)
-    expect(result.current.canViewIngressEvents).toBe(false)
-    expect(result.current.canManageIngressEvents).toBe(false)
     expect(result.current.canViewTicketEmail).toBe(false)
     expect(result.current.canSendTicketEmailReply).toBe(false)
     expect(result.current.canAccessEmailAdmin).toBe(false)
   })
 
   it('canAccessEmailAdmin is true with any email admin permission', () => {
-    for (const code of ['EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE', 'EMAIL_OPERATIONS_VIEW', 'EMAIL_OPERATIONS_MANAGE']) {
+    for (const code of ['EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE']) {
       mockAuthState.currentUser = { permissionCodes: [code] }
       const { result } = renderHook(() => usePermissions())
       expect(result.current.canAccessEmailAdmin).toBe(true)

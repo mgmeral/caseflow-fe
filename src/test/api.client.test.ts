@@ -13,7 +13,7 @@ function mockFetch(status: number, body: unknown) {
     ok: status >= 200 && status < 300,
     status,
     json: () => Promise.resolve(body),
-  } as Response)
+  } as unknown as Response)
 }
 
 afterEach(() => {
@@ -79,5 +79,49 @@ describe('apiClient', () => {
       expect(e.violations).toHaveLength(2)
       expect(e.violations?.[0]).toEqual({ field: 'subject', message: 'must not be blank' })
     }
+  })
+
+  it('GET blob: returns binary content through the authenticated client', async () => {
+    const blob = new Blob(['file-bytes'], { type: 'application/pdf' })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      blob: () => Promise.resolve(blob),
+    } as unknown as Response)
+
+    const result = await apiClient.getBlob('/tickets/1/emails/2/attachments/3/content')
+
+    expect(result).toBe(blob)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api.test/tickets/1/emails/2/attachments/3/content',
+      expect.objectContaining({ method: 'GET' }),
+    )
+  })
+
+  it('does not double-prefix backend API paths that already start with /api', async () => {
+    vi.resetModules()
+    vi.doMock('@/lib/env', () => ({ API_URL: 'http://api.test/api' }))
+
+    const { apiClient: apiClientWithApiBase } = await import('@/services/api.client')
+    const blob = new Blob(['file-bytes'], { type: 'application/pdf' })
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      blob: () => Promise.resolve(blob),
+    } as unknown as Response)
+
+    const result = await apiClientWithApiBase.getBlob('/api/tickets/1/emails/2/attachments/3/content')
+
+    expect(result).toBe(blob)
+    expect(fetchSpy).toHaveBeenCalledWith(
+      'http://api.test/api/tickets/1/emails/2/attachments/3/content',
+      expect.objectContaining({ method: 'GET' }),
+    )
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('/api/api/tickets/1/emails/2/attachments/3/content'),
+      expect.anything(),
+    )
   })
 })

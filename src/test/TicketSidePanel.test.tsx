@@ -126,4 +126,104 @@ describe('TicketSidePanel', () => {
     expect(screen.getByText('Transferred from Tier 1 to Tier 2.')).toBeInTheDocument()
     expect(screen.getByText('Escalated to specialist')).toBeInTheDocument()
   })
+
+  it('shows a loading state while backend history is still loading', () => {
+    render(
+      <TicketSidePanel
+        ticket={baseTicket as any}
+        allowedTransitions={[]}
+        activities={[]}
+        isActivityLoading
+        onAssign={vi.fn()}
+        onChangeStatus={vi.fn()}
+        onChangePriority={vi.fn()}
+        onCloseTicket={vi.fn()}
+        onReopenTicket={vi.fn()}
+        onTransfer={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Loading history...')).toBeInTheDocument()
+    expect(screen.queryByText('No history yet.')).not.toBeInTheDocument()
+  })
+
+  it('renders a shared attachments section and exposes a view action', () => {
+    const onViewAttachments = vi.fn()
+
+    render(
+      <TicketSidePanel
+        ticket={baseTicket as any}
+        allowedTransitions={[]}
+        activities={[]}
+        attachments={[
+          {
+            id: 'att-1',
+            ticketId: 't1',
+            emailId: 'e1',
+            fileName: 'resume.pdf',
+            contentType: 'application/pdf',
+            size: 2048,
+            downloadUrl: '/files/resume.pdf',
+            uploadedAt: '2026-03-01T10:00:00Z',
+          },
+        ]}
+        onViewAttachments={onViewAttachments}
+        onAssign={vi.fn()}
+        onChangeStatus={vi.fn()}
+        onChangePriority={vi.fn()}
+        onCloseTicket={vi.fn()}
+        onReopenTicket={vi.fn()}
+        onTransfer={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Attachments')).toBeInTheDocument()
+    expect(screen.getByText('resume.pdf')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'View Attachments' }))
+    expect(onViewAttachments).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows an attachment loading state before hydrated email attachments arrive', () => {
+    render(
+      <TicketSidePanel
+        ticket={baseTicket as any}
+        allowedTransitions={[]}
+        activities={[]}
+        attachments={[]}
+        isAttachmentLoading
+        onViewAttachments={vi.fn()}
+        onAssign={vi.fn()}
+        onChangeStatus={vi.fn()}
+        onChangePriority={vi.fn()}
+        onCloseTicket={vi.fn()}
+        onReopenTicket={vi.fn()}
+        onTransfer={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('Loading attachments...')).toBeInTheDocument()
+    expect(screen.queryByText('No attachments on this email.')).not.toBeInTheDocument()
+  })
+
+  it('renders the current email empty state only when the selected email has no attachments', () => {
+    render(
+      <TicketSidePanel
+        ticket={baseTicket as any}
+        allowedTransitions={[]}
+        activities={[]}
+        attachments={[]}
+        attachmentEmptyMessage="No attachments on this email."
+        onViewAttachments={vi.fn()}
+        onAssign={vi.fn()}
+        onChangeStatus={vi.fn()}
+        onChangePriority={vi.fn()}
+        onCloseTicket={vi.fn()}
+        onReopenTicket={vi.fn()}
+        onTransfer={vi.fn()}
+      />,
+    )
+
+    expect(screen.getByText('No attachments on this email.')).toBeInTheDocument()
+  })
 })

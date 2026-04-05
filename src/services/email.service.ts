@@ -27,7 +27,7 @@ function emailDocToLegacyTicketMessage(message: EmailDocumentResponse): TicketMe
     type: 'public_inbound',
     authorId: null,
     authorName: message.from ?? '',
-    content: message.textBody ?? message.htmlBody ?? '',
+    content: message.textBody ?? message.sanitizedHtmlBody ?? message.htmlBody ?? '',
     createdAt: message.receivedAt ?? new Date().toISOString(),
     attachments: (message.attachments ?? []).map((attachment) => attachment.fileName),
   }

@@ -4,6 +4,7 @@ const mockGet = vi.hoisted(() => vi.fn())
 const mockPost = vi.hoisted(() => vi.fn())
 const mockPut = vi.hoisted(() => vi.fn())
 const mockPatch = vi.hoisted(() => vi.fn())
+const mockDelete = vi.hoisted(() => vi.fn())
 
 vi.mock('@/services/api.client', () => ({
   apiClient: {
@@ -11,7 +12,7 @@ vi.mock('@/services/api.client', () => ({
     post: mockPost,
     put: mockPut,
     patch: mockPatch,
-    delete: vi.fn(),
+    delete: mockDelete,
   },
 }))
 
@@ -27,6 +28,7 @@ describe('customerService persistence contract', () => {
     mockPost.mockReset()
     mockPut.mockReset()
     mockPatch.mockReset()
+    mockDelete.mockReset()
   })
 
   it('lists customers from backend and maps fields', async () => {
@@ -96,5 +98,13 @@ describe('customerService persistence contract', () => {
 
     expect(mockPatch).toHaveBeenNthCalledWith(1, '/customers/5/activate', {})
     expect(mockPatch).toHaveBeenNthCalledWith(2, '/customers/5/deactivate', {})
+  })
+
+  it('deletes customer via backend', async () => {
+    mockDelete.mockResolvedValueOnce(undefined)
+
+    await customerService.delete('5')
+
+    expect(mockDelete).toHaveBeenCalledWith('/customers/5')
   })
 })

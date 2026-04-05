@@ -4,9 +4,6 @@ import {
   normalizeMailboxList,
   normalizeCustomerEmailSettings,
   normalizeCustomerEmailRoutingRule,
-  normalizeIngressEvent,
-  normalizeIngressEventList,
-  normalizeIngressEventDetail,
   normalizeTicketEmailMessage,
   normalizeSendTicketReplyResult,
 } from '@/services/email-platform.normalizers'
@@ -14,8 +11,6 @@ import type {
   MailboxResponse,
   CustomerEmailSettingsResponse,
   CustomerEmailRoutingRuleResponse,
-  IngressEventResponse,
-  IngressEventDetailResponse,
   TicketEmailMessageResponse,
   SendTicketReplyResponse,
 } from '@/types/api.types'
@@ -230,70 +225,29 @@ describe('email-platform normalizers', () => {
       expect(result.isActive).toBe(true)
       expect(result.notes).toBe('High priority VIP rule')
     })
-  })
 
-  describe('normalizeIngressEvent', () => {
-    it('maps core fields', () => {
-      const response: IngressEventResponse = {
-        id: 'ing-1',
-        mailboxId: 'mb-1',
-        mailboxName: 'Support',
-        mailboxEmail: 'support@test.com',
-        sourceType: 'IMAP_POLLING',
-        sourceUid: '12345',
-        internetMessageId: '<msg-123@mail.com>',
-        subject: 'Help needed',
-        sender: 'user@test.com',
-        processingStatus: 'COMPLETED',
-        receivedAt: '2025-01-10T08:00:00Z',
-        processedAt: '2025-01-10T08:00:05Z',
-        lastError: null,
+    it('maps routing rule aliases and optional subdomain support', () => {
+      const response: CustomerEmailRoutingRuleResponse = {
+        id: 'rule-2',
+        customerId: 'cust-1',
+        recipientMailboxId: null,
+        recipientMailboxName: null,
+        ruleType: 'DOMAIN',
+        pattern: '@acme.com',
+        priority: null,
+        active: false,
+        allowSubdomains: true,
+        createdAt: '2025-01-01T00:00:00Z',
+        updatedAt: '2025-01-01T00:00:00Z',
       }
 
-      const result = normalizeIngressEvent(response)
+      const result = normalizeCustomerEmailRoutingRule(response)
 
-      expect(result.id).toBe('ing-1')
-      expect(result.processingStatus).toBe('COMPLETED')
-      expect(result.sourceType).toBe('IMAP_POLLING')
-      expect(result.internetMessageId).toBe('<msg-123@mail.com>')
-      expect(result.sender).toBe('user@test.com')
-      expect(result.lastError).toBeNull()
-    })
-  })
-
-  describe('normalizeIngressEventDetail', () => {
-    it('includes detail fields beyond base event', () => {
-      const response: IngressEventDetailResponse = {
-        id: 'ing-2',
-        mailboxId: 'mb-1',
-        mailboxName: 'Support',
-        mailboxEmail: 'support@test.com',
-        sourceType: 'IMAP_POLLING',
-        sourceUid: '67890',
-        internetMessageId: '<msg-456@mail.com>',
-        subject: 'Urgent',
-        sender: 'boss@test.com',
-        processingStatus: 'FAILED',
-        receivedAt: '2025-01-11T09:00:00Z',
-        processedAt: null,
-        lastError: 'Spam detected',
-        recipients: ['support@test.com'],
-        cc: ['admin@test.com'],
-        rawHeaders: { 'X-Spam-Score': '9.5' },
-        payloadExcerpt: 'Buy now...',
-        relatedTicketId: null,
-        retryCount: 2,
-      }
-
-      const result = normalizeIngressEventDetail(response)
-
-      expect(result.processingStatus).toBe('FAILED')
-      expect(result.sourceUid).toBe('67890')
-      expect(result.recipients).toEqual(['support@test.com'])
-      expect(result.cc).toEqual(['admin@test.com'])
-      expect(result.rawHeaders).toEqual({ 'X-Spam-Score': '9.5' })
-      expect(result.retryCount).toBe(2)
-      expect(result.relatedTicketId).toBeNull()
+      expect(result.senderMatchType).toBe('DOMAIN_SUFFIX')
+      expect(result.senderMatchValue).toBe('@acme.com')
+      expect(result.priority).toBe(0)
+      expect(result.isActive).toBe(false)
+      expect(result.allowSubdomains).toBe(true)
     })
   })
 
@@ -321,7 +275,16 @@ describe('email-platform normalizers', () => {
         receivedAt: '2025-01-12T10:00:00Z',
         dispatchStatus: null,
         attachments: [
-          { id: 'att-1', fileName: 'screenshot.png', contentType: 'image/png', size: 45000, downloadUrl: '/api/attachments/att-1' },
+          {
+            id: 'att-1',
+            fileName: 'screenshot.png',
+            contentType: 'image/png',
+            size: 45000,
+            previewSupported: true,
+            previewUrl: '/api/attachments/att-1/preview',
+            openUrl: '/api/attachments/att-1/open',
+            downloadUrl: '/api/attachments/att-1',
+          },
         ],
       }
 
@@ -333,6 +296,9 @@ describe('email-platform normalizers', () => {
       expect(result.bodyHtml).toBe('<p>Help me</p>')
       expect(result.attachments).toHaveLength(1)
       expect(result.attachments[0].fileName).toBe('screenshot.png')
+      expect(result.attachments[0].previewSupported).toBe(true)
+      expect(result.attachments[0].previewUrl).toBe('/api/attachments/att-1/preview')
+      expect(result.attachments[0].openUrl).toBe('/api/attachments/att-1/open')
       expect(result.attachments[0].downloadUrl).toBe('/api/attachments/att-1')
       expect(result.sourceEventId).toBe('evt-1')
     })

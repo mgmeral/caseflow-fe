@@ -50,6 +50,10 @@ export const customerService = {
   update: (id: string, data: { name: string; code: string }) =>
     apiClient.put<CustomerResponse>(`/customers/${id}`, data).then(toCustomer),
 
+  delete: async (id: string): Promise<void> => {
+    await apiClient.delete<void>(`/customers/${id}`)
+  },
+
   activate: async (id: string) => {
     const raw = await apiClient.patch<CustomerResponse | undefined>(`/customers/${id}/activate`, {})
     if (raw) return toCustomer(raw)

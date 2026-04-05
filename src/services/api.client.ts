@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
-const BASE_URL = (import.meta.env.VITE_API_URL as string | undefined) ?? ''
+import { API_URL } from '@/lib/env'
+
+const BASE_URL = API_URL
 const DEFAULT_TIMEOUT_MS = 30_000
 
 export interface FieldViolation {
@@ -32,18 +34,67 @@ function getAuthHeader(): Record<string, string> {
   }
 }
 
+type ResponseType = 'json' | 'blob' | 'text'
+
+interface RequestOptions {
+  responseType?: ResponseType
+  accept?: string
+}
+
+function isAbsoluteUrl(path: string): boolean {
+  return /^https?:\/\//i.test(path)
+}
+
+function buildRequestUrl(path: string): string {
+  if (!path) return BASE_URL
+  if (!BASE_URL || isAbsoluteUrl(path)) return path
+
+  try {
+    const base = new URL(BASE_URL)
+
+    if (path.startsWith('/')) {
+      const normalizedBasePath = base.pathname.replace(/\/+$/, '')
+      const normalizedRequestPath = path.replace(/\/+$/, '') || '/'
+
+      if (
+        normalizedBasePath
+        && normalizedBasePath !== '/'
+        && normalizedRequestPath === normalizedBasePath
+      ) {
+        return `${base.origin}${normalizedRequestPath}`
+      }
+
+      if (
+        normalizedBasePath
+        && normalizedBasePath !== '/'
+        && normalizedRequestPath.startsWith(`${normalizedBasePath}/`)
+      ) {
+        return `${base.origin}${normalizedRequestPath}`
+      }
+
+      return `${base.origin}${normalizedBasePath}${normalizedRequestPath}`
+    }
+
+    return `${BASE_URL.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+  } catch {
+    return `${BASE_URL.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  options: RequestOptions = {},
 ): Promise<T> {
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
+  const responseType = options.responseType ?? 'json'
 
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
 
   const headers: Record<string, string> = {
-    Accept: 'application/json',
+    Accept: options.accept ?? (responseType === 'json' ? 'application/json' : '*/*'),
     ...getAuthHeader(),
   }
 
@@ -52,7 +103,7 @@ async function request<T>(
   }
 
   try {
-    const response = await fetch(`${BASE_URL}${path}`, {
+    const response = await fetch(buildRequestUrl(path), {
       method,
       headers,
       body:
@@ -100,6 +151,14 @@ async function request<T>(
       return undefined as unknown as T
     }
 
+    if (responseType === 'blob') {
+      return await response.blob() as T
+    }
+
+    if (responseType === 'text') {
+      return await response.text() as T
+    }
+
     try {
       return await response.json() as T
     } catch {
@@ -118,6 +177,8 @@ async function request<T>(
 
 export const apiClient = {
   get: <T>(path: string): Promise<T> => request<T>('GET', path),
+  getBlob: (path: string): Promise<Blob> => request<Blob>('GET', path, undefined, { responseType: 'blob' }),
+  getText: (path: string): Promise<string> => request<string>('GET', path, undefined, { responseType: 'text', accept: 'text/plain, application/json;q=0.9, */*;q=0.8' }),
   post: <T>(path: string, body: unknown): Promise<T> => request<T>('POST', path, body),
   put: <T>(path: string, body: unknown): Promise<T> => request<T>('PUT', path, body),
   patch: <T>(path: string, body: unknown): Promise<T> => request<T>('PATCH', path, body),

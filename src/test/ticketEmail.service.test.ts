@@ -25,6 +25,7 @@ describe('ticketEmailService', () => {
         {
           direction: 'INBOUND',
           id: 1,
+          emailId: 'eml-1',
           messageId: '<msg1>',
           fromAddress: 'c@test.com',
           toAddress: null,
@@ -39,7 +40,77 @@ describe('ticketEmailService', () => {
       expect(mockGet).toHaveBeenCalledWith('/tickets/tkt-1/email/thread')
       expect(result).toHaveLength(1)
       expect(result[0].id).toBe('1')
+      expect(result[0].emailDocumentId).toBe('eml-1')
       expect(result[0].direction).toBe('INBOUND')
+    })
+
+    it('keeps thread event ids separate from real email document ids', async () => {
+      mockGet.mockResolvedValueOnce([
+        {
+          direction: 'INBOUND',
+          id: 74,
+          emailDocumentId: 'email-74',
+          messageId: '<msg74>',
+          fromAddress: 'c@test.com',
+          toAddress: null,
+          subject: 'Help',
+          status: 'RECEIVED',
+          timestamp: '2024-01-01T00:00:00Z',
+          bodyPreview: 'Need help',
+        },
+      ])
+
+      const result = await ticketEmailService.listThread('tkt-1')
+
+      expect(result[0].id).toBe('74')
+      expect(result[0].emailDocumentId).toBe('email-74')
+      expect(result[0].sourceEventId).toBe('74')
+    })
+
+    it('falls back to a non-numeric thread id when the backend uses it as the real email document id', async () => {
+      mockGet.mockResolvedValueOnce([
+        {
+          direction: 'INBOUND',
+          id: '69d239b6d87d2153052e7461',
+          sourceEventId: '79',
+          messageId: '<msg74>',
+          fromAddress: 'c@test.com',
+          toAddress: null,
+          subject: 'Help',
+          status: 'RECEIVED',
+          timestamp: '2024-01-01T00:00:00Z',
+          bodyPreview: 'Need help',
+          attachmentCount: 2,
+        },
+      ])
+
+      const result = await ticketEmailService.listThread('tkt-1')
+
+      expect(result[0].id).toBe('69d239b6d87d2153052e7461')
+      expect(result[0].emailDocumentId).toBe('69d239b6d87d2153052e7461')
+      expect(result[0].sourceEventId).toBe('79')
+    })
+
+    it('does not infer legacy event-like ids as email document ids', async () => {
+      mockGet.mockResolvedValueOnce([
+        {
+          direction: 'INBOUND',
+          id: 'evt-74',
+          messageId: '<msg74>',
+          fromAddress: 'c@test.com',
+          toAddress: null,
+          subject: 'Help',
+          status: 'RECEIVED',
+          timestamp: '2024-01-01T00:00:00Z',
+          bodyPreview: 'Need help',
+          attachmentCount: 2,
+        },
+      ])
+
+      const result = await ticketEmailService.listThread('tkt-1')
+
+      expect(result[0].emailDocumentId).toBeNull()
+      expect(result[0].sourceEventId).toBe('evt-74')
     })
 
     it('returns sorted results by date', async () => {
@@ -57,56 +128,98 @@ describe('ticketEmailService', () => {
   describe('getDetail', () => {
     it('returns normalized message for a valid email', async () => {
       mockGet.mockResolvedValueOnce({
-        id: 11,
-        mailboxId: 5,
+        detailType: 'INBOUND',
+        id: 'e1',
         messageId: '<msg1>',
-        rawFrom: 'c@test.com',
-        rawSubject: 'Help',
-        inReplyTo: null,
-        rawReplyTo: null,
+        ticketPublicId: 'tkt-1',
+        subject: 'Help',
+        fromAddress: 'c@test.com',
+        toAddress: ['support@test.com'],
+        direction: 'INBOUND',
+        cc: [],
         receivedAt: '2024-01-01T00:00:00Z',
-        status: 'RECEIVED',
-        failureReason: null,
-        processingAttempts: 1,
-        lastAttemptAt: null,
-        processedAt: null,
-        documentId: null,
-        ticketId: 100,
+        bodyText: 'Need help',
+        bodyHtml: '<p>Need help</p>',
+        attachments: [
+          { id: '501', fileName: 'invoice.pdf', downloadPath: '/api/tickets/100/emails/e1/attachments/501/content', contentType: 'application/pdf', size: 2048, previewSupported: true },
+        ],
       })
 
       const result = await ticketEmailService.getDetail('tkt-1', 'e1')
-      expect(mockGet).toHaveBeenCalledWith('/tickets/tkt-1/email/inbound/e1')
+      expect(mockGet).toHaveBeenCalledWith('/tickets/tkt-1/email/detail/INBOUND/e1')
       expect(result).not.toBeNull()
-      expect(result?.id).toBe('11')
+      expect(result?.id).toBe('e1')
+      expect(result?.emailDocumentId).toBe('e1')
+      expect(result?.attachments).toEqual([
+        expect.objectContaining({
+          fileName: 'invoice.pdf',
+          id: '501',
+          downloadUrl: '/api/tickets/100/emails/e1/attachments/501/content',
+          previewSupported: true,
+        }),
+      ])
     })
 
-    it('calls outbound detail endpoint when direction is OUTBOUND', async () => {
+    it('hydrates outbound email detail from /emails/{id} and keeps outbound direction', async () => {
       mockGet.mockResolvedValueOnce({
-        id: 22,
-        ticketId: 100,
+        detailType: 'OUTBOUND',
+        id: 'dispatch-42',
+        ticketPublicId: 'tkt-1',
+        direction: 'OUTBOUND',
         messageId: '<msg2>',
-        fromAddress: 'support@test.com',
-        toAddress: 'c@test.com',
         subject: 'Re: Help',
-        status: 'SENT',
-        attempts: 1,
-        lastAttemptAt: '2024-01-02T00:00:00Z',
+        fromAddress: 'support@test.com',
+        toAddress: ['c@test.com'],
+        cc: [],
         sentAt: '2024-01-02T00:00:00Z',
-        failureReason: null,
-        scheduledAt: null,
-        createdAt: '2024-01-02T00:00:00Z',
+        bodyText: 'Reply body',
+        bodyHtml: null,
+        attachments: [],
       })
 
       const result = await ticketEmailService.getDetail('tkt-1', 'dispatch-42', 'OUTBOUND')
-      expect(mockGet).toHaveBeenCalledWith('/tickets/tkt-1/email/outbound/dispatch-42')
-      expect(result?.id).toBe('22')
+      expect(mockGet).toHaveBeenCalledWith('/tickets/tkt-1/email/detail/OUTBOUND/dispatch-42')
+      expect(result?.id).toBe('dispatch-42')
+      expect(result?.detailId).toBe('dispatch-42')
       expect(result?.direction).toBe('OUTBOUND')
+      expect(result?.sentAt).toBe('2024-01-02T00:00:00Z')
+      expect(result?.receivedAt).toBeNull()
     })
 
     it('returns null when API returns null', async () => {
       mockGet.mockResolvedValueOnce(null)
       const result = await ticketEmailService.getDetail('tkt-1', 'no-such')
       expect(result).toBeNull()
+    })
+  })
+
+  describe('previewReply', () => {
+    it('calls the ticket-scoped preview endpoint and normalizes the response', async () => {
+      mockPost.mockResolvedValueOnce({
+        derivedToAddress: 'customer@test.com',
+        derivedFromAddress: 'support@test.com',
+        subject: 'Re: Help',
+        bodyText: 'Preview body',
+        bodyHtml: '<p>Preview body</p>',
+        warnings: ['Template fallback applied'],
+        placeholderDiagnostics: [
+          { placeholder: 'customer.name', status: 'EMPTY', message: 'Customer name is missing' },
+        ],
+      })
+
+      const result = await ticketEmailService.previewReply('tkt-1', {
+        sourceEventId: 'evt-1',
+        mailboxId: '1',
+        templateId: 'tpl-1',
+      })
+
+      expect(mockPost).toHaveBeenCalledWith('/tickets/tkt-1/email/reply/preview', {
+        sourceEventId: 'evt-1',
+        mailboxId: '1',
+        templateId: 'tpl-1',
+      })
+      expect(result.derivedToAddress).toBe('customer@test.com')
+      expect(result.placeholderDiagnostics[0]?.placeholder).toBe('customer.name')
     })
   })
 

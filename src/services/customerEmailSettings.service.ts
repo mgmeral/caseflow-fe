@@ -23,7 +23,7 @@ function toBackendUnknownSenderPolicy(policy: UpsertCustomerEmailSettingsRequest
     case 'ROUTE_TO_DEFAULT':
     case 'AUTO_CREATE_CONTACT':
     case 'ALLOW':
-      return 'CREATE_UNMATCHED_TICKET'
+      return 'MANUAL_REVIEW'
     case 'QUARANTINE':
       return 'MANUAL_REVIEW'
     default:
@@ -71,8 +71,8 @@ export const customerEmailSettingsService = {
   },
 
   listRoutingRules: async (customerId: string): Promise<CustomerEmailRoutingRule[]> => {
-    const settings = await apiClient.get<CustomerEmailSettingsResponse | null>(`/customers/${customerId}/email-settings`)
-    return (settings?.rules ?? []).map(normalizeCustomerEmailRoutingRule)
+    const rules = await apiClient.get<CustomerEmailRoutingRuleResponse[]>(`/customers/${customerId}/email-settings/rules`)
+    return (rules ?? []).map(normalizeCustomerEmailRoutingRule)
   },
 
   createRoutingRule: async (customerId: string, payload: UpsertCustomerEmailRoutingRuleRequest) => {

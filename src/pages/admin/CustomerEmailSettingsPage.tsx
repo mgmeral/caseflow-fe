@@ -21,7 +21,7 @@ import {
   ShieldOff, Mail, Save, Plus, Pencil, ToggleLeft, ToggleRight, Trash2, Search,
 } from 'lucide-react'
 
-const UNKNOWN_SENDER_POLICIES = ['MANUAL_REVIEW', 'CREATE_UNMATCHED_TICKET', 'IGNORE', 'REJECT'] as const
+const UNKNOWN_SENDER_POLICIES = ['MANUAL_REVIEW', 'IGNORE', 'REJECT'] as const
 
 export function CustomerEmailSettingsPage() {
   const { canManageEmailConfig } = usePermissions()
@@ -84,7 +84,7 @@ export function CustomerEmailSettingsPage() {
       setSettingsForm({
         isEnabled: true,
         allowSubdomains: false,
-        unknownSenderPolicy: 'CREATE_UNMATCHED_TICKET',
+        unknownSenderPolicy: 'MANUAL_REVIEW',
         defaultGroupId: null,
         defaultPriority: null,
       })
