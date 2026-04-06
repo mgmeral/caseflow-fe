@@ -16,6 +16,7 @@ interface TicketSidePanelProps {
   activities: TicketActivityItem[]
   attachments?: TicketAttachment[]
   tagsCard?: ReactNode
+  integrationCards?: ReactNode
   attachmentEmptyMessage?: string
   isActivityLoading?: boolean
   isAttachmentLoading?: boolean
@@ -34,6 +35,7 @@ export function TicketSidePanel({
   activities,
   attachments = [],
   tagsCard,
+  integrationCards,
   attachmentEmptyMessage = 'No attachments on this email.',
   isActivityLoading = false,
   isAttachmentLoading = false,
@@ -121,6 +123,8 @@ export function TicketSidePanel({
       </div>
 
       {tagsCard}
+
+  {integrationCards}
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">

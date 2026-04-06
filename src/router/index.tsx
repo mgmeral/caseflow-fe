@@ -17,6 +17,8 @@ import { SettingsPage } from '@/pages/admin/SettingsPage'
 import { MailboxManagementPage } from '@/pages/admin/MailboxManagementPage'
 import { CustomerEmailSettingsPage } from '@/pages/admin/CustomerEmailSettingsPage'
 import { TagManagementPage } from '../pages/admin/TagManagementPage'
+import { JiraIntegrationSettingsPage } from '@/pages/admin/JiraIntegrationSettingsPage'
+import { ChannelIntegrationSettingsPage } from '@/pages/admin/ChannelIntegrationSettingsPage'
 
 export const router = createBrowserRouter([
   {
@@ -71,7 +73,7 @@ export const router = createBrowserRouter([
           },
           {
             path: 'admin',
-            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'GROUP_MANAGE', 'ADMIN_CONFIG', 'EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE']} />,
+            element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'GROUP_MANAGE', 'ADMIN_CONFIG', 'EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE', 'INTEGRATION_CONFIG_MANAGE']} />,
             children: [
               {
                 index: true,
@@ -112,6 +114,22 @@ export const router = createBrowserRouter([
               {
                 path: 'email/customers',
                 element: <CustomerEmailSettingsPage />,
+              },
+              {
+                path: 'integrations/jira',
+                element: (
+                  <ProtectedRoute requiredPermissions={['INTEGRATION_CONFIG_MANAGE']}>
+                    <JiraIntegrationSettingsPage />
+                  </ProtectedRoute>
+                ),
+              },
+              {
+                path: 'integrations/channels',
+                element: (
+                  <ProtectedRoute requiredPermissions={['INTEGRATION_CONFIG_MANAGE']}>
+                    <ChannelIntegrationSettingsPage />
+                  </ProtectedRoute>
+                ),
               },
             ],
           },

@@ -23,6 +23,8 @@ import type { TicketEmailMessage } from '@/types/email.types'
 import type { TicketAttachment } from '@/types/ticket.types'
 import { AttachmentViewerModal } from '@/components/ticket-detail/AttachmentViewerModal'
 import { TicketTagsCard } from '@/components/ticket-detail/TicketTagsCard'
+import { JiraIntegrationCard } from '@/components/ticket-detail/JiraIntegrationCard'
+import { ScheduledEmailsCard } from '@/components/ticket-detail/ScheduledEmailsCard'
 import { buildTicketActivityItems } from '@/lib/ticketActivity'
 
 function getEmailSelectionKey(email: Pick<TicketEmailMessage, 'detailType' | 'detailId'>): string | null {
@@ -341,6 +343,12 @@ export function TicketDetailPage() {
             activities={activityItems}
             attachments={selectedEmailAttachments}
             tagsCard={<TicketTagsCard ticketId={ticket.id} />}
+            integrationCards={(
+              <>
+                <JiraIntegrationCard ticketPublicId={ticketPublicId} />
+                <ScheduledEmailsCard ticketPublicId={ticketPublicId} ticketStatus={ticket.status} />
+              </>
+            )}
             attachmentEmptyMessage={attachmentEmptyMessage}
             isActivityLoading={isHistoryLoading || emailThreadLoading}
             isAttachmentLoading={canViewTicketEmail && !!selectedEmailKey && selectedEmailLoading}
@@ -400,6 +408,7 @@ export function TicketDetailPage() {
         ticketPublicId={ticketPublicId}
         lastInbound={replySourceEmail}
         ticketSubject={ticket.subject}
+        isTicketClosed={ticket.status === 'CLOSED'}
       />
 
       <EmailDetailDrawer

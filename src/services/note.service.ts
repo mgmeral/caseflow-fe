@@ -21,6 +21,8 @@ function noteToMessage(n: NoteResponse): TicketMessage {
     content: n.content,
     createdAt: n.createdAt,
     attachments: [],
+    eventType: n.eventType ?? null,
+    metadataJson: n.metadataJson ?? null,
   }
 }
 

@@ -6,6 +6,7 @@ const mockSuccess = vi.hoisted(() => vi.fn())
 const mockError = vi.hoisted(() => vi.fn())
 const mockInfo = vi.hoisted(() => vi.fn())
 const mockTemplatesError = vi.hoisted(() => ({ value: false }))
+const mockScheduleMutate = vi.hoisted(() => vi.fn())
 const mockReplyPreviewState = vi.hoisted(() => ({
   data: {
     subject: 'Preview Subject',
@@ -50,11 +51,18 @@ vi.mock('@/hooks/useTicketEmails', () => ({
   ),
 }))
 
+vi.mock('@/hooks/useIntegrations', () => ({
+  useCreateScheduledEmail: () => ({
+    mutate: mockScheduleMutate,
+    isPending: false,
+  }),
+}))
+
 vi.mock('@/hooks/useMailboxes', () => ({
   useMailboxes: () => ({
     data: {
       items: [
-        { id: 'm1', name: 'Main', address: 'support@caseflow.com' },
+        { id: '1', name: 'Main', address: 'support@caseflow.com' },
       ],
     },
   }),
@@ -96,7 +104,7 @@ function buildInboundReplyContext() {
     threadKey: null,
     messageId: '<m1>',
     providerMessageId: null,
-    mailboxId: 'm1',
+    mailboxId: '1',
     mailboxName: 'Main',
     sourceEventId: 'evt-1',
     resolvedReplyTarget: 'customer@example.com',
@@ -132,6 +140,7 @@ describe('EmailReplyComposer', () => {
     mockError.mockReset()
     mockInfo.mockReset()
     mockTemplatesError.value = false
+    mockScheduleMutate.mockReset()
     mockReplyPreviewState.data = {
       subject: 'Preview Subject',
       bodyHtml: '<p>Preview HTML</p>',
@@ -175,7 +184,7 @@ describe('EmailReplyComposer', () => {
 
     expect(mockMutate).toHaveBeenCalledWith(
       {
-        mailboxId: 'm1',
+        mailboxId: '1',
         sourceEventId: 'evt-1',
         subject: 'Preview Subject',
         textBody: 'Reply body',
@@ -202,6 +211,51 @@ describe('EmailReplyComposer', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
   })
 
+  it('schedules an email using the ticket public id workflow extension', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Scheduled body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    fireEvent.change(screen.getByLabelText('Send Not Before'), { target: { value: '2026-04-10T09:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Schedule' }))
+
+    expect(mockScheduleMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mailboxId: 1,
+        toAddress: 'customer@example.com',
+        subject: 'Preview Subject',
+        textBody: 'Scheduled body',
+      }),
+      expect.any(Object),
+    )
+  })
+
+  it('disables scheduling safely when the ticket is closed', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+        isTicketClosed
+      />,
+    )
+
+    expect(screen.getByText('Scheduled send is disabled because the ticket is closed.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeDisabled()
+  })
+
   it('shows queued feedback for accepted replies', () => {
     const onClose = vi.fn()
 
@@ -221,7 +275,7 @@ describe('EmailReplyComposer', () => {
 
     const queuedOptions = mockMutate.mock.calls[0][1]
     act(() => {
-      queuedOptions.onSuccess({ requestId: 'r1', ticketId: 't1', outboundEmailId: null, mailboxId: 'm1', status: 'QUEUED', acceptedAt: null, message: null })
+      queuedOptions.onSuccess({ requestId: 'r1', ticketId: 't1', outboundEmailId: null, mailboxId: '1', status: 'QUEUED', acceptedAt: null, message: null })
     })
 
     expect(screen.getByText('Reply queued for delivery.')).toBeInTheDocument()
@@ -246,7 +300,7 @@ describe('EmailReplyComposer', () => {
 
     const sentOptions = mockMutate.mock.calls[0][1]
     act(() => {
-      sentOptions.onSuccess({ requestId: 'r2', ticketId: 't1', outboundEmailId: 'o1', mailboxId: 'm1', status: 'SENT', acceptedAt: null, message: null })
+      sentOptions.onSuccess({ requestId: 'r2', ticketId: 't1', outboundEmailId: 'o1', mailboxId: '1', status: 'SENT', acceptedAt: null, message: null })
     })
 
     expect(mockSuccess).toHaveBeenCalledWith('Reply sent.')
@@ -269,7 +323,7 @@ describe('EmailReplyComposer', () => {
 
     const dispatchedOptions = mockMutate.mock.calls[0][1]
     act(() => {
-      dispatchedOptions.onSuccess({ requestId: 'r2', ticketId: 't1', outboundEmailId: 'o1', mailboxId: 'm1', status: 'DISPATCHED', acceptedAt: null, message: null })
+      dispatchedOptions.onSuccess({ requestId: 'r2', ticketId: 't1', outboundEmailId: 'o1', mailboxId: '1', status: 'DISPATCHED', acceptedAt: null, message: null })
     })
 
     expect(mockInfo).toHaveBeenCalledWith('Reply dispatched to outbound delivery.')
@@ -292,7 +346,7 @@ describe('EmailReplyComposer', () => {
 
     const failedOptions = mockMutate.mock.calls[0][1]
     act(() => {
-      failedOptions.onSuccess({ requestId: 'r3', ticketId: 't1', outboundEmailId: null, mailboxId: 'm1', status: 'FAILED', acceptedAt: null, message: 'Mailbox unavailable' })
+      failedOptions.onSuccess({ requestId: 'r3', ticketId: 't1', outboundEmailId: null, mailboxId: '1', status: 'FAILED', acceptedAt: null, message: 'Mailbox unavailable' })
     })
 
     expect(screen.getByText('Mailbox unavailable')).toBeInTheDocument()

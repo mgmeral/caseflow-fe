@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import DOMPurify from 'dompurify'
-import { Send, Mail, X, Eye } from 'lucide-react'
+import { CalendarClock, Send, Mail, X, Eye } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 import { useSendTicketReply, useTicketReplyPreview } from '@/hooks/useTicketEmails'
+import { useCreateScheduledEmail } from '@/hooks/useIntegrations'
 import { useMailboxes } from '@/hooks/useMailboxes'
 import { useToast } from '@/hooks/useToast'
 import { Modal } from '@/components/shared/Modal'
 import { useTemplates } from '@/hooks/useTemplates'
 import type { SendTicketReplyRequest, TicketEmailMessage } from '@/types/email.types'
 import { getReplyFeedback } from '@/lib/ticketEmailUi'
+import { getErrorMessage } from '@/lib/errors'
 
 interface EmailReplyComposerProps {
   isOpen: boolean
@@ -19,6 +21,7 @@ interface EmailReplyComposerProps {
   lastInbound?: TicketEmailMessage | null
   /** Ticket subject fallback */
   ticketSubject?: string
+  isTicketClosed?: boolean
 }
 
 function stripHtml(html: string): string {
@@ -37,6 +40,7 @@ export function EmailReplyComposer({
   ticketPublicId,
   lastInbound,
   ticketSubject,
+  isTicketClosed = false,
 }: EmailReplyComposerProps) {
   const { success, error: toastError, info } = useToast()
   const { data: mailboxData } = useMailboxes({ active: true })
@@ -44,6 +48,7 @@ export function EmailReplyComposer({
   const mailboxes = mailboxData?.items ?? []
   const templates = (templatesQuery.data ?? []).filter((template) => template.isActive)
   const sendMutation = useSendTicketReply(ticketId)
+  const scheduleMutation = useCreateScheduledEmail(ticketPublicId ?? '')
   const replySourceEventId = lastInbound?.replyContext?.sourceEventId ?? lastInbound?.sourceEventId ?? null
   const defaultSubject =
     lastInbound?.subject
@@ -62,6 +67,8 @@ export function EmailReplyComposer({
   const [feedback, setFeedback] = useState<ComposerFeedback | null>(null)
   const [contentWasEdited, setContentWasEdited] = useState(false)
   const [lastAppliedPreviewKey, setLastAppliedPreviewKey] = useState('')
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null
   const previewPayload = useMemo(() => {
     if (!replySourceEventId) return null
@@ -87,6 +94,8 @@ export function EmailReplyComposer({
     setContentWasEdited(false)
     setLastAppliedPreviewKey('')
   }, [defaultSubject, isOpen, lastInbound?.mailboxId])
+
+  const resolvedToAddress = previewQuery.data?.derivedToAddress ?? lastInbound?.replyContext?.resolvedReplyTarget ?? lastInbound?.resolvedReplyTarget ?? ''
 
   useEffect(() => {
     if (!isOpen || !previewPayload) return
@@ -192,7 +201,82 @@ export function EmailReplyComposer({
     setFeedback(null)
     setContentWasEdited(false)
     setLastAppliedPreviewKey('')
+    setShowScheduleModal(false)
+    setScheduleAt('')
     onClose()
+  }
+
+  const handleSchedule = () => {
+    if (isTicketClosed) {
+      toastError('Scheduled email is not available for closed tickets.')
+      return
+    }
+    if (!ticketPublicId) {
+      toastError('Scheduled email requires the ticket public identifier.')
+      return
+    }
+    if (!replySourceEventId) {
+      toastError('No inbound email context is available for scheduling a threaded reply.')
+      return
+    }
+    if (!mailboxId) {
+      toastError('Select the mailbox that should send this scheduled email.')
+      return
+    }
+    if (!resolvedToAddress) {
+      toastError('The backend reply preview did not resolve a recipient address yet.')
+      return
+    }
+    if (!body.trim()) {
+      toastError('Message body cannot be empty.')
+      return
+    }
+    if (!scheduleAt) {
+      toastError('Choose a future send time.')
+      return
+    }
+
+    const scheduledTimestamp = new Date(scheduleAt)
+    if (Number.isNaN(scheduledTimestamp.getTime()) || scheduledTimestamp.getTime() <= Date.now()) {
+      toastError('Scheduled send time must be in the future.')
+      return
+    }
+
+    const mailboxNumericId = Number(mailboxId)
+    if (Number.isNaN(mailboxNumericId)) {
+      toastError('Mailbox id must be numeric for scheduled email creation.')
+      return
+    }
+
+    scheduleMutation.mutate(
+      {
+        mailboxId: mailboxNumericId,
+        toAddress: resolvedToAddress,
+        subject: subject.trim(),
+        textBody: body.trim(),
+        htmlBody: selectedTemplateHtml && !contentWasEdited ? selectedTemplateHtml : null,
+        sendNotBefore: scheduledTimestamp.toISOString(),
+      },
+      {
+        onSuccess: (result) => {
+          const message = `Email scheduled for ${new Date(result.sendNotBefore).toLocaleString()}.`
+          setFeedback({ tone: 'success', text: message })
+          success(message)
+          setShowScheduleModal(false)
+          setScheduleAt('')
+          setSubject(defaultSubject)
+          setBody('')
+          setSelectedTemplateId('')
+          setSelectedTemplateHtml(null)
+          setContentWasEdited(false)
+        },
+        onError: (error) => {
+          const message = getErrorMessage(error, 'Failed to schedule email.')
+          setFeedback({ tone: 'error', text: message })
+          toastError(message)
+        },
+      },
+    )
   }
 
   const handleTemplateChange = (templateId: string) => {
@@ -266,6 +350,12 @@ export function EmailReplyComposer({
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
               Real mode supports direct replies only. CC, BCC, and attachments are hidden until the backend supports them.
             </div>
+
+            {isTicketClosed ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Scheduled send is disabled because the ticket is closed.
+              </div>
+            ) : null}
 
             {previewQuery.data ? (
               <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 space-y-1">
@@ -374,6 +464,15 @@ export function EmailReplyComposer({
                 Cancel
               </Button>
               <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<CalendarClock size={13} />}
+                onClick={() => setShowScheduleModal(true)}
+                disabled={!mailboxId || !replySourceEventId || !body.trim() || !resolvedToAddress || previewQuery.isLoading || isTicketClosed || scheduleMutation.isPending}
+              >
+                Schedule
+              </Button>
+              <Button
                 variant="primary"
                 size="sm"
                 leftIcon={<Send size={13} />}
@@ -387,6 +486,39 @@ export function EmailReplyComposer({
           </div>
         </div>
       </div>
+
+      <Modal
+        isOpen={showScheduleModal}
+        onClose={() => setShowScheduleModal(false)}
+        title="Schedule Email"
+        footer={(
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setShowScheduleModal(false)}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={handleSchedule} isLoading={scheduleMutation.isPending}>
+              Confirm Schedule
+            </Button>
+          </>
+        )}
+      >
+        <div className="space-y-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 space-y-1">
+            <div><span className="font-medium">To:</span> {resolvedToAddress || 'Unavailable'}</div>
+            <div><span className="font-medium">Subject:</span> {subject || 'Untitled reply'}</div>
+          </div>
+          <label className="block text-sm text-gray-700 space-y-1">
+            <span className="font-medium">Send Not Before</span>
+            <input
+              type="datetime-local"
+              value={scheduleAt}
+              onChange={(event) => setScheduleAt(event.target.value)}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </label>
+          <div className="text-xs text-gray-500">
+            The backend will store this dispatch and send it no earlier than the selected time. Scheduled creation does not mean delivery has already happened.
+          </div>
+        </div>
+      </Modal>
 
       <Modal isOpen={showTemplatePreview} onClose={() => setShowTemplatePreview(false)} title="Template Preview" size="xl">
         {!selectedTemplateId ? (

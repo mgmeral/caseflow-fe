@@ -236,6 +236,8 @@ export interface NoteResponse {
   /** Backend field — the username or display name of the note creator */
   createdBy: string
   createdAt: string
+  eventType?: string | null
+  metadataJson?: string | null
 }
 
 // ---------------------------------------------------------------------------

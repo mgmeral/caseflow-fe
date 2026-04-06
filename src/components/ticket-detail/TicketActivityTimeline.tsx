@@ -1,5 +1,5 @@
 import { format } from 'date-fns'
-import { ArrowRightLeft, CheckCircle2, Clock3, FileText, Mail, MailWarning, MessageSquare, PlusCircle, RefreshCcw, UserRoundCog } from 'lucide-react'
+import { AlertTriangle, ArrowRightLeft, BellRing, CalendarClock, CheckCircle2, Clock3, FileText, Mail, MailWarning, MessageSquare, PlusCircle, PlugZap, RefreshCcw, UserRoundCog } from 'lucide-react'
 import type { TicketActivityItem } from '@/types/ticket.types'
 
 interface TicketActivityTimelineProps {
@@ -32,6 +32,19 @@ function iconFor(kind: TicketActivityItem['kind']) {
       return <Mail size={14} className="text-emerald-600" />
     case 'template_used':
       return <FileText size={14} className="text-fuchsia-600" />
+    case 'jira_requested':
+    case 'jira_created':
+      return <PlugZap size={14} className="text-sky-600" />
+    case 'jira_failed':
+      return <AlertTriangle size={14} className="text-red-600" />
+    case 'notification_sent':
+      return <BellRing size={14} className="text-emerald-600" />
+    case 'notification_failed':
+      return <BellRing size={14} className="text-red-600" />
+    case 'scheduled_email_created':
+    case 'scheduled_email_canceled':
+    case 'scheduled_email_failed':
+      return <CalendarClock size={14} className="text-amber-600" />
     default:
       return <MessageSquare size={14} className="text-gray-500" />
   }
@@ -54,6 +67,11 @@ export function TicketActivityTimeline({ activities, isLoading = false }: Ticket
           <div className="min-w-0 flex-1">
             <div className="text-xs font-medium text-gray-800">{activity.summary}</div>
             {activity.detail && <div className="mt-1 text-xs text-gray-500 whitespace-pre-wrap">{activity.detail}</div>}
+            {activity.linkUrl ? (
+              <a href={activity.linkUrl} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-xs font-medium text-indigo-600 hover:text-indigo-800">
+                {activity.linkLabel ?? 'Open link'}
+              </a>
+            ) : null}
             <div className="mt-1 text-[11px] text-gray-400">
               {activity.actor ? `${activity.actor} · ` : ''}
               {format(new Date(activity.timestamp), 'MMM d, HH:mm')}

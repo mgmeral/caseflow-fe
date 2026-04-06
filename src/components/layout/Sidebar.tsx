@@ -16,6 +16,8 @@ import {
   Mail,
   AtSign,
   Tags,
+  PlugZap,
+  Webhook,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Avatar } from '@/components/shared/Avatar'
@@ -32,9 +34,20 @@ interface NavItem {
 export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
-  const { canManageUsers, canManageRoles, canManageGroups, canManageAdminConfig, canViewAdminPool, canViewReports, canViewEmailConfig, canManageEmailConfig, canAccessEmailAdmin } = usePermissions()
+  const {
+    canManageUsers,
+    canManageRoles,
+    canManageGroups,
+    canManageAdminConfig,
+    canManageIntegrationConfig,
+    canViewAdminPool,
+    canViewReports,
+    canViewEmailConfig,
+    canManageEmailConfig,
+    canAccessEmailAdmin,
+  } = usePermissions()
 
-  const canAccessAdminSection = canManageUsers || canManageRoles || canManageAdminConfig || canAccessEmailAdmin
+  const canAccessAdminSection = canManageUsers || canManageRoles || canManageAdminConfig || canManageIntegrationConfig || canAccessEmailAdmin
 
   const mainNav: NavItem[] = [
     { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -50,6 +63,8 @@ export function Sidebar() {
     ...(canManageAdminConfig ? [{ to: '/admin/tags', icon: <Tags size={18} />, label: 'Tag Management' }] : []),
     ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', icon: <Mail size={18} />, label: 'Mailboxes' }] : []),
     ...(canManageEmailConfig ? [{ to: '/admin/email/customers', icon: <AtSign size={18} />, label: 'Email Settings' }] : []),
+    ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/jira', icon: <PlugZap size={18} />, label: 'Jira Integration' }] : []),
+    ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/channels', icon: <Webhook size={18} />, label: 'Notification Channels' }] : []),
     ...(canManageUsers ? [{ to: '/admin/settings', icon: <Settings size={18} />, label: 'Settings' }] : []),
   ]
 

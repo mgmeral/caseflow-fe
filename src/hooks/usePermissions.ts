@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/store/auth.store'
+import { hasPermission } from '@/lib/permissions'
 
 /**
  * Permission codes returned by GET /api/auth/me.
@@ -26,13 +27,13 @@ const P = {
   EMAIL_CONFIG_MANAGE:       'EMAIL_CONFIG_MANAGE',
   TICKET_EMAIL_VIEW:         'TICKET_EMAIL_VIEW',
   TICKET_EMAIL_REPLY_SEND:   'TICKET_EMAIL_REPLY_SEND',
+  INTEGRATION_CONFIG_MANAGE: 'INTEGRATION_CONFIG_MANAGE',
+  SCHEDULED_EMAIL_MANAGE:    'SCHEDULED_EMAIL_MANAGE',
 } as const
 
 export function usePermissions() {
   const currentUser = useAuthStore((s) => s.currentUser)
-  const codes = new Set(currentUser?.permissionCodes ?? [])
-
-  const has = (code: string) => codes.has(code)
+  const has = (code: string) => hasPermission(currentUser?.permissionCodes, code)
 
   return {
     /** The user's display role code (dynamic — not used for capability checks) */
@@ -60,6 +61,8 @@ export function usePermissions() {
     canManageEmailConfig:       has(P.EMAIL_CONFIG_MANAGE),
     canViewTicketEmail:         has(P.TICKET_EMAIL_VIEW),
     canSendTicketEmailReply:    has(P.TICKET_EMAIL_REPLY_SEND),
+    canManageIntegrationConfig: has(P.INTEGRATION_CONFIG_MANAGE),
+    canManageScheduledEmail:    has(P.SCHEDULED_EMAIL_MANAGE),
     /** Shorthand: can access any email admin/config screen */
     canAccessEmailAdmin:        has(P.EMAIL_CONFIG_VIEW) || has(P.EMAIL_CONFIG_MANAGE),
   }

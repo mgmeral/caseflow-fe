@@ -14,6 +14,7 @@ import type { User, Group } from '@/types/user.types'
 import type { UserRole } from '@/types/common.types'
 import type { BackendRole } from '@/types/api.types'
 import type { Ticket, TicketAttachment, TicketStatus, TicketPriority, SourceType } from '@/types/ticket.types'
+import { createPermissionSet } from '@/lib/permissions'
 
 // ---------------------------------------------------------------------------
 // Status / priority normalization
@@ -203,7 +204,7 @@ export function normalizeUser(raw: Record<string, unknown>): User {
     roleId: raw.roleId != null ? String(raw.roleId) : undefined,
     roleCode: raw.roleCode ? String(raw.roleCode) : undefined,
     roleName: raw.roleName ? String(raw.roleName) : undefined,
-    permissionCodes: Array.isArray(raw.permissionCodes) ? (raw.permissionCodes as string[]) : [],
+    permissionCodes: Array.isArray(raw.permissionCodes) ? [...createPermissionSet(raw.permissionCodes as string[])] : [],
     ticketScope: normalizeTicketScope(raw.ticketScope),
     groupIds: Array.isArray(raw.groupIds) ? (raw.groupIds as (string | number)[]).map(String) : [],
     groupNames: Array.isArray(raw.groupNames) ? (raw.groupNames as string[]) : [],

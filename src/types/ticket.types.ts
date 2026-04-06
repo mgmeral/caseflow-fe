@@ -146,6 +146,8 @@ export interface TicketMessage {
   content: string
   createdAt: string
   attachments: string[]
+  eventType?: string | null
+  metadataJson?: string | null
 }
 
 export interface TransferRecord {
@@ -176,11 +178,21 @@ export interface TicketActivityItem {
     | 'reply_failed'
     | 'template_used'
     | 'customer_reply'
+    | 'jira_requested'
+    | 'jira_created'
+    | 'jira_failed'
+    | 'notification_sent'
+    | 'notification_failed'
+    | 'scheduled_email_created'
+    | 'scheduled_email_canceled'
+    | 'scheduled_email_failed'
     | 'system'
   actor: string | null
   timestamp: string
   summary: string
   detail?: string | null
+  linkLabel?: string | null
+  linkUrl?: string | null
 }
 
 export interface TicketFilters {

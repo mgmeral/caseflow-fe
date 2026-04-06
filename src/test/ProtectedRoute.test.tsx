@@ -106,4 +106,13 @@ describe('ProtectedRoute', () => {
     )
     expect(screen.getByText('Dashboard')).toBeTruthy()
   })
+
+  it('accepts legacy aliased permissions when route requires canonical backend code', () => {
+    renderWithRouter(
+      { isAuthenticated: true, currentUser: { role: 'viewer', permissionCodes: ['PERM_INTEGRATION_CONFIG_MANAGE'] } },
+      undefined,
+      ['INTEGRATION_CONFIG_MANAGE'],
+    )
+    expect(screen.getByText('Protected Content')).toBeTruthy()
+  })
 })
