@@ -16,7 +16,7 @@ function noteToMessage(n: NoteResponse): TicketMessage {
     id: n.id,
     ticketId: n.ticketId,
     type: typeMap[n.type] ?? 'internal_note',
-    authorId: null,
+    authorId: n.createdBy ?? null,
     authorName: n.createdBy ?? '',
     content: n.content,
     createdAt: n.createdAt,

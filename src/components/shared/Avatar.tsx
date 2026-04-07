@@ -1,6 +1,6 @@
 import { clsx } from 'clsx'
 
-type AvatarSize = 'sm' | 'md' | 'lg'
+type AvatarSize = 'xs' | 'sm' | 'md' | 'lg'
 
 interface AvatarProps {
   name: string
@@ -10,6 +10,7 @@ interface AvatarProps {
 }
 
 const SIZE_CLASSES: Record<AvatarSize, string> = {
+  xs: 'w-5 h-5 text-[10px]',
   sm: 'w-6 h-6 text-xs',
   md: 'w-8 h-8 text-sm',
   lg: 'w-10 h-10 text-base',

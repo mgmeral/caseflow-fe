@@ -1,6 +1,10 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Lock, Send } from 'lucide-react'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useUsers } from '@/hooks/useUsers'
+import { detectMentionQuery, filterMentionUsers, insertMention } from '@/lib/mentions'
+import { MentionSuggestions } from './MentionSuggestions'
+import type { User } from '@/types/user.types'
 
 interface ComposeAreaProps {
   onSendNote: (content: string) => void
@@ -9,7 +13,13 @@ interface ComposeAreaProps {
 
 export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
   const { canAddInternalNote } = usePermissions()
+  const { users } = useUsers()
   const [content, setContent] = useState('')
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null)
+  const [activeIndex, setActiveIndex] = useState(0)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const filteredUsers = mentionQuery !== null ? filterMentionUsers(users, mentionQuery) : []
 
   if (!canAddInternalNote) return null
 
@@ -17,21 +27,86 @@ export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
     if (!content.trim()) return
     onSendNote(content.trim())
     setContent('')
+    setMentionQuery(null)
+  }
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    setContent(val)
+    const pos = e.target.selectionStart ?? val.length
+    const query = detectMentionQuery(val, pos)
+    setMentionQuery(query)
+    setActiveIndex(0)
+  }
+
+  const handleSelect = useCallback(
+    (user: User) => {
+      const pos = textareaRef.current?.selectionStart ?? content.length
+      const { newText, newCursorPos } = insertMention(content, pos, user)
+      setContent(newText)
+      setMentionQuery(null)
+      setActiveIndex(0)
+      // Restore cursor after React re-render
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus()
+        textareaRef.current?.setSelectionRange(newCursorPos, newCursorPos)
+      })
+    },
+    [content],
+  )
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery !== null && filteredUsers.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIndex((i) => (i + 1) % filteredUsers.length)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIndex((i) => (i - 1 + filteredUsers.length) % filteredUsers.length)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        handleSelect(filteredUsers[activeIndex])
+        return
+      }
+    }
+
+    if (e.key === 'Escape' && mentionQuery !== null) {
+      e.preventDefault()
+      setMentionQuery(null)
+      return
+    }
+
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      handleSend()
+    }
   }
 
   return (
-    <div className="border-t border-amber-200 bg-amber-50/40 px-4 py-2.5 shrink-0">
+    <div className="border-t border-amber-200 bg-amber-50/40 px-4 py-2.5 shrink-0 relative">
+      {/* Mention suggestions — anchored above composer */}
+      {mentionQuery !== null && (
+        <MentionSuggestions
+          users={filteredUsers}
+          activeIndex={activeIndex}
+          onSelect={handleSelect}
+        />
+      )}
+
       <div className="flex items-start gap-2">
         <Lock size={12} className="text-amber-500 mt-2 shrink-0" />
         <textarea
+          ref={textareaRef}
           value={content}
-          onChange={(e) => setContent(e.target.value)}
-          placeholder="Add an internal note…"
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          placeholder="Add an internal note… Type @ to mention someone"
           rows={2}
           className="flex-1 text-sm resize-none border border-amber-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 bg-white leading-snug"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
-          }}
         />
         <button
           type="button"

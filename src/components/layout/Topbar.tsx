@@ -137,11 +137,8 @@ export function Topbar() {
 
         {/* User avatar */}
         {currentUser && (
-          <div className="flex items-center gap-2 pl-2 border-l border-gray-200/60">
+          <div className="pl-2 border-l border-gray-200/60">
             <Avatar name={currentUser.fullName} color={currentUser.avatarColor} size="sm" />
-            <span className="text-sm text-slate-700 font-medium hidden sm:block">
-              {currentUser.fullName.split(' ')[0]}
-            </span>
           </div>
         )}
       </div>
