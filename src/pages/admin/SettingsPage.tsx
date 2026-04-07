@@ -1,11 +1,76 @@
-import { usePermissions } from '@/hooks/usePermissions'
+import { Link } from 'react-router-dom'
+import {
+  AtSign,
+  FileText,
+  Mail,
+  Shield,
+  ShieldOff,
+  Tags,
+  PlugZap,
+  UserCog,
+  UsersRound,
+  Webhook,
+} from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ShieldOff } from 'lucide-react'
+import { usePermissions } from '@/hooks/usePermissions'
+
+interface SettingsLinkItem {
+  to: string
+  label: string
+  description: string
+  icon: React.ReactNode
+}
+
+interface SettingsSection {
+  title: string
+  description: string
+  items: SettingsLinkItem[]
+}
 
 export function SettingsPage() {
-  const { canManageUsers } = usePermissions()
+  const {
+    canManageAdminConfig,
+    canManageEmailConfig,
+    canManageGroups,
+    canManageIntegrationConfig,
+    canManageRoles,
+    canManageUsers,
+    canViewEmailConfig,
+  } = usePermissions()
 
-  if (!canManageUsers) {
+  const canAccessSettingsHub = canManageUsers || canManageRoles || canManageGroups || canManageAdminConfig || canManageIntegrationConfig || canViewEmailConfig || canManageEmailConfig
+
+  const sections: SettingsSection[] = [
+    {
+      title: 'Management',
+      description: 'Manage workspace access, roles, and team structure for internal users.',
+      items: [
+        ...(canManageUsers ? [{ to: '/admin/users', label: 'Users', description: 'Manage workspace members, identity, and access assignments.', icon: <UserCog size={18} /> }] : []),
+        ...(canManageRoles ? [{ to: '/admin/roles', label: 'Roles', description: 'Define role capabilities and permission coverage.', icon: <Shield size={18} /> }] : []),
+        ...(canManageGroups ? [{ to: '/admin/groups', label: 'Groups', description: 'Organize operational teams and ownership boundaries.', icon: <UsersRound size={18} /> }] : []),
+      ],
+    },
+    {
+      title: 'Configuration',
+      description: 'Configure shared communication and workspace defaults used across the product.',
+      items: [
+        ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', label: 'Mailboxes', description: 'Manage mailbox connections and available sending identities.', icon: <Mail size={18} /> }] : []),
+        ...(canManageEmailConfig ? [{ to: '/admin/email/customers', label: 'Email Settings', description: 'Control customer-specific email behavior and routing defaults.', icon: <AtSign size={18} /> }] : []),
+        ...(canManageUsers ? [{ to: '/admin/templates', label: 'Templates', description: 'Maintain shared templates for outbound communication.', icon: <FileText size={18} /> }] : []),
+        ...(canManageAdminConfig ? [{ to: '/admin/tags', label: 'Tag Management', description: 'Maintain the shared tag catalog used across tickets.', icon: <Tags size={18} /> }] : []),
+      ],
+    },
+    {
+      title: 'Integrations',
+      description: 'Connect CaseFlow with external systems used in the ticket workflow.',
+      items: [
+        ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/jira', label: 'Jira Integration', description: 'Configure Jira issue creation defaults and connection settings.', icon: <PlugZap size={18} /> }] : []),
+        ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/channels', label: 'Notification Channels', description: 'Route ticket events into Slack or Teams notification channels.', icon: <Webhook size={18} /> }] : []),
+      ],
+    },
+  ].filter((section) => section.items.length > 0)
+
+  if (!canAccessSettingsHub) {
     return (
       <div className="p-6">
         <EmptyState
@@ -19,7 +84,39 @@ export function SettingsPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+      <div className="space-y-2">
+        <h1 className="text-xl font-bold text-gray-900">Settings</h1>
+        <p className="max-w-3xl text-sm text-gray-500">Browse admin and configuration screens grouped by user-facing purpose, so operational work stays in the main navigation and setup lives here.</p>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-2">
+        {sections.map((section) => (
+          <section key={section.title} className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+            <div className="space-y-1">
+              <h2 className="text-base font-semibold text-gray-900">{section.title}</h2>
+              <p className="text-sm text-gray-500">{section.description}</p>
+            </div>
+
+            <div className="grid gap-3">
+              {section.items.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  className="group flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 transition-colors hover:border-blue-200 hover:bg-blue-50"
+                >
+                  <div className="mt-0.5 rounded-lg bg-slate-100 p-2 text-slate-700 transition-colors group-hover:bg-blue-100 group-hover:text-blue-700">
+                    {item.icon}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="font-medium text-gray-900 group-hover:text-blue-800">{item.label}</div>
+                    <p className="mt-1 text-sm text-gray-500">{item.description}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   )
 }

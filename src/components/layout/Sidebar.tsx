@@ -9,15 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
-  UserCog,
-  UsersRound,
-  Shield,
-  FileText,
-  Mail,
-  AtSign,
-  Tags,
-  PlugZap,
-  Webhook,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Avatar } from '@/components/shared/Avatar'
@@ -35,37 +26,27 @@ export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
   const {
+    canViewAdminPool,
+    canViewReports,
     canManageUsers,
     canManageRoles,
     canManageGroups,
     canManageAdminConfig,
     canManageIntegrationConfig,
-    canViewAdminPool,
-    canViewReports,
     canViewEmailConfig,
     canManageEmailConfig,
     canAccessEmailAdmin,
   } = usePermissions()
 
-  const canAccessAdminSection = canManageUsers || canManageRoles || canManageAdminConfig || canManageIntegrationConfig || canAccessEmailAdmin
+  const canAccessAdminSection = canManageUsers || canManageRoles || canManageGroups || canManageAdminConfig || canManageIntegrationConfig || canAccessEmailAdmin || canViewEmailConfig
 
   const mainNav: NavItem[] = [
     { to: '/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
     { to: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     { to: '/customers', icon: <Users size={18} />, label: 'Customers' },
-  ]
-
-  const adminNav: NavItem[] = [
-    ...(canManageUsers ? [{ to: '/admin/users', icon: <UserCog size={18} />, label: 'Users' }] : []),
-    ...(canManageRoles ? [{ to: '/admin/roles', icon: <Shield size={18} />, label: 'Roles' }] : []),
-    ...(canManageGroups ? [{ to: '/admin/groups', icon: <UsersRound size={18} />, label: 'Groups' }] : []),
-    ...(canManageUsers ? [{ to: '/admin/templates', icon: <FileText size={18} />, label: 'Templates' }] : []),
-    ...(canManageAdminConfig ? [{ to: '/admin/tags', icon: <Tags size={18} />, label: 'Tag Management' }] : []),
-    ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', icon: <Mail size={18} />, label: 'Mailboxes' }] : []),
-    ...(canManageEmailConfig ? [{ to: '/admin/email/customers', icon: <AtSign size={18} />, label: 'Email Settings' }] : []),
-    ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/jira', icon: <PlugZap size={18} />, label: 'Jira Integration' }] : []),
-    ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/channels', icon: <Webhook size={18} />, label: 'Notification Channels' }] : []),
-    ...(canManageUsers ? [{ to: '/admin/settings', icon: <Settings size={18} />, label: 'Settings' }] : []),
+    ...(canViewReports ? [{ to: '/reports', icon: <BarChart2 size={18} />, label: 'Reports' }] : []),
+    ...(canViewAdminPool ? [{ to: '/pool', icon: <Inbox size={18} />, label: 'Admin Pool' }] : []),
+    ...(canAccessAdminSection ? [{ to: '/admin', icon: <Settings size={18} />, label: 'Settings' }] : []),
   ]
 
   return (
@@ -109,45 +90,6 @@ export function Sidebar() {
         {mainNav.map((item) => (
           <SidebarLink key={item.to} item={item} collapsed={sidebarCollapsed} />
         ))}
-
-        {(canViewAdminPool || canViewReports) && (
-          <>
-            {!sidebarCollapsed && (
-              <div className="pt-4 pb-1 px-2">
-                <span className="text-xs font-semibold text-blue-300/55 uppercase tracking-wider">
-                  Management
-                </span>
-              </div>
-            )}
-            {canViewAdminPool && (
-              <SidebarLink
-                item={{ to: '/pool', icon: <Inbox size={18} />, label: 'Admin Pool' }}
-                collapsed={sidebarCollapsed}
-              />
-            )}
-            {canViewReports && (
-              <SidebarLink
-                item={{ to: '/reports', icon: <BarChart2 size={18} />, label: 'Reports' }}
-                collapsed={sidebarCollapsed}
-              />
-            )}
-          </>
-        )}
-
-        {canAccessAdminSection && (
-          <>
-            {!sidebarCollapsed && (
-              <div className="pt-4 pb-1 px-2">
-                <span className="text-xs font-semibold text-blue-300/55 uppercase tracking-wider">
-                  Admin
-                </span>
-              </div>
-            )}
-            {adminNav.map((item) => (
-              <SidebarLink key={item.to} item={item} collapsed={sidebarCollapsed} />
-            ))}
-          </>
-        )}
       </nav>
 
       {/* User section */}
@@ -201,3 +143,4 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
     </NavLink>
   )
 }
+
