@@ -3,12 +3,9 @@ import {
   AtSign,
   FileText,
   Mail,
-  Shield,
   ShieldOff,
   Tags,
   PlugZap,
-  UserCog,
-  UsersRound,
   Webhook,
 } from 'lucide-react'
 import { EmptyState } from '@/components/shared/EmptyState'
@@ -31,30 +28,18 @@ export function SettingsPage() {
   const {
     canManageAdminConfig,
     canManageEmailConfig,
-    canManageGroups,
     canManageIntegrationConfig,
-    canManageRoles,
     canManageUsers,
     canViewEmailConfig,
   } = usePermissions()
 
-  const canAccessSettingsHub = canManageUsers || canManageRoles || canManageGroups || canManageAdminConfig || canManageIntegrationConfig || canViewEmailConfig || canManageEmailConfig
+  const canAccessSettingsHub = canManageAdminConfig || canManageIntegrationConfig || canViewEmailConfig || canManageEmailConfig || canManageUsers
 
   const sections: SettingsSection[] = [
-    {
-      title: 'Management',
-      description: 'Manage workspace access, roles, and team structure for internal users.',
-      items: [
-        ...(canManageUsers ? [{ to: '/admin/users', label: 'Users', description: 'Manage workspace members, identity, and access assignments.', icon: <UserCog size={18} /> }] : []),
-        ...(canManageRoles ? [{ to: '/admin/roles', label: 'Roles', description: 'Define role capabilities and permission coverage.', icon: <Shield size={18} /> }] : []),
-        ...(canManageGroups ? [{ to: '/admin/groups', label: 'Groups', description: 'Organize operational teams and ownership boundaries.', icon: <UsersRound size={18} /> }] : []),
-      ],
-    },
     {
       title: 'Configuration',
       description: 'Configure shared communication and workspace defaults used across the product.',
       items: [
-        ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', label: 'Mailboxes', description: 'Manage mailbox connections and available sending identities.', icon: <Mail size={18} /> }] : []),
         ...(canManageEmailConfig ? [{ to: '/admin/email/customers', label: 'Email Settings', description: 'Control customer-specific email behavior and routing defaults.', icon: <AtSign size={18} /> }] : []),
         ...(canManageUsers ? [{ to: '/admin/templates', label: 'Templates', description: 'Maintain shared templates for outbound communication.', icon: <FileText size={18} /> }] : []),
         ...(canManageAdminConfig ? [{ to: '/admin/tags', label: 'Tag Management', description: 'Maintain the shared tag catalog used across tickets.', icon: <Tags size={18} /> }] : []),
@@ -64,6 +49,7 @@ export function SettingsPage() {
       title: 'Integrations',
       description: 'Connect CaseFlow with external systems used in the ticket workflow.',
       items: [
+        ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', label: 'Mailboxes', description: 'Manage mailbox connections and available sending identities.', icon: <Mail size={18} /> }] : []),
         ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/jira', label: 'Jira Integration', description: 'Configure Jira issue creation defaults and connection settings.', icon: <PlugZap size={18} /> }] : []),
         ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/channels', label: 'Notification Channels', description: 'Route ticket events into Slack or Teams notification channels.', icon: <Webhook size={18} /> }] : []),
       ],
@@ -91,7 +77,7 @@ export function SettingsPage() {
 
       <div className="grid gap-5 xl:grid-cols-2">
         {sections.map((section) => (
-          <section key={section.title} className="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+          <section key={section.title} className="rounded-xl border border-gray-200/60 bg-white shadow-soft p-5 space-y-4">
             <div className="space-y-1">
               <h2 className="text-base font-semibold text-gray-900">{section.title}</h2>
               <p className="text-sm text-gray-500">{section.description}</p>
@@ -102,9 +88,9 @@ export function SettingsPage() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="group flex items-start gap-3 rounded-xl border border-gray-200 px-4 py-3 transition-colors hover:border-blue-200 hover:bg-blue-50"
+                  className="group flex items-start gap-3 rounded-xl border border-gray-200/60 px-4 py-3 transition-all hover:border-indigo-200 hover:bg-indigo-50/50 hover:shadow-soft"
                 >
-                  <div className="mt-0.5 rounded-lg bg-slate-100 p-2 text-slate-700 transition-colors group-hover:bg-blue-100 group-hover:text-blue-700">
+                  <div className="mt-0.5 rounded-xl bg-gray-50 p-2 text-gray-600 transition-colors group-hover:bg-indigo-100/70 group-hover:text-indigo-700">
                     {item.icon}
                   </div>
                   <div className="min-w-0">

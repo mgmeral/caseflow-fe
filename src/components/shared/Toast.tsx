@@ -44,7 +44,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
   return (
     <div
       className={clsx(
-        'flex items-start gap-3 p-4 rounded-lg border shadow-md min-w-[300px] max-w-[400px]',
+        'flex items-start gap-3 p-4 rounded-xl border shadow-elevated min-w-[300px] max-w-[400px]',
         config.bg,
         config.border,
       )}

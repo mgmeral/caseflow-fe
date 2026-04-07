@@ -53,7 +53,7 @@ export function Topbar() {
   }
 
   return (
-    <header className="h-14 bg-white/95 border-b border-blue-100 flex items-center justify-between px-4 flex-shrink-0 z-10">
+    <header className="h-14 bg-white border-b border-gray-200/60 flex items-center justify-between px-4 flex-shrink-0 z-10">
       {/* Left: breadcrumb placeholder (pages will render their own) */}
       <div id="topbar-breadcrumb" />
 
@@ -76,7 +76,7 @@ export function Topbar() {
           </button>
 
           {isOpen && (
-            <div className="absolute right-0 z-30 mt-2 w-[22rem] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+            <div className="absolute right-0 z-30 mt-2 w-[22rem] overflow-hidden rounded-xl border border-gray-200/60 bg-white shadow-elevated">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <div>
                   <div className="text-sm font-semibold text-slate-900">Notifications</div>
@@ -137,7 +137,7 @@ export function Topbar() {
 
         {/* User avatar */}
         {currentUser && (
-          <div className="flex items-center gap-2 pl-2 border-l border-blue-100">
+          <div className="flex items-center gap-2 pl-2 border-l border-gray-200/60">
             <Avatar name={currentUser.fullName} color={currentUser.avatarColor} size="sm" />
             <span className="text-sm text-slate-700 font-medium hidden sm:block">
               {currentUser.fullName.split(' ')[0]}

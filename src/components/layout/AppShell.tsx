@@ -5,7 +5,7 @@ import { ToastContainer } from '@/components/shared/Toast'
 
 export function AppShell() {
   return (
-    <div className="flex h-screen overflow-hidden bg-[#f3f7ff]">
+    <div className="flex h-screen overflow-hidden bg-[#f5f8fc]">
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">

@@ -83,11 +83,11 @@ export function ScheduledEmailsCard({ ticketPublicId, ticketStatus }: ScheduledE
 
   if (!ticketPublicId) {
     return (
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Scheduled Emails</h3>
+      <div className="rounded-xl bg-white border border-gray-200/60 shadow-soft overflow-hidden">
+        <div className="px-4 py-2.5">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Scheduled Emails</h3>
         </div>
-        <div className="px-4 py-3 text-xs text-gray-400">Scheduled emails are unavailable until the backend returns a public ticket identifier.</div>
+        <div className="px-4 pb-3 text-xs text-gray-400">Unavailable — no public ticket identifier.</div>
       </div>
     )
   }
@@ -96,12 +96,12 @@ export function ScheduledEmailsCard({ ticketPublicId, ticketStatus }: ScheduledE
   const { pending, history } = splitScheduledEmails(items)
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Scheduled Emails</h3>
-        <Badge variant={ticketStatus === 'CLOSED' ? 'default' : 'outline'}>{ticketStatus === 'CLOSED' ? 'Ticket Closed' : 'Active Ticket'}</Badge>
+    <div className="rounded-xl bg-white border border-gray-200/60 shadow-soft overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Scheduled Emails</h3>
+        <Badge variant={ticketStatus === 'CLOSED' ? 'default' : 'outline'}>{ticketStatus === 'CLOSED' ? 'Closed' : 'Active'}</Badge>
       </div>
-      <div className="px-4 py-3 space-y-3 text-sm">
+      <div className="px-4 pb-3 space-y-2.5 text-sm">
         {scheduledEmailsQuery.isLoading ? <div className="text-xs text-gray-500">Loading scheduled emails...</div> : null}
         {scheduledEmailsQuery.isError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-red-700">
@@ -109,7 +109,7 @@ export function ScheduledEmailsCard({ ticketPublicId, ticketStatus }: ScheduledE
           </div>
         ) : null}
         {!scheduledEmailsQuery.isLoading && !scheduledEmailsQuery.isError && items.length === 0 ? (
-          <div className="text-xs text-gray-500">No scheduled emails for this ticket yet. Use the reply composer to schedule one.</div>
+          <div className="text-xs text-gray-400">No scheduled emails yet.</div>
         ) : null}
 
         {pending.length > 0 ? (
@@ -140,8 +140,8 @@ export function ScheduledEmailsCard({ ticketPublicId, ticketStatus }: ScheduledE
           </div>
         ) : null}
 
-        <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-900">
-          Scheduled send creation happens in the reply composer. A successful schedule request only means the dispatch was stored, not that the email has already been sent.
+        <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] text-blue-800">
+          Schedules are created via the reply composer.
         </div>
       </div>
     </div>

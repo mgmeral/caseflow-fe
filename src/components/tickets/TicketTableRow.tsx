@@ -49,7 +49,7 @@ export function TicketTableRow({
     >
       {/* Checkbox */}
       <td
-        className="pl-4 pr-2 py-3 w-10"
+        className="pl-3 pr-1 py-1.5 w-8"
         onClick={(e) => e.stopPropagation()}
       >
         <div
@@ -69,55 +69,53 @@ export function TicketTableRow({
       </td>
 
       {/* Subject */}
-      <td className="px-4 py-3 max-w-xs">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {ticket.isUnread && (
-                <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
-              )}
-              <span className="text-sm font-medium text-gray-900 truncate">{ticket.subject}</span>
-            </div>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-gray-400">{ticket.id}</span>
-              {ticket.isTransferred && (
-                <span className="inline-flex items-center gap-0.5 text-[11px] text-amber-600 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-full">
-                  <ArrowUpRight size={10} />
-                  Transferred
-                </span>
-              )}
-            </div>
+      <td className="px-3 py-1.5 max-w-xs">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            {ticket.isUnread && (
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+            )}
+            <span className="text-sm font-medium text-gray-900 truncate">{ticket.subject}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-px">
+            <span className="text-[11px] text-gray-400">{ticket.ticketNo}</span>
+            {ticket.isTransferred && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 bg-amber-50 border border-amber-200 px-1 py-px rounded-full leading-none">
+                <ArrowUpRight size={9} />
+                Transferred
+              </span>
+            )}
           </div>
         </div>
       </td>
 
       {/* Customer */}
-      <td className="px-4 py-3">
-        <div className="text-sm text-gray-700 truncate max-w-[140px]">{ticket.customerName}</div>
+      <td className="px-3 py-1.5">
+        <div className="text-sm text-gray-700 truncate max-w-[130px]">{ticket.customerName}</div>
       </td>
 
       {/* Status */}
-      <td className="px-4 py-3">
+      <td className="px-3 py-1.5">
         <TicketStatusBadge status={ticket.status} />
       </td>
 
       {/* Priority */}
-      <td className="px-4 py-3">
+      <td className="px-3 py-1.5">
         <PriorityBadge priority={ticket.priority} />
       </td>
 
       {/* Owner */}
-      <td className="px-4 py-3">
+      <td className="px-3 py-1.5">
         <OwnerCell userId={ticket.assignedUserId} userName={ticket.assignedUserName} />
       </td>
 
       {/* Group */}
-      <td className="px-4 py-3">
-        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{ticket.groupName}</span>
+      <td className="px-3 py-1.5">
+        <span className="text-[11px] text-gray-500 bg-gray-100 px-1.5 py-px rounded">{ticket.groupName}</span>
       </td>
 
       {/* Aging */}
-      <td className="px-4 py-3">
+      <td className="px-3 py-1.5">
         <AgingIndicator
           openDurationMinutes={ticket.openDurationMinutes}
           slaBreached={ticket.slaBreached}
@@ -125,15 +123,15 @@ export function TicketTableRow({
       </td>
 
       {/* Updated At */}
-      <td className="px-4 py-3">
-        <span className="text-xs text-gray-400">
+      <td className="px-3 py-1.5">
+        <span className="text-[11px] text-gray-400 tabular-nums">
           {format(new Date(ticket.updatedAt), 'MMM d, HH:mm')}
         </span>
       </td>
 
       {/* Actions */}
       <td
-        className={clsx('px-4 py-3 text-right w-12', hovering ? 'opacity-100' : 'opacity-0')}
+        className={clsx('px-3 py-1.5 text-right w-10', hovering ? 'opacity-100' : 'opacity-0')}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">

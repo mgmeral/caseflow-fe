@@ -9,6 +9,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
+  UserCog,
+  Shield,
+  UsersRound,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Avatar } from '@/components/shared/Avatar'
@@ -45,19 +48,22 @@ export function Sidebar() {
     { to: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     { to: '/customers', icon: <Users size={18} />, label: 'Customers' },
     ...(canViewReports ? [{ to: '/reports', icon: <BarChart2 size={18} />, label: 'Reports' }] : []),
-    ...(canViewAdminPool ? [{ to: '/pool', icon: <Inbox size={18} />, label: 'Admin Pool' }] : []),
+    ...(canViewAdminPool ? [{ to: '/pool', icon: <Inbox size={18} />, label: 'Queue' }] : []),
+    ...(canManageUsers ? [{ to: '/admin/users', icon: <UserCog size={18} />, label: 'Users' }] : []),
+    ...(canManageRoles ? [{ to: '/admin/roles', icon: <Shield size={18} />, label: 'Roles' }] : []),
+    ...(canManageGroups ? [{ to: '/admin/groups', icon: <UsersRound size={18} />, label: 'Groups' }] : []),
     ...(canAccessAdminSection ? [{ to: '/admin', icon: <Settings size={18} />, label: 'Settings' }] : []),
   ]
 
   return (
     <aside
       className={clsx(
-        'flex flex-col h-full bg-[#071a3d] text-slate-100 transition-all duration-200 ease-in-out flex-shrink-0',
+        'flex flex-col h-full bg-[#0c1d3a] text-slate-100 transition-all duration-200 ease-in-out flex-shrink-0',
         sidebarCollapsed ? 'w-16' : 'w-60',
       )}
     >
       {/* Logo / Brand */}
-      <div className="flex items-center justify-between h-24 px-3 border-b border-blue-900/70 bg-[#091f49]">
+      <div className="flex items-center justify-between h-24 px-3 border-b border-white/[0.06] bg-[#0f2344]">
         <NavLink
           to="/dashboard"
           aria-label="Go to dashboard"
@@ -93,7 +99,7 @@ export function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="border-t border-blue-900/70 p-3 bg-[#071736]">
+      <div className="border-t border-white/[0.06] p-3 bg-[#091b37]">
         {currentUser && (
           <div
             className={clsx(
@@ -130,10 +136,10 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-3 px-2 py-2 rounded-md text-sm transition-colors w-full',
+          'flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition-colors w-full',
           isActive
-            ? 'bg-[#0d5ac9] text-white shadow-[0_0_0_1px_rgba(255,255,255,0.08)_inset]'
-            : 'text-blue-100/90 hover:bg-blue-900/70 hover:text-white',
+            ? 'bg-[#1a5dc4] text-white shadow-sm'
+            : 'text-blue-100/80 hover:bg-white/[0.07] hover:text-white',
           collapsed && 'justify-center',
         )
       }

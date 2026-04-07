@@ -36,6 +36,10 @@ const emailDetailDrawerProps = vi.hoisted(() => ({
   last: null as Record<string, unknown> | null,
 }))
 
+const workAreaProps = vi.hoisted(() => ({
+  last: null as Record<string, unknown> | null,
+}))
+
 vi.mock('@/hooks/useTicketDetail', () => ({
   useTicketDetail: () => ({
     ticket: {
@@ -125,8 +129,11 @@ vi.mock('@/components/ticket-detail/TicketDetailLayout', () => ({
   ),
 }))
 
-vi.mock('@/components/ticket-detail/ConversationThread', () => ({
-  ConversationThread: () => <div>Conversation</div>,
+vi.mock('@/components/ticket-detail/TicketWorkArea', () => ({
+  TicketWorkArea: (props: Record<string, unknown>) => {
+    workAreaProps.last = props
+    return <div>Work Area</div>
+  },
 }))
 
 vi.mock('@/components/ticket-detail/EmailThread', () => ({
@@ -146,10 +153,6 @@ vi.mock('@/components/ticket-detail/EmailDetailDrawer', () => ({
     emailDetailDrawerProps.last = props
     return null
   },
-}))
-
-vi.mock('@/components/ticket-detail/ComposeArea', () => ({
-  ComposeArea: () => <div>Compose</div>,
 }))
 
 vi.mock('@/components/ticket-detail/TicketSidePanel', () => ({
@@ -284,6 +287,7 @@ describe('TicketDetailPage', () => {
     ticketSidePanelProps.last = null
     attachmentViewerProps.last = null
     emailDetailDrawerProps.last = null
+    workAreaProps.last = null
     emailDetailState.byId = {}
     emailDetailState.isLoading = false
     emailDetailState.calls = []
@@ -307,7 +311,7 @@ describe('TicketDetailPage', () => {
     expect(emailDetailState.calls).toContain('69d239-real-email-id')
     expect(emailDetailState.calls).not.toContain('74')
     expect(emailDetailState.ticketPublicIds).toContain('550e8400-e29b-41d4-a716-446655440000')
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachmentEmptyMessage: 'No attachments on this email.',
     })
   })
@@ -338,7 +342,7 @@ describe('TicketDetailPage', () => {
 
     expect(emailDetailState.calls).toContain('69d24d0179e5e872075434c8')
     expect(emailDetailState.calls).not.toContain('79')
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [expect.objectContaining({ fileName: 'resume.pdf' })],
     })
   })
@@ -357,7 +361,7 @@ describe('TicketDetailPage', () => {
 
     renderPage()
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [expect.objectContaining({ fileName: 'resume.pdf' })],
       attachmentEmptyMessage: 'No attachments on this email.',
     })
@@ -377,7 +381,7 @@ describe('TicketDetailPage', () => {
 
     renderPage()
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [],
       isAttachmentLoading: true,
     })
@@ -396,13 +400,13 @@ describe('TicketDetailPage', () => {
 
     renderPage()
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [expect.objectContaining({ fileName: 'first.pdf' })],
     })
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Email 2' }))
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [expect.objectContaining({ fileName: 'second.pdf' })],
     })
   })
@@ -418,7 +422,7 @@ describe('TicketDetailPage', () => {
 
     renderPage()
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [],
       attachmentEmptyMessage: 'No attachments on this email.',
     })
@@ -430,7 +434,7 @@ describe('TicketDetailPage', () => {
 
     renderPage()
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [],
       attachmentEmptyMessage: 'Select an email to inspect attachments.',
     })
@@ -479,7 +483,7 @@ describe('TicketDetailPage', () => {
 
     renderPage()
 
-    expect(ticketSidePanelProps.last).toMatchObject({
+    expect(workAreaProps.last).toMatchObject({
       attachments: [
         expect.objectContaining({
           emailId: 'email-74',

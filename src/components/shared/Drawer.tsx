@@ -26,19 +26,19 @@ export function Drawer({ isOpen, onClose, title, children, footer, width = 'w-96
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
 
       {/* Panel */}
       <div
         className={clsx(
-          'relative flex flex-col bg-white shadow-xl h-full',
+          'relative flex flex-col bg-white shadow-elevated h-full',
           width,
           'animate-in slide-in-from-right duration-200',
         )}
         role="dialog"
         aria-modal="true"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h2 className="text-base font-semibold text-gray-900">{title}</h2>
           <button
             onClick={onClose}
@@ -52,7 +52,7 @@ export function Drawer({ isOpen, onClose, title, children, footer, width = 'w-96
         <div className="flex-1 overflow-y-auto px-6 py-4">{children}</div>
 
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3 shrink-0">
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
             {footer}
           </div>
         )}

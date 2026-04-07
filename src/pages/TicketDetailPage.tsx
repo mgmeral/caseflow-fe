@@ -3,10 +3,9 @@ import { useTicketDetail } from '@/hooks/useTicketDetail'
 import { useTicketEmailDetailByDirection, useTicketEmailThread } from '@/hooks/useTicketEmails'
 import { useUsers } from '@/hooks/useUsers'
 import { TicketDetailLayout } from '@/components/ticket-detail/TicketDetailLayout'
-import { ConversationThread } from '@/components/ticket-detail/ConversationThread'
 import { EmailThread } from '@/components/ticket-detail/EmailThread'
 import { EmailDetailDrawer } from '@/components/ticket-detail/EmailDetailDrawer'
-import { ComposeArea } from '@/components/ticket-detail/ComposeArea'
+import { TicketWorkArea } from '@/components/ticket-detail/TicketWorkArea'
 import { TicketSidePanel } from '@/components/ticket-detail/TicketSidePanel'
 import { EmailReplyComposer } from '@/components/ticket-detail/EmailReplyComposer'
 import { AssignmentModal } from '@/components/modals/AssignmentModal'
@@ -14,11 +13,10 @@ import { TransferModal } from '@/components/modals/TransferModal'
 import { CloseConfirmModal } from '@/components/modals/CloseConfirmModal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
-import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, Mail, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, XCircle, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 import { useEffect, useMemo, useState } from 'react'
 import { usePermissions } from '@/hooks/usePermissions'
-import { clsx } from 'clsx'
 import type { TicketEmailMessage } from '@/types/email.types'
 import type { TicketAttachment } from '@/types/ticket.types'
 import { AttachmentViewerModal } from '@/components/ticket-detail/AttachmentViewerModal'
@@ -72,7 +70,7 @@ export function TicketDetailPage() {
   } = useTicketDetail(id)
 
   const { users, groups } = useUsers()
-  const { canAssignTickets, canTransferTickets, canSendTicketEmailReply, canViewTicketEmail } = usePermissions()
+  const { canAssignTickets, canTransferTickets, canSendTicketEmailReply, canViewTicketEmail, canCloseTickets } = usePermissions()
   const { data: emailThread = [], isLoading: emailThreadLoading } = useTicketEmailThread(id)
 
   const [showAssign, setShowAssign] = useState(false)
@@ -95,10 +93,7 @@ export function TicketDetailPage() {
     canViewTicketEmail && !!ticketPublicId && !!selectedEmailSummary?.detailId,
   )
 
-  type ThreadTab = 'email' | 'notes'
   const hasEmailThread = emailThread.length > 0
-  const [activeTab, setActiveTab] = useState<ThreadTab>('notes')
-  const [hasManualTabSelection, setHasManualTabSelection] = useState(false)
 
   const allMessages = messages ?? []
   const conversationMessages = allMessages.filter((message) => message.type !== 'system_event')
@@ -113,11 +108,6 @@ export function TicketDetailPage() {
   const attachmentEmptyMessage = selectedEmailKey
     ? 'No attachments on this email.'
     : 'Select an email to inspect attachments.'
-
-  useEffect(() => {
-    if (hasManualTabSelection) return
-    setActiveTab(canViewTicketEmail && hasEmailThread ? 'email' : 'notes')
-  }, [canViewTicketEmail, hasEmailThread, hasManualTabSelection])
 
   useEffect(() => {
     if (!canViewTicketEmail || emailThread.length === 0) {
@@ -186,9 +176,9 @@ export function TicketDetailPage() {
   const replySourceEmail = selectedInboundEmail ?? lastInboundEmail
 
   return (
-    <>
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Top navigation bar: breadcrumb + action buttons */}
-      <div className="flex items-center justify-between px-6 py-3 border-b border-gray-200 bg-white shrink-0">
+      <div className="flex items-center justify-between px-6 py-2.5 border-b border-gray-200/60 bg-white shrink-0">
         <div className="flex items-center gap-1.5 text-sm min-w-0">
           <button
             onClick={() => navigate('/tickets')}
@@ -242,63 +232,40 @@ export function TicketDetailPage() {
               Transfer
             </Button>
           )}
+          {canCloseTickets && allowedStatusTransitions.includes('CLOSED' as any) && (
+            <Button
+              variant="danger"
+              size="sm"
+              leftIcon={<XCircle size={14} />}
+              onClick={() => setShowClose(true)}
+            >
+              Close
+            </Button>
+          )}
+          {canCloseTickets && allowedStatusTransitions.includes('REOPENED' as any) && (
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<RotateCcw size={14} />}
+              onClick={() => reopen()}
+            >
+              Reopen
+            </Button>
+          )}
         </div>
       </div>
 
       <TicketDetailLayout
         left={
-          <div>
-            {/* Tab bar: Email Thread vs Notes/Conversation */}
+          <div className="flex flex-col h-full">
+            {/* Email thread — primary content, scrollable */}
+            <div className="flex-1 overflow-y-auto min-h-0">
             {canViewTicketEmail && (
-              <div className="flex bg-gray-50 border-b border-gray-200">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasManualTabSelection(true)
-                    setActiveTab('email')
-                  }}
-                  className={clsx(
-                    'flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors',
-                    activeTab === 'email'
-                      ? 'border-indigo-500 text-indigo-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700',
-                  )}
-                >
-                  <Mail size={14} />
-                  Email Thread
-                  {emailThread.length > 0 && (
-                    <span className="ml-1 bg-indigo-100 text-indigo-600 text-xs font-semibold px-1.5 py-0.5 rounded-full">{emailThread.length}</span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasManualTabSelection(true)
-                    setActiveTab('notes')
-                  }}
-                  className={clsx(
-                    'flex items-center gap-1.5 px-5 py-2.5 text-sm font-medium border-b-2 transition-colors',
-                    activeTab === 'notes'
-                      ? 'border-indigo-500 text-indigo-700'
-                      : 'border-transparent text-gray-500 hover:text-gray-700',
-                  )}
-                >
-                  <MessageSquare size={14} />
-                  Notes & Activity
-                  {conversationMessages.length > 0 && (
-                    <span className="ml-1 bg-gray-200 text-gray-600 text-xs font-semibold px-1.5 py-0.5 rounded-full">{conversationMessages.length}</span>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {/* Email thread tab */}
-            {activeTab === 'email' && canViewTicketEmail && (
               emailThreadLoading ? (
                 <div className="p-6">
                   <table className="w-full"><tbody><SkeletonRow colCount={3} /><SkeletonRow colCount={3} /></tbody></table>
                 </div>
-              ) : (
+              ) : hasEmailThread ? (
                 <EmailThread
                   ticketPublicId={ticketPublicId}
                   emails={emailThread}
@@ -310,38 +277,38 @@ export function TicketDetailPage() {
                     setIsEmailDrawerOpen(true)
                   }}
                 />
+              ) : (
+                <div className="px-6 py-10 text-center text-sm text-gray-400">
+                  No email messages in this thread yet.
+                </div>
               )
             )}
 
-            {/* Notes/conversation tab */}
-            {activeTab === 'notes' && (
-              <>
-                <ConversationThread messages={conversationMessages} />
-                <ComposeArea
-                  onSendNote={(content) => addNote(content)}
-                  isSendingNote={isAddingNote}
-                />
-              </>
-            )}
-
-            {/* Fallback when can't see email tab */}
             {!canViewTicketEmail && (
-              <>
-                <ConversationThread messages={conversationMessages} />
-                <ComposeArea
-                  onSendNote={(content) => addNote(content)}
-                  isSendingNote={isAddingNote}
-                />
-              </>
+              <div className="px-6 py-10 text-center text-sm text-gray-400">
+                Email view is not available for your role.
+              </div>
             )}
+            </div>
+
+            {/* Lower work area: Notes | Recent Activity | Attachments — pinned at bottom */}
+            <TicketWorkArea
+              messages={conversationMessages}
+              activities={activityItems}
+              attachments={selectedEmailAttachments}
+              attachmentEmptyMessage={attachmentEmptyMessage}
+              isActivityLoading={isHistoryLoading || emailThreadLoading}
+              isAttachmentLoading={canViewTicketEmail && !!selectedEmailKey && selectedEmailLoading}
+              onSendNote={(content) => addNote(content)}
+              isSendingNote={isAddingNote}
+              onViewAttachments={() => setShowTicketAttachments(true)}
+            />
           </div>
         }
         right={
           <TicketSidePanel
             ticket={ticket}
             allowedTransitions={allowedStatusTransitions}
-            activities={activityItems}
-            attachments={selectedEmailAttachments}
             tagsCard={<TicketTagsCard ticketId={ticket.id} />}
             integrationCards={(
               <>
@@ -349,16 +316,8 @@ export function TicketDetailPage() {
                 <ScheduledEmailsCard ticketPublicId={ticketPublicId} ticketStatus={ticket.status} />
               </>
             )}
-            attachmentEmptyMessage={attachmentEmptyMessage}
-            isActivityLoading={isHistoryLoading || emailThreadLoading}
-            isAttachmentLoading={canViewTicketEmail && !!selectedEmailKey && selectedEmailLoading}
-            onViewAttachments={() => setShowTicketAttachments(true)}
             onChangeStatus={(status) => changeStatus({ status })}
             onChangePriority={(priority) => changePriority(priority)}
-            onAssign={() => setShowAssign(true)}
-            onTransfer={() => setShowTransfer(true)}
-            onCloseTicket={() => setShowClose(true)}
-            onReopenTicket={() => reopen()}
           />
         }
       />
@@ -433,6 +392,6 @@ export function TicketDetailPage() {
           downloadUrl: attachment.downloadUrl,
         }))}
       />
-    </>
+    </div>
   )
 }

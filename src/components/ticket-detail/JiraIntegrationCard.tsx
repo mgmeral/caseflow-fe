@@ -37,11 +37,11 @@ export function JiraIntegrationCard({ ticketPublicId }: JiraIntegrationCardProps
 
   if (!ticketPublicId) {
     return (
-      <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Jira</h3>
+      <div className="rounded-xl bg-white border border-gray-200/60 shadow-soft overflow-hidden">
+        <div className="px-4 py-2.5">
+          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Jira</h3>
         </div>
-        <div className="px-4 py-3 text-xs text-gray-400">Ticket integration state is unavailable until the backend provides a public ticket identifier.</div>
+        <div className="px-4 pb-3 text-xs text-gray-400">Unavailable — no public ticket identifier.</div>
       </div>
     )
   }
@@ -56,12 +56,12 @@ export function JiraIntegrationCard({ ticketPublicId }: JiraIntegrationCardProps
   const actionDisabled = isMutating || isPending || !configReady || !configKnown
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Jira</h3>
+    <div className="rounded-xl bg-white border border-gray-200/60 shadow-soft overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center justify-between gap-2">
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Jira</h3>
         {statusQuery.data ? <Badge variant={statusVariant(status)}>{status}</Badge> : null}
       </div>
-      <div className="px-4 py-3 space-y-3 text-sm">
+      <div className="px-4 pb-3 space-y-2.5 text-sm">
         {statusQuery.isLoading ? (
           <div className="flex items-center gap-2 text-gray-500"><Loader2 size={14} className="animate-spin" /> Loading Jira status...</div>
         ) : statusQuery.isError ? (
@@ -80,10 +80,10 @@ export function JiraIntegrationCard({ ticketPublicId }: JiraIntegrationCardProps
             {statusQuery.data?.linkedAt ? <div className="text-xs text-gray-500">Linked {new Date(statusQuery.data.linkedAt).toLocaleString()}</div> : null}
           </>
         ) : status === 'NOT_REQUESTED' ? (
-          <div className="text-gray-600">No Jira issue has been created for this ticket yet.</div>
+          <div className="text-xs text-gray-400">No Jira issue linked yet.</div>
         ) : isPending ? (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-blue-800">
-            Jira issue creation is in progress. The backend has accepted the request and this card will refresh until the job resolves.
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            Jira issue creation in progress.
           </div>
         ) : status === 'CANCELED' ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">Jira issue creation was canceled.</div>
@@ -97,19 +97,15 @@ export function JiraIntegrationCard({ ticketPublicId }: JiraIntegrationCardProps
         )}
 
         {canManageIntegrationConfig && configQuery.isLoading ? (
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-            Checking Jira configuration readiness...
-          </div>
+          <div className="text-xs text-gray-400">Checking Jira config...</div>
         ) : null}
 
         {showConfigWarning ? (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 text-xs">
-            Jira integration is not configured or is disabled. Complete the admin Jira settings before creating issues from tickets.
-            <div className="mt-2">
-              <Link to="/admin/integrations/jira" className="font-semibold text-amber-900 underline underline-offset-2">
-                Open Jira Settings
-              </Link>
-            </div>
+            Jira integration is not configured.
+            <Link to="/admin/integrations/jira" className="ml-1 font-semibold text-amber-900 underline underline-offset-2">
+              Open Settings
+            </Link>
           </div>
         ) : null}
 

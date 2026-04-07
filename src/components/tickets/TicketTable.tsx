@@ -27,7 +27,7 @@ interface TicketTableProps {
 }
 
 const COLUMNS: Array<{ key: string; label: string; sortable?: boolean; width?: string }> = [
-  { key: 'checkbox', label: '', width: 'w-10' },
+  { key: 'checkbox', label: '', width: 'w-8' },
   { key: 'subject', label: 'Subject', sortable: true },
   { key: 'customerName', label: 'Customer', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
@@ -36,7 +36,7 @@ const COLUMNS: Array<{ key: string; label: string; sortable?: boolean; width?: s
   { key: 'groupName', label: 'Group', sortable: true },
   { key: 'openDurationMinutes', label: 'Age', sortable: true },
   { key: 'updatedAt', label: 'Updated', sortable: true },
-  { key: 'actions', label: '', width: 'w-12' },
+  { key: 'actions', label: '', width: 'w-10' },
 ]
 
 function SortIcon({ field, sort }: { field: string; sort: SortState }) {
@@ -94,14 +94,14 @@ export function TicketTable({
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
+            <tr className="bg-gray-50/80 border-b border-gray-200">
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
                   className={clsx(
-                    'px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase tracking-wide',
+                    'px-3 py-2 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wide',
                     col.width,
-                    col.sortable && 'cursor-pointer select-none hover:text-gray-700',
+                    col.sortable && 'cursor-pointer select-none hover:text-gray-600',
                     sort.field === col.key && 'text-indigo-600',
                   )}
                   onClick={() => col.sortable && handleSort(col.key)}
@@ -156,15 +156,15 @@ export function TicketTable({
 
       {/* Pagination */}
       {!isLoading && total > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-white">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-gray-500">
-              Showing {startItem}–{endItem} of {total}
+        <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 bg-white">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">
+              {startItem}–{endItem} of {total}
             </span>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             >
               {PAGE_SIZE_OPTIONS.map((s) => (
                 <option key={s} value={s}>

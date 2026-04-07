@@ -47,7 +47,7 @@ describe('JiraIntegrationCard', () => {
   it('renders the not requested state and triggers create', () => {
     render(<MemoryRouter><JiraIntegrationCard ticketPublicId="ticket-public-1" /></MemoryRouter>)
 
-    expect(screen.getByText('No Jira issue has been created for this ticket yet.')).toBeInTheDocument()
+    expect(screen.getByText('No Jira issue linked yet.')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Create Jira Issue' }))
     expect(createMutate).toHaveBeenCalledTimes(1)
   })
@@ -56,7 +56,7 @@ describe('JiraIntegrationCard', () => {
     jiraState.data = { jobId: 42, jobStatus: 'PENDING', attemptCount: null, lastError: null, nextAttemptAt: null, jiraIssueKey: null, jiraUrl: null, linkedAt: null }
     const { rerender } = render(<MemoryRouter><JiraIntegrationCard ticketPublicId="ticket-public-1" /></MemoryRouter>)
 
-    expect(screen.getByText(/Jira issue creation is in progress/)).toBeInTheDocument()
+    expect(screen.getByText(/Jira issue creation in progress/)).toBeInTheDocument()
 
     jiraState.data = {
       jobId: 42,
@@ -98,8 +98,8 @@ describe('JiraIntegrationCard', () => {
 
     render(<MemoryRouter><JiraIntegrationCard ticketPublicId="ticket-public-1" /></MemoryRouter>)
 
-    expect(screen.getByText(/Jira integration is not configured or is disabled/)).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open Jira Settings' })).toHaveAttribute('href', '/admin/integrations/jira')
+    expect(screen.getByText(/Jira integration is not configured/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open Settings' })).toHaveAttribute('href', '/admin/integrations/jira')
     expect(screen.getByRole('button', { name: 'Create Jira Issue' })).toBeDisabled()
     expect(createMutate).not.toHaveBeenCalled()
   })

@@ -12,8 +12,8 @@ export function TicketListPage() {
   const { users, groups } = useUsers()
 
   return (
-    <div className="p-6 space-y-4">
-      <h1 className="text-xl font-bold text-gray-900">Tickets</h1>
+    <div className="p-4 space-y-3">
+      <h1 className="text-lg font-bold text-gray-900">Tickets</h1>
 
       <TicketFilters
         filters={filters}

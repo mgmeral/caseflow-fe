@@ -124,7 +124,6 @@ describe('TicketTagsCard', () => {
     expect(screen.getByRole('button', { name: 'Remove VIP' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove Billing' })).toBeInTheDocument()
     expect(screen.getByText('Assigned Tags')).toBeInTheDocument()
-    expect(screen.getByText('2 assigned')).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Escalated (ESC)' })).toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'VIP (VIP)' })).not.toBeInTheDocument()
     expect(screen.queryByRole('option', { name: 'Billing (BILLING)' })).not.toBeInTheDocument()
@@ -135,7 +134,7 @@ describe('TicketTagsCard', () => {
     render(<TicketTagsCard ticketId="t1" />)
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Add tag' }), { target: { value: '2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add Another Tag' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Tag' }))
 
     expect(addMutate).toHaveBeenCalledWith('2', expect.any(Object))
   })
@@ -196,7 +195,6 @@ describe('TicketTagsCard', () => {
     expect(screen.getByText('ESC')).toBeInTheDocument()
     expect(screen.getByText('Tag #8')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Remove Tag #' })).not.toBeInTheDocument()
-    expect(screen.getByText('2 assigned')).toBeInTheDocument()
   })
 
   it('handles duplicate add errors gracefully', () => {
@@ -207,7 +205,7 @@ describe('TicketTagsCard', () => {
     render(<TicketTagsCard ticketId="t1" />)
 
     fireEvent.change(screen.getByRole('combobox', { name: 'Add tag' }), { target: { value: '2' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add Another Tag' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add Tag' }))
 
     expect(screen.getByText('This tag is already assigned to the ticket.')).toBeInTheDocument()
     expect(mockError).toHaveBeenCalledWith('This tag is already assigned to the ticket.')

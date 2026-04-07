@@ -63,7 +63,7 @@ function MultiSelectDropdown({ label, options, selected, onChange }: MultiSelect
         type="button"
         onClick={() => setOpen((o) => !o)}
         className={clsx(
-          'flex items-center gap-1.5 px-3 py-1.5 text-sm border rounded-md bg-white hover:bg-gray-50 transition-colors',
+          'flex items-center gap-1 px-2 py-1 text-xs border rounded-md bg-white hover:bg-gray-50 transition-colors',
           selected.length > 0 ? 'border-indigo-400 text-indigo-700' : 'border-gray-300 text-gray-700',
         )}
       >
@@ -172,17 +172,17 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
   }
 
   return (
-    <div className="bg-white border-b border-gray-200 px-4 py-3 space-y-2">
+    <div className="bg-white border-b border-gray-200 px-3 py-2 space-y-1.5">
       {/* Row 1 */}
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap">
         <div className="relative">
-          <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search tickets..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            className="pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-[280px]"
+            className="pl-7 pr-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-[240px]"
           />
         </div>
 
@@ -219,7 +219,7 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
         <button
           type="button"
           onClick={() => setShowMore((v) => !v)}
-          className="flex items-center gap-1 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 ml-auto"
+          className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 ml-auto"
         >
           {showMore ? 'Less' : 'More'}
           {showMore ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -228,23 +228,23 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
 
       {/* Row 2 */}
       {showMore && (
-        <div className="flex items-center gap-3 flex-wrap pt-1">
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 font-medium">From</label>
+        <div className="flex items-center gap-2 flex-wrap pt-0.5">
+          <div className="flex items-center gap-1.5">
+            <label className="text-[11px] text-gray-500 font-medium">From</label>
             <input
               type="date"
               value={filters.dateFrom ?? ''}
               onChange={(e) => onChange({ dateFrom: e.target.value || null })}
-              className="px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-1.5 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500 font-medium">To</label>
+          <div className="flex items-center gap-1.5">
+            <label className="text-[11px] text-gray-500 font-medium">To</label>
             <input
               type="date"
               value={filters.dateTo ?? ''}
               onChange={(e) => onChange({ dateTo: e.target.value || null })}
-              className="px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-1.5 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
@@ -261,7 +261,7 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
               type="button"
               onClick={() => onChange({ [key]: !filters[key] })}
               className={clsx(
-                'px-3 py-1.5 text-xs font-medium rounded-full border transition-colors',
+                'px-2 py-1 text-[11px] font-medium rounded-full border transition-colors',
                 filters[key]
                   ? 'bg-indigo-50 text-indigo-700 border-indigo-300'
                   : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50',
@@ -275,11 +275,11 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
 
       {/* Active filter tags */}
       {activeFilterCount > 0 && (
-        <div className="flex items-center gap-2 flex-wrap pt-1">
+        <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
           {activeTags.map((tag) => (
             <span
               key={tag.label}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs rounded-full border border-indigo-200"
+              className="inline-flex items-center gap-0.5 px-1.5 py-px bg-indigo-50 text-indigo-700 text-[11px] rounded-full border border-indigo-200"
             >
               {tag.label}
               <button

@@ -137,18 +137,18 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
-        <Tags size={14} className="text-gray-400" />
-        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tags</h3>
+    <div className="rounded-xl bg-white border border-gray-200/60 shadow-soft overflow-hidden">
+      <div className="px-4 py-2.5 flex items-center gap-2">
+        <Tags size={13} className="text-gray-400" />
+        <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tags</h3>
         {visibleAssignments.length > 0 ? (
-          <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-500 border border-gray-200">
-            {visibleAssignments.length} assigned
+          <span className="ml-auto rounded-full bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-500 border border-gray-200/60">
+            {visibleAssignments.length}
           </span>
         ) : null}
       </div>
 
-      <div className="px-4 py-3 space-y-3">
+      <div className="px-4 pb-3 space-y-2.5">
         {isAssignedError ? (
           <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-xs text-red-800 space-y-2">
             <div>Ticket tags could not be loaded.</div>
@@ -193,7 +193,7 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
         <div className="space-y-2 border-t border-gray-100 pt-3">
           <div className="space-y-1">
             <label htmlFor="ticket-tag-select" className="block text-xs font-medium text-gray-600">Add Tag</label>
-            <p className="text-xs text-gray-400">Tickets support multiple tags. Add one tag at a time and manage assigned tags from the chip list above.</p>
+            <p className="text-[11px] text-gray-400">Add one active tag at a time.</p>
           </div>
           <div className="flex items-center gap-2">
             <select
@@ -217,7 +217,7 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
               disabled={!selectedTagId || addTagMutation.isPending || isActiveLoading}
               isLoading={addTagMutation.isPending}
             >
-              Add Another Tag
+              Add Tag
             </Button>
           </div>
 
@@ -232,10 +232,8 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
           ) : isActiveLoading ? (
             <p className="text-xs text-gray-400">Loading active tags...</p>
           ) : availableTags.length === 0 ? (
-            <p className="text-xs text-gray-400">No active tags are available to add.</p>
-          ) : (
-            <p className="text-xs text-gray-400">Only active backend-managed tags are available here.</p>
-          )}
+            <p className="text-[11px] text-gray-400">No tags available.</p>
+          ) : null}
 
           {inlineError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{inlineError}</div>
