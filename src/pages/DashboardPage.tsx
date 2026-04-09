@@ -1,32 +1,24 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Ticket, CheckCircle, Clock, UserX, Hourglass, X, CheckCircle2 } from 'lucide-react'
+import { Ticket, CheckCircle, Clock, UserX, Hourglass, CheckCircle2 } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { useAuthStore } from '@/store/auth.store'
 import { useDashboardStats } from '@/hooks/useDashboard'
 import { PriorityBadge } from '@/components/tickets/PriorityBadge'
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge'
 
-type DashboardFilter = 'active' | 'unassigned' | 'waiting' | 'resolved' | null
-
-const FILTER_LABELS: Record<NonNullable<DashboardFilter>, string> = {
-  active: 'Active',
-  unassigned: 'Unassigned',
-  waiting: 'Waiting > 24h',
-  resolved: 'Resolved',
-}
+type DashboardFilter = 'active' | 'unassigned' | 'waiting' | 'resolved'
 
 export function DashboardPage() {
   const { currentUser } = useAuthStore()
   const navigate = useNavigate()
-  const [activeFilter, setActiveFilter] = useState<DashboardFilter>(null)
   const statsQuery = useDashboardStats()
 
   const stats = statsQuery.data
   const myActionItems = useMemo(() => stats?.myActionRequiredItems ?? [], [stats?.myActionRequiredItems])
 
-  const toggleFilter = (filter: DashboardFilter) => {
-    setActiveFilter((current) => (current === filter ? null : filter))
+  const navigateToTickets = (filter: DashboardFilter) => {
+    navigate(`/tickets?dashboardFilter=${filter}`)
   }
 
   return (
@@ -36,7 +28,7 @@ export function DashboardPage() {
           <h1 className="text-lg font-bold text-gray-900">
             Good day, {currentUser?.fullName.split(' ')[0]}!
           </h1>
-          <p className="text-xs text-gray-500">Backend-driven operational snapshot for today.</p>
+          <p className="text-xs text-gray-500">Backend-driven operational snapshot.</p>
         </div>
       </div>
 
@@ -47,57 +39,30 @@ export function DashboardPage() {
           value={stats?.activeTickets ?? 0}
           icon={Clock}
           color="amber"
-          active={activeFilter === 'active'}
-          onClick={() => toggleFilter('active')}
+          onClick={() => navigateToTickets('active')}
         />
         <StatCard
           label="Unassigned"
           value={stats?.unassignedTickets ?? 0}
           icon={UserX}
           color="amber"
-          active={activeFilter === 'unassigned'}
-          onClick={() => toggleFilter('unassigned')}
+          onClick={() => navigateToTickets('unassigned')}
         />
         <StatCard
           label="Waiting > 24h"
           value={stats?.waitingOver24h ?? 0}
           icon={Hourglass}
           color="red"
-          active={activeFilter === 'waiting'}
-          onClick={() => toggleFilter('waiting')}
+          onClick={() => navigateToTickets('waiting')}
         />
         <StatCard
           label="Resolved"
           value={stats?.resolvedTickets ?? 0}
           icon={CheckCircle}
           color="green"
-          active={activeFilter === 'resolved'}
-          onClick={() => toggleFilter('resolved')}
+          onClick={() => navigateToTickets('resolved')}
         />
       </div>
-
-      {activeFilter ? (
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-medium rounded-full border border-indigo-200">
-            Dashboard filter: {FILTER_LABELS[activeFilter]}
-            <button
-              type="button"
-              onClick={() => setActiveFilter(null)}
-              className="hover:text-indigo-900"
-              aria-label="Clear dashboard filter"
-            >
-              <X size={12} />
-            </button>
-          </span>
-          <button
-            type="button"
-            onClick={() => navigate('/tickets')}
-            className="text-xs text-indigo-600 hover:text-indigo-800 underline"
-          >
-            View all in Tickets
-          </button>
-        </div>
-      ) : null}
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">

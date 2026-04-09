@@ -145,14 +145,16 @@ export interface TicketMessage {
   authorName: string
   authorUser?: {
     id: string | null
-    fullName: string
     username?: string | null
+    displayName?: string | null
+    fullName?: string | null
     email?: string | null
   } | null
   content: string
   mentions?: Array<{
     userId: string
     displayText: string
+    displayName?: string | null
     fullName?: string | null
     username?: string | null
     email?: string | null

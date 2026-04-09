@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 
 const resetFilters = vi.hoisted(() => vi.fn())
+const setFilters = vi.hoisted(() => vi.fn())
 
 vi.mock('@/store/filter.store', () => ({
   useFilterStore: () => ({
@@ -9,7 +11,7 @@ vi.mock('@/store/filter.store', () => ({
     sort: { field: 'status', direction: 'asc' },
     page: 3,
     pageSize: 50,
-    setFilters: vi.fn(),
+    setFilters,
     setSort: vi.fn(),
     setPage: vi.fn(),
     setPageSize: vi.fn(),
@@ -37,7 +39,21 @@ const { TicketListPage } = await import('@/pages/TicketListPage')
 
 describe('TicketListPage', () => {
   it('resets filter state on page entry', () => {
-    render(<TicketListPage />)
+    render(
+      <MemoryRouter>
+        <TicketListPage />
+      </MemoryRouter>,
+    )
     expect(resetFilters).toHaveBeenCalled()
+  })
+
+  it('applies dashboard preset filters from query params', () => {
+    render(
+      <MemoryRouter initialEntries={['/tickets?dashboardFilter=unassigned']}>
+        <TicketListPage />
+      </MemoryRouter>,
+    )
+
+    expect(setFilters).toHaveBeenCalledWith({ openOnly: true, unassignedOnly: true })
   })
 })

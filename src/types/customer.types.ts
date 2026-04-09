@@ -20,7 +20,7 @@ export interface Customer {
   name: string
   code: string
   isActive: boolean
-  createdAt: string
-  updatedAt: string
+  colorHex: string | null
+  createdAt: string | null
+  updatedAt: string | null
 }
-""

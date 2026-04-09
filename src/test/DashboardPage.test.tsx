@@ -74,9 +74,11 @@ describe('DashboardPage', () => {
     if (!widget) throw new Error('My Action Required widget not found')
     expect(within(widget).getByText('Assigned active ticket')).toBeInTheDocument()
     expect(within(widget).queryByText('Resolved ticket')).not.toBeInTheDocument()
+    expect(screen.getByText('Backend-driven operational snapshot.')).toBeInTheDocument()
+    expect(screen.queryByText('Backend-driven operational snapshot for today.')).not.toBeInTheDocument()
   })
 
-  it('applies visible dashboard KPI filter state', () => {
+  it('navigates to tickets with a real preset when a KPI is clicked', () => {
     render(
       <MemoryRouter>
         <DashboardPage />
@@ -84,7 +86,6 @@ describe('DashboardPage', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: /Waiting > 24h/i }))
-    expect(screen.getByText('Dashboard filter: Waiting > 24h')).toBeInTheDocument()
-    expect(screen.getByText('View all in Tickets')).toBeInTheDocument()
+    expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=waiting')
   })
 })

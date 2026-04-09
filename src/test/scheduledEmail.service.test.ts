@@ -30,15 +30,27 @@ describe('scheduledEmailService', () => {
     await scheduledEmailService.listScheduledEmails('ticket-public-1')
     await scheduledEmailService.createScheduledEmail('ticket-public-1', {
       mailboxId: 1,
+      toAddress: ' customer@example.com ',
+      subject: ' Follow-up ',
+      textBody: ' Hello ',
+      htmlBody: ' <p>Hello</p> ',
+      sendNotBefore: '2026-04-10T09:00:00Z',
+      sourceEventId: ' evt-1 ',
+      templateId: ' tpl-1 ',
+      contentWasEdited: false,
+    })
+
+    expect(mockGet).toHaveBeenCalledWith('/tickets/ticket-public-1/scheduled-emails')
+    expect(mockPost).toHaveBeenCalledWith('/tickets/ticket-public-1/scheduled-emails', expect.objectContaining({
+      mailboxId: 1,
       toAddress: 'customer@example.com',
       subject: 'Follow-up',
       textBody: 'Hello',
       htmlBody: '<p>Hello</p>',
-      sendNotBefore: '2026-04-10T09:00:00Z',
-    })
-
-    expect(mockGet).toHaveBeenCalledWith('/tickets/ticket-public-1/scheduled-emails')
-    expect(mockPost).toHaveBeenCalledWith('/tickets/ticket-public-1/scheduled-emails', expect.objectContaining({ mailboxId: 1 }))
+      sourceEventId: 'evt-1',
+      templateId: 'tpl-1',
+      contentWasEdited: false,
+    }))
   })
 
   it('cancels scheduled email with ticketPublicId and dispatchId', async () => {

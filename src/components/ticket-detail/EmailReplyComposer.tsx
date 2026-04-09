@@ -256,6 +256,9 @@ export function EmailReplyComposer({
         textBody: body.trim(),
         htmlBody: selectedTemplateHtml && !contentWasEdited ? selectedTemplateHtml : null,
         sendNotBefore: scheduledTimestamp.toISOString(),
+        sourceEventId: replySourceEventId,
+        templateId: selectedTemplateId || null,
+        contentWasEdited,
       },
       {
         onSuccess: (result) => {

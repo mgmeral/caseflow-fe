@@ -13,6 +13,9 @@ const mockUpdateRule = vi.hoisted(() => vi.fn())
 const mockDeactivateRule = vi.hoisted(() => vi.fn())
 const mockDeleteRule = vi.hoisted(() => vi.fn())
 const mockDeleteCustomer = vi.hoisted(() => vi.fn())
+const mockUpdateCustomer = vi.hoisted(() => vi.fn())
+const mockActivateCustomer = vi.hoisted(() => vi.fn())
+const mockDeactivateCustomer = vi.hoisted(() => vi.fn())
 
 const reportState = vi.hoisted(() => ({
   data: {
@@ -47,6 +50,7 @@ const detailState = vi.hoisted(() => ({
     name: 'Akbank',
     code: 'AKBANK',
     isActive: true,
+    colorHex: '#0d5ac9',
     createdAt: '2025-01-01T00:00:00Z',
     updatedAt: '2025-01-02T00:00:00Z',
   },
@@ -92,6 +96,9 @@ const detailState = vi.hoisted(() => ({
 vi.mock('@/hooks/useCustomers', () => ({
   useCustomerDetail: () => ({ customer: detailState.customer, isLoading: false }),
   useCustomerTickets: () => ({ tickets: detailState.tickets, isLoading: false }),
+  useUpdateCustomer: () => ({ mutateAsync: mockUpdateCustomer, isPending: false }),
+  useActivateCustomer: () => ({ mutateAsync: mockActivateCustomer, isPending: false }),
+  useDeactivateCustomer: () => ({ mutateAsync: mockDeactivateCustomer, isPending: false }),
   useDeleteCustomer: () => ({ mutateAsync: mockDeleteCustomer, isPending: false }),
 }))
 
@@ -157,6 +164,9 @@ describe('CustomerDetailPage', () => {
     mockDeactivateRule.mockReset()
     mockDeleteRule.mockReset()
     mockDeleteCustomer.mockReset()
+    mockUpdateCustomer.mockReset()
+    mockActivateCustomer.mockReset()
+    mockDeactivateCustomer.mockReset()
     mockNavigate.mockReset()
 
     mockUpsertSettings.mockResolvedValue(undefined)
@@ -165,6 +175,19 @@ describe('CustomerDetailPage', () => {
     mockDeactivateRule.mockResolvedValue(undefined)
     mockDeleteRule.mockResolvedValue(undefined)
     mockDeleteCustomer.mockResolvedValue(undefined)
+    mockUpdateCustomer.mockResolvedValue(undefined)
+    mockActivateCustomer.mockResolvedValue(undefined)
+    mockDeactivateCustomer.mockResolvedValue(undefined)
+
+    detailState.customer = {
+      id: 'c1',
+      name: 'Akbank',
+      code: 'AKBANK',
+      isActive: true,
+      colorHex: '#0d5ac9',
+      createdAt: '2025-01-01T00:00:00Z',
+      updatedAt: '2025-01-02T00:00:00Z',
+    }
 
     detailState.emailSettings = {
       customerId: 'c1',
@@ -215,6 +238,7 @@ describe('CustomerDetailPage', () => {
     renderPage()
 
     expect(screen.getByText('Akbank')).toBeInTheDocument()
+    expect(screen.getAllByText('#0d5ac9').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('button', { name: 'Email Settings' }))
     expect(screen.getByText('Sender Patterns & Routing Rules')).toBeInTheDocument()
     expect(screen.getByText('@akbank.com')).toBeInTheDocument()
@@ -229,6 +253,48 @@ describe('CustomerDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Email Settings' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Report' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Tickets' })).toBeInTheDocument()
+  })
+
+  it('supports customer edit and save flow with color updates', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+    fireEvent.change(screen.getByDisplayValue('Akbank'), { target: { value: 'Akbank Digital' } })
+    fireEvent.change(screen.getByDisplayValue('AKBANK'), { target: { value: 'akb-dijital' } })
+    fireEvent.change(screen.getByLabelText('Custom Hex'), { target: { value: '#475569' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(mockUpdateCustomer).toHaveBeenCalledWith({
+        id: 'c1',
+        payload: { name: 'Akbank Digital', code: 'AKB-DIJITAL', colorHex: '#475569' },
+      })
+      expect(mockSuccess).toHaveBeenCalledWith('Customer updated')
+    })
+  })
+
+  it('uses activate and deactivate endpoints from the detail header', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Deactivate' }))
+
+    await waitFor(() => {
+      expect(mockDeactivateCustomer).toHaveBeenCalledWith('c1')
+      expect(mockSuccess).toHaveBeenCalledWith('Customer deactivated')
+    })
+
+    detailState.customer = {
+      ...detailState.customer,
+      isActive: false,
+    }
+
+    renderPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Activate' }))
+
+    await waitFor(() => {
+      expect(mockActivateCustomer).toHaveBeenCalledWith('c1')
+      expect(mockSuccess).toHaveBeenCalledWith('Customer activated')
+    })
   })
 
   it('shows the empty routing rule state only when the backend returned no rules', () => {
@@ -246,7 +312,7 @@ describe('CustomerDetailPage', () => {
     renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: 'Email Settings' }))
-    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'Edit' })[1])
     fireEvent.click(screen.getByRole('checkbox', { name: 'Allow Subdomains' }))
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

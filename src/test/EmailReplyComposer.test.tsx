@@ -234,6 +234,9 @@ describe('EmailReplyComposer', () => {
         toAddress: 'customer@example.com',
         subject: 'Preview Subject',
         textBody: 'Scheduled body',
+        sourceEventId: 'evt-1',
+        templateId: null,
+        contentWasEdited: true,
       }),
       expect.any(Object),
     )

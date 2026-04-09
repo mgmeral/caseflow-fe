@@ -56,7 +56,7 @@ export interface Mailbox {
   cursorInitStrategy: InitialSyncStrategy | string | null
   lastSeenUid: string | null
   activationState: string | null
-  pollingStatus: PollingStatus
+  pollingStatus: PollingStatus | null
   isActive: boolean
   defaultGroupId: string | null
   defaultPriority: TicketPriority | string | null

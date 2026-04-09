@@ -1,17 +1,41 @@
-﻿import type { Customer } from '@/types/customer.types'
+﻿import type { CreateCustomerRequest, CustomerResponse, CustomerSummaryResponse, UpdateCustomerRequest } from '@/types/api.types'
+import type { Customer } from '@/types/customer.types'
 import type { Ticket } from '@/types/ticket.types'
-import type { CustomerResponse } from '@/types/api.types'
 import { apiClient } from './api.client'
 import { normalizeTicket } from './normalizers'
 
-function toCustomer(raw: CustomerResponse): Customer {
+function normalizeColorHex(value: string | null | undefined): string | null {
+  if (!value) return null
+  const trimmed = value.trim().toLowerCase()
+  if (!trimmed) return null
+
+  const withHash = trimmed.startsWith('#') ? trimmed : `#${trimmed}`
+  const shortHexMatch = withHash.match(/^#([0-9a-f]{3})$/i)
+  if (shortHexMatch) {
+    const [, shortHex] = shortHexMatch
+    return `#${shortHex.split('').map((character) => `${character}${character}`).join('')}`
+  }
+
+  return /^#[0-9a-f]{6}$/i.test(withHash) ? withHash : null
+}
+
+function toCustomer(raw: CustomerSummaryResponse | CustomerResponse): Customer {
   return {
     id: String(raw.id),
     name: raw.name,
     code: raw.code,
     isActive: raw.isActive,
-    createdAt: raw.createdAt,
-    updatedAt: raw.updatedAt,
+    colorHex: normalizeColorHex(raw.colorHex),
+    createdAt: 'createdAt' in raw ? raw.createdAt : null,
+    updatedAt: 'updatedAt' in raw ? raw.updatedAt : null,
+  }
+}
+
+function toCustomerPayload(data: CreateCustomerRequest | UpdateCustomerRequest): CreateCustomerRequest | UpdateCustomerRequest {
+  return {
+    name: data.name.trim(),
+    code: data.code.trim().toUpperCase(),
+    colorHex: normalizeColorHex(data.colorHex),
   }
 }
 
@@ -25,8 +49,8 @@ export const customerService = {
     if (search) params.set('search', search)
     if (typeof isActive === 'boolean') params.set('isActive', String(isActive))
     const qs = params.toString()
-    const res = await apiClient.get<CustomerResponse[]>(`/customers${qs ? `?${qs}` : ''}`)
-    const list = Array.isArray(res) ? res : (res as unknown as { data: CustomerResponse[] }).data ?? []
+    const res = await apiClient.get<CustomerSummaryResponse[]>(`/customers${qs ? `?${qs}` : ''}`)
+    const list = Array.isArray(res) ? res : (res as unknown as { data: CustomerSummaryResponse[] }).data ?? []
     return list.map(toCustomer)
   },
 
@@ -45,11 +69,11 @@ export const customerService = {
     return items.map(normalizeTicket)
   },
 
-  create: (data: { name: string; code: string }) =>
-    apiClient.post<CustomerResponse>('/customers', data).then(toCustomer),
+  create: (data: CreateCustomerRequest) =>
+    apiClient.post<CustomerResponse>('/customers', toCustomerPayload(data)).then(toCustomer),
 
-  update: (id: string, data: { name: string; code: string }) =>
-    apiClient.put<CustomerResponse>(`/customers/${id}`, data).then(toCustomer),
+  update: (id: string, data: UpdateCustomerRequest) =>
+    apiClient.put<CustomerResponse>(`/customers/${id}`, toCustomerPayload(data)).then(toCustomer),
 
   delete: async (id: string): Promise<void> => {
     await apiClient.delete<void>(`/customers/${id}`)

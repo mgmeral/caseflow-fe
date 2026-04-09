@@ -14,10 +14,14 @@ interface ScheduledEmailsCardProps {
 function statusVariant(status: DispatchStatus): 'warning' | 'info' | 'success' | 'error' | 'default' {
   switch (status) {
     case 'PENDING':
+    case 'QUEUED':
       return 'warning'
     case 'SENDING':
+    case 'PROCESSING':
+    case 'DISPATCHED':
       return 'info'
     case 'SENT':
+    case 'DELIVERED':
       return 'success'
     case 'FAILED':
     case 'PERMANENTLY_FAILED':
@@ -31,9 +35,13 @@ function statusVariant(status: DispatchStatus): 'warning' | 'info' | 'success' |
 
 function splitScheduledEmails(items: ScheduledEmailResponse[]) {
   return {
-    pending: items.filter((item) => item.status === 'PENDING'),
-    history: items.filter((item) => item.status !== 'PENDING'),
+    pending: items.filter((item) => !['SENT', 'DELIVERED', 'FAILED', 'PERMANENTLY_FAILED', 'CANCELED'].includes(item.status ?? '')),
+    history: items.filter((item) => ['SENT', 'DELIVERED', 'FAILED', 'PERMANENTLY_FAILED', 'CANCELED'].includes(item.status ?? '')),
   }
+}
+
+function formatOperationalTimestamp(value: string | null | undefined): string {
+  return value ? new Date(value).toLocaleString() : '—'
 }
 
 function ScheduledEmailRow({
@@ -50,18 +58,25 @@ function ScheduledEmailRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="font-medium text-gray-800 truncate">{item.subject}</div>
-          <div className="mt-1 text-xs text-gray-500 truncate">To {item.toAddress}</div>
-          <div className="mt-1 text-xs text-gray-500">Send not before {new Date(item.sendNotBefore).toLocaleString()}</div>
+          <div className="mt-1 text-xs text-gray-500 truncate">Recipient {item.resolvedRecipient ?? item.toAddress}</div>
+          <div className="mt-1 text-xs text-gray-500 truncate">Mailbox {item.mailboxName ?? 'Unknown mailbox'}{item.mailboxAddress ? ` (${item.mailboxAddress})` : ''}</div>
+          <div className="mt-1 text-xs text-gray-500 truncate">From {item.fromAddress ?? item.mailboxAddress ?? 'Backend-managed sender'}</div>
         </div>
-        <Badge variant={statusVariant(item.status)}>{item.status}</Badge>
+        <Badge variant={statusVariant(item.status ?? 'CANCELED')}>{item.status ?? 'UNKNOWN'}</Badge>
       </div>
-      {(item.sentAt || item.canceledAt) ? (
-        <div className="mt-2 text-xs text-gray-500">
-          {item.sentAt ? `Sent ${new Date(item.sentAt).toLocaleString()}` : null}
-          {item.canceledAt ? `Canceled ${new Date(item.canceledAt).toLocaleString()}` : null}
+      <div className="mt-3 grid gap-1 text-xs text-gray-500 md:grid-cols-2">
+        <div>Created {formatOperationalTimestamp(item.createdAt)}</div>
+        <div>Send not before {formatOperationalTimestamp(item.sendNotBefore)}</div>
+        <div>Sent at {formatOperationalTimestamp(item.sentAt)}</div>
+        <div>Canceled at {formatOperationalTimestamp(item.canceledAt)}</div>
+      </div>
+      {(item.failureReason || item.failureCategory) ? (
+        <div className="mt-2 rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-800">
+          <div>Failure reason: {item.failureReason ?? 'Unavailable'}</div>
+          <div>Failure category: {item.failureCategory ?? 'Unavailable'}</div>
         </div>
       ) : null}
-      {item.status === 'PENDING' ? (
+      {(item.status === 'PENDING' || item.status === 'QUEUED') ? (
         <div className="mt-3">
           <Button variant="secondary" size="sm" leftIcon={<MailX size={13} />} onClick={() => onCancel(item.id)} isLoading={canceling}>
             Cancel Schedule
@@ -141,7 +156,7 @@ export function ScheduledEmailsCard({ ticketPublicId, ticketStatus }: ScheduledE
         ) : null}
 
         <div className="rounded-md border border-blue-100 bg-blue-50/60 px-3 py-2 text-[11px] text-blue-800">
-          Schedules are created via the reply composer.
+          Schedules are created from the real threaded reply composer and use backend-resolved mailbox and recipient routing.
         </div>
       </div>
     </div>

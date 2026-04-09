@@ -1,3 +1,9 @@
+import type {
+  OutboundDispatchStatus,
+  ScheduledEmailResponse as ApiScheduledEmailResponse,
+  ScheduleEmailRequest as ApiScheduleEmailRequest,
+} from './api.types'
+
 export type JiraJobStatus =
   | 'NOT_REQUESTED'
   | 'PENDING'
@@ -99,32 +105,8 @@ export interface ChannelConfigRequest {
   enabled: boolean
 }
 
-export type DispatchStatus =
-  | 'PENDING'
-  | 'SENDING'
-  | 'SENT'
-  | 'FAILED'
-  | 'PERMANENTLY_FAILED'
-  | 'CANCELED'
+export type DispatchStatus = OutboundDispatchStatus
 
-export interface ScheduledEmailResponse {
-  id: number
-  ticketId: number
-  mailboxId: number
-  toAddress: string
-  subject: string
-  status: DispatchStatus
-  sendNotBefore: string
-  canceledAt: string | null
-  sentAt: string | null
-  createdAt: string
-}
+export type ScheduledEmailResponse = ApiScheduledEmailResponse
 
-export interface ScheduleEmailRequest {
-  mailboxId: number
-  toAddress: string
-  subject: string
-  textBody: string
-  htmlBody?: string | null
-  sendNotBefore: string
-}
+export type ScheduleEmailRequest = ApiScheduleEmailRequest

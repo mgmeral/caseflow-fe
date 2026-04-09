@@ -31,7 +31,7 @@ function toBackendMailboxPayload(payload: CreateMailboxRequest): CreateMailboxRe
     providerType: payload.providerType ?? 'IMAP',
     inboundMode: payload.inboundMode ?? 'POLLING',
     outboundMode: payload.outboundMode ?? 'SMTP',
-    isActive: payload.isActive ?? true,
+    isActive: payload.isActive ?? false,
     defaultGroupId,
     defaultPriority: payload.defaultPriority ?? null,
     oauthTenantId: cleanString(payload.oauthTenantId),
@@ -49,7 +49,7 @@ function toBackendMailboxPayload(payload: CreateMailboxRequest): CreateMailboxRe
     imapPassword: cleanString(payload.imapPassword),
     imapUseSsl: payload.imapUseSsl ?? true,
     imapFolder: cleanString(payload.imapFolder) ?? 'INBOX',
-    pollingEnabled: payload.pollingEnabled ?? true,
+    pollingEnabled: payload.pollingEnabled ?? false,
     pollIntervalSeconds: pollInterval,
     initialSyncStrategy: normalizeInitialSyncStrategy(payload.initialSyncStrategy) ?? 'NEW_MESSAGES_ONLY',
   }
@@ -63,8 +63,6 @@ export interface MailboxListFilters {
   // Backward-compatible aliases used by existing callers.
   search?: string
   active?: boolean
-  pollingEnabled?: boolean
-  pollingStatus?: string
 }
 
 export const mailboxService = {

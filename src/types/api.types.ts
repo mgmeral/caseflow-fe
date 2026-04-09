@@ -198,6 +198,22 @@ export type SenderMatchType = 'EXACT_EMAIL' | 'DOMAIN' | 'DOMAIN_SUFFIX'
 
 export type TicketEmailDirection = 'INBOUND' | 'OUTBOUND'
 
+export interface BackendUserSummaryResponse {
+  id?: string | number | null
+  username?: string | null
+  displayName?: string | null
+  fullName?: string | null
+  email?: string | null
+}
+
+export interface NoteMentionResponse extends BackendUserSummaryResponse {
+  mentionedUserId?: string | number | null
+  userId?: string | number | null
+  displayText?: string | null
+  startIndex?: number | null
+  endIndex?: number | null
+}
+
 // ---------------------------------------------------------------------------
 // Group Type DTOs
 // ---------------------------------------------------------------------------
@@ -236,22 +252,8 @@ export interface NoteResponse {
   type: NoteType
   content: string
   createdBy: string | number
-  createdByUser?: {
-    id?: string | number | null
-    fullName?: string | null
-    username?: string | null
-    email?: string | null
-  } | null
-  mentions?: Array<{
-    mentionedUserId?: string | number | null
-    userId?: string | number | null
-    displayText?: string | null
-    fullName?: string | null
-    username?: string | null
-    email?: string | null
-    startIndex?: number | null
-    endIndex?: number | null
-  }> | null
+  createdByUser?: BackendUserSummaryResponse | null
+  mentions?: NoteMentionResponse[] | null
   createdAt: string
   eventType?: string | null
   metadataJson?: string | null
@@ -799,6 +801,40 @@ export interface SendTicketReplyResponse {
   message: string | null
 }
 
+export interface ScheduledEmailResponse {
+  id: string | number
+  ticketId: string | number
+  mailboxId: string | number | null
+  mailboxName?: string | null
+  mailboxAddress?: string | null
+  fromAddress?: string | null
+  resolvedRecipient?: string | null
+  toAddress: string
+  subject: string
+  status: OutboundDispatchStatus | null
+  failureReason?: string | null
+  failureCategory?: string | null
+  sourceEventId?: string | null
+  templateId?: string | null
+  contentWasEdited?: boolean | null
+  sendNotBefore: string
+  canceledAt?: string | null
+  sentAt?: string | null
+  createdAt: string
+}
+
+export interface ScheduleEmailRequest {
+  mailboxId: number
+  toAddress: string
+  subject: string
+  textBody: string
+  htmlBody?: string | null
+  sendNotBefore: string
+  sourceEventId?: string | null
+  templateId?: string | null
+  contentWasEdited?: boolean | null
+}
+
 export interface TicketStatusTransitionListResponse {
   currentStatus?: string | null
   allowedTransitions?: string[]
@@ -972,23 +1008,26 @@ export interface GroupResponse {
 
 /**
  * GET /api/customers list item
- * Spec: { id, name, code }
+ * Spec: { id, name, code, isActive, colorHex }
  */
 export interface CustomerSummaryResponse {
-  id: number
+  id: number | string
   name: string
   code: string
+  isActive: boolean
+  colorHex?: string | null
 }
 
 /**
  * GET /api/customers/{id}
- * Spec: { id, name, code, isActive, createdAt, updatedAt }
+ * Spec: { id, name, code, isActive, colorHex, createdAt, updatedAt }
  */
 export interface CustomerResponse {
-  id: number
+  id: number | string
   name: string
   code: string
   isActive: boolean
+  colorHex?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -1135,20 +1174,22 @@ export interface UpdateGroupRequest {
 
 /**
  * POST /api/customers body
- * Spec: { name [required], code [required] }
+ * Spec: { name [required], code [required], colorHex? }
  */
 export interface CreateCustomerRequest {
   name: string
   code: string
+  colorHex?: string | null
 }
 
 /**
  * PUT /api/customers/{id} body
- * Spec: { name [required], code [required] }
+ * Spec: { name [required], code [required], colorHex? }
  */
 export interface UpdateCustomerRequest {
   name: string
   code: string
+  colorHex?: string | null
 }
 
 /**

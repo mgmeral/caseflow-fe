@@ -1,13 +1,24 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateCustomer, useCustomers } from '@/hooks/useCustomers'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Badge } from '@/components/shared/Badge'
 import { Button } from '@/components/shared/Button'
+import { ColorField, normalizeOptionalHexColor } from '@/components/shared/ColorField'
 import { Modal } from '@/components/shared/Modal'
 import { useToast } from '@/hooks/useToast'
 import { Users, Search, Plus, Settings2 } from 'lucide-react'
+
+function CustomerColorDot({ colorHex }: { colorHex: string | null }) {
+  return (
+    <span
+      className="inline-block h-2.5 w-2.5 rounded-full border border-gray-200"
+      style={{ backgroundColor: colorHex ?? '#e5e7eb' }}
+      aria-hidden="true"
+    />
+  )
+}
 
 export function CustomerListPage() {
   const navigate = useNavigate()
@@ -18,6 +29,7 @@ export function CustomerListPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [colorHex, setColorHex] = useState('')
 
   // Debounce search
   useEffect(() => {
@@ -29,25 +41,17 @@ export function CustomerListPage() {
   const { customers, isLoading, isError, error } = useCustomers(debouncedSearch, backendStatusFilter)
   const createCustomer = useCreateCustomer()
 
-  const filteredCustomers = useMemo(() => {
-    let result = customers
-    // Fallback client-side guard in case backend ignores isActive
-    if (statusFilter !== 'all') {
-      const isActive = statusFilter === 'active'
-      result = result.filter((c) => c.isActive === isActive)
-    }
-    // Client-side search fallback for code matching (backend may only search by name)
-    if (debouncedSearch) {
-      const q = debouncedSearch.toLowerCase()
-      result = result.filter(
-        (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q),
-      )
-    }
-    return result
-  }, [customers, statusFilter, debouncedSearch])
-
   const normalizedCode = code.trim().toUpperCase()
-  const canCreate = name.trim().length >= 2 && normalizedCode.length >= 2
+  const normalizedColorHex = normalizeOptionalHexColor(colorHex)
+  const isColorValid = !colorHex.trim() || Boolean(normalizedColorHex)
+  const canCreate = name.trim().length >= 2 && normalizedCode.length >= 2 && isColorValid
+
+  const closeCreateModal = () => {
+    setIsCreateOpen(false)
+    setName('')
+    setCode('')
+    setColorHex('')
+  }
 
   const handleCreate = async () => {
     if (!canCreate) return
@@ -55,11 +59,10 @@ export function CustomerListPage() {
       const created = await createCustomer.mutateAsync({
         name: name.trim(),
         code: normalizedCode,
+        colorHex: normalizedColorHex,
       })
       success('Customer created')
-      setIsCreateOpen(false)
-      setName('')
-      setCode('')
+      closeCreateModal()
       navigate(`/customers/${created.id}`)
     } catch (err) {
       showError(err instanceof Error ? err.message : 'Failed to create customer')
@@ -114,7 +117,7 @@ export function CustomerListPage() {
             description={error instanceof Error ? error.message : 'Please try again.'}
             action={{ label: 'Create Customer', onClick: () => setIsCreateOpen(true) }}
           />
-        ) : filteredCustomers.length === 0 ? (
+        ) : customers.length === 0 ? (
           <EmptyState
             icon={<Users className="w-8 h-8 text-gray-400" />}
             title="No customers found"
@@ -134,15 +137,23 @@ export function CustomerListPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredCustomers.map((c) => (
+              {customers.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => navigate(`/customers/${c.id}`)}
                   className="hover:bg-gray-50 cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 font-medium text-gray-800">{c.name}</td>
                   <td className="px-4 py-3">
-                    <Badge variant="outline" size="sm">{c.code}</Badge>
+                    <div className="flex items-center gap-2.5">
+                      <CustomerColorDot colorHex={c.colorHex} />
+                      <span className="font-medium text-gray-800">{c.name}</span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="inline-flex items-center gap-1.5">
+                      <Badge variant="outline" size="sm">{c.code}</Badge>
+                      {c.colorHex ? <span className="text-[11px] text-gray-400 font-mono">{c.colorHex}</span> : null}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     {c.isActive
@@ -163,7 +174,7 @@ export function CustomerListPage() {
 
       <Modal
         isOpen={isCreateOpen}
-        onClose={() => setIsCreateOpen(false)}
+        onClose={closeCreateModal}
         title="Create Customer"
         size="md"
       >
@@ -186,11 +197,12 @@ export function CustomerListPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
+          <ColorField value={colorHex} onChange={setColorHex} label="Customer Color" />
           <p className="text-xs text-gray-500">
             Customer is the routing owner. After creation, configure sender patterns and email defaults from the customer detail page.
           </p>
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" size="sm" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button variant="secondary" size="sm" onClick={closeCreateModal}>Cancel</Button>
             <Button variant="primary" size="sm" onClick={handleCreate} isLoading={createCustomer.isPending} disabled={!canCreate}>
               Create
             </Button>

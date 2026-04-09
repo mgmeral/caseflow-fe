@@ -8,9 +8,15 @@ const scheduledState = vi.hoisted(() => ({
       id: 1,
       ticketId: 100,
       mailboxId: 1,
+      mailboxName: 'Main',
+      mailboxAddress: 'support@caseflow.com',
+      fromAddress: 'support@caseflow.com',
+      resolvedRecipient: 'customer@example.com',
       toAddress: 'customer@example.com',
       subject: 'Follow-up',
       status: 'PENDING',
+      failureReason: null,
+      failureCategory: null,
       sendNotBefore: '2026-04-10T09:00:00Z',
       canceledAt: null,
       sentAt: null,
@@ -20,9 +26,15 @@ const scheduledState = vi.hoisted(() => ({
       id: 2,
       ticketId: 100,
       mailboxId: 1,
+      mailboxName: 'Main',
+      mailboxAddress: 'support@caseflow.com',
+      fromAddress: 'support@caseflow.com',
+      resolvedRecipient: 'customer@example.com',
       toAddress: 'customer@example.com',
       subject: 'Reminder',
       status: 'FAILED',
+      failureReason: 'Mailbox unavailable',
+      failureCategory: 'SMTP_AUTH',
       sendNotBefore: '2026-04-09T09:00:00Z',
       canceledAt: null,
       sentAt: null,
@@ -57,6 +69,10 @@ describe('ScheduledEmailsCard', () => {
     expect(screen.getByText('History')).toBeInTheDocument()
     expect(screen.getByText('Follow-up')).toBeInTheDocument()
     expect(screen.getByText('Reminder')).toBeInTheDocument()
+    expect(screen.getAllByText('Mailbox Main (support@caseflow.com)').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('From support@caseflow.com').length).toBeGreaterThan(0)
+    expect(screen.getByText('Failure reason: Mailbox unavailable')).toBeInTheDocument()
+    expect(screen.getByText('Failure category: SMTP_AUTH')).toBeInTheDocument()
   })
 
   it('cancels pending scheduled emails with the dispatch id', () => {

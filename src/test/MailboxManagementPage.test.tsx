@@ -160,6 +160,18 @@ describe('MailboxManagementPage', () => {
 
     expect(screen.getByRole('button', { name: 'Other IMAP' })).toBeInTheDocument()
     expect(screen.getByDisplayValue('Password')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'Arm polling after activation' })).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Save Mailbox' })).toBeInTheDocument()
+  })
+
+  it('keeps only backend-backed status filtering controls in the list toolbar', () => {
+    renderPage()
+
+    expect(screen.getByPlaceholderText('Filter current page...')).toBeInTheDocument()
+    expect(screen.getByRole('combobox')).toBeInTheDocument()
+    expect(screen.queryByText('All Polling')).not.toBeInTheDocument()
+    expect(screen.queryByText('All Poll Status')).not.toBeInTheDocument()
+    expect(screen.getByText('Status filtering is backed by the backend. Polling state indicators below are informational only, and the quick filter applies to the currently loaded page.')).toBeInTheDocument()
   })
 
   it('switches to Gmail presets and keeps OAuth fields hidden', () => {
@@ -169,9 +181,9 @@ describe('MailboxManagementPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
     fireEvent.click(screen.getByRole('button', { name: /Advanced Settings/i }))
 
-    expect(screen.getByText('Normal Gmail sifrenizi degil, 2 Adimli Dogrulama sonrasi uretilen App Password kullanin.')).toBeInTheDocument()
-    expect(screen.getByText('IMAP username ve SMTP username cogunlukla tam email adresidir.')).toBeInTheDocument()
-    expect(screen.getByText('Onerilen ayarlar: imap.gmail.com:993 SSL, smtp.gmail.com:587 STARTTLS.')).toBeInTheDocument()
+    expect(screen.getByText('Gmail bağlantısı')).toBeInTheDocument()
+    expect(screen.getByText('Normal Gmail şifrenizi değil, App Password kullanın. App Password oluşturmak için Google hesabınızda 2 Adımlı Doğrulama açık olmalıdır.')).toBeInTheDocument()
+    expect(screen.getByText('Genelde IMAP Username ve SMTP Username alanlarına email adresiniz yazılır.')).toBeInTheDocument()
     expect(screen.getByDisplayValue('imap.gmail.com')).toBeInTheDocument()
     expect(screen.getByDisplayValue('smtp.gmail.com')).toBeInTheDocument()
     expect(screen.queryByLabelText('Tenant ID *')).not.toBeInTheDocument()
@@ -183,9 +195,9 @@ describe('MailboxManagementPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
     fireEvent.click(screen.getByRole('button', { name: 'Outlook / Microsoft 365' }))
 
-    expect(screen.getByText('Normal mailbox sifresi kullanilmaz; OAuth2 / Modern Auth gerekir.')).toBeInTheDocument()
-    expect(screen.getByText('Tenant ID, Client ID ve Client Secret doldurulmalidir.')).toBeInTheDocument()
-    expect(screen.getByText('Onerilen ayarlar: outlook.office365.com:993 SSL, smtp-mail.outlook.com:587 STARTTLS.')).toBeInTheDocument()
+    expect(screen.getByText('Microsoft 365 bağlantısı')).toBeInTheDocument()
+    expect(screen.getByText('Bu ekranda Outlook hesabınıza giriş yapmazsınız. Normal mailbox şifresi yerine, Microsoft 365 admin tarafından sağlanan bağlantı bilgilerini girersiniz.')).toBeInTheDocument()
+    expect(screen.getByText('Gerekli bilgiler: IMAP Username, Tenant ID, Client ID ve Client Secret.')).toBeInTheDocument()
     expect(screen.getByLabelText('Tenant ID *')).toBeInTheDocument()
     expect(screen.getByLabelText('Client ID *')).toBeInTheDocument()
     expect(screen.getByLabelText('Client Secret *')).toBeInTheDocument()
@@ -197,7 +209,7 @@ describe('MailboxManagementPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
 
-    expect(screen.getByText('Sunucu bilgilerini saglayiciniza gore manuel doldurun.')).toBeInTheDocument()
+    expect(screen.getByText('Host, port, username ve password alanlarını mail sağlayıcınızın verdiği bilgilere göre doldurun.')).toBeInTheDocument()
     expect(screen.getByLabelText('IMAP Password *')).toBeInTheDocument()
   })
 
@@ -219,9 +231,9 @@ describe('MailboxManagementPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
     fireEvent.click(screen.getByRole('button', { name: 'Outlook / Microsoft 365' }))
-    fireEvent.change(screen.getByLabelText('Name *'), { target: { value: 'Outlook Box' } })
+    fireEvent.change(screen.getByLabelText('Mailbox Name *'), { target: { value: 'Outlook Box' } })
     fireEvent.change(screen.getByLabelText('Email Address *'), { target: { value: 'helpdesk@contoso.com' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Mailbox' }))
 
     expect(await screen.findByText('Tenant ID is required for OAuth2.')).toBeInTheDocument()
     expect(screen.getByText('Client ID is required for OAuth2.')).toBeInTheDocument()
@@ -296,15 +308,25 @@ describe('MailboxManagementPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
     fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
 
-    fireEvent.change(screen.getByLabelText('Name *'), { target: { value: 'Risky mailbox' } })
+    fireEvent.change(screen.getByLabelText('Mailbox Name *'), { target: { value: 'Risky mailbox' } })
     fireEvent.change(screen.getByLabelText('Email Address *'), { target: { value: 'risk@example.com' } })
     fireEvent.change(screen.getByLabelText('IMAP Username *'), { target: { value: 'risk@example.com' } })
     fireEvent.change(screen.getByLabelText('IMAP Password *'), { target: { value: 'secret' } })
     fireEvent.change(screen.getByLabelText('Initial Sync'), { target: { value: 'SCAN_LAST_3_DAYS' } })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Arm polling after activation' }))
 
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Save Mailbox' }))
 
     expect(screen.getByText('Saving this mailbox with polling enabled can allow historical inbox scanning as soon as the mailbox is activated and polling runs.')).toBeInTheDocument()
+  })
+
+  it('shows an honest recovery note instead of fake admin mail operations', () => {
+    renderPage()
+
+    fireEvent.click(screen.getAllByTitle('Edit')[0])
+
+    expect(screen.getByText('Operational Recovery')).toBeInTheDocument()
+    expect(screen.getByText('Poll-now, cursor reset, ingress event retry, quarantine, and release actions are not exposed by the backend admin contract yet, so this screen does not simulate them.')).toBeInTheDocument()
   })
 
   it('keeps the existing secret placeholder text in edit mode', () => {
@@ -312,7 +334,7 @@ describe('MailboxManagementPage', () => {
 
     fireEvent.click(screen.getAllByTitle('Edit')[1])
 
-    expect(screen.getByPlaceholderText('Bos birakirsan mevcut deger korunur')).toBeInTheDocument()
+    expect(screen.getAllByPlaceholderText('Boş bırakırsanız mevcut değer korunur').length).toBeGreaterThan(0)
   })
 
   it('shows field helper text for the main credential inputs', () => {
@@ -321,10 +343,10 @@ describe('MailboxManagementPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
     fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
 
-    expect(screen.getByText('This should be the mailbox address CaseFlow will read and optionally send from.')).toBeInTheDocument()
-    expect(screen.getByText('Usually the full email address. Override only if your provider requires a different login name.')).toBeInTheDocument()
-    expect(screen.getByText('Use the mailbox password or app password required by your provider. Password auth is hidden for Outlook.')).toBeInTheDocument()
-    expect(screen.getByText('Usually the same as the email address when mailbox-specific SMTP auth is enabled.')).toBeInTheDocument()
-    expect(screen.getByText('Controls how much historical inbox content is scanned before steady-state polling starts.')).toBeInTheDocument()
+    expect(screen.getByText('Dinlenecek gerçek mailbox adresi.')).toBeInTheDocument()
+    expect(screen.getByText('Çoğu durumda mailbox adresiyle aynıdır.')).toBeInTheDocument()
+    expect(screen.getByText('Gmail için normal şifre değil, App Password kullanın.')).toBeInTheDocument()
+    expect(screen.getByText('Genelde mailbox adresiyle aynıdır.')).toBeInTheDocument()
+    expect(screen.getByText('İlk kurulumda eski maillerin taranıp taranmayacağını belirler. Güvenli başlangıç için New messages only önerilir.')).toBeInTheDocument()
   })
 })

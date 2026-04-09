@@ -11,59 +11,7 @@ import type {
 import { apiClient, ApiError } from './api.client'
 import { normalizeStatus, normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
 import { DEFAULT_TICKET_SORT, isSupportedTicketSortField } from '@/lib/ticketQueryContracts'
-
-type NormalizedMention = NonNullable<TicketMessage['mentions']>[number]
-
-// ---------------------------------------------------------------------------
-// Helpers: map backend DTOs to TicketMessage view model
-// ---------------------------------------------------------------------------
-
-function noteToMessage(n: NoteResponse): TicketMessage {
-  const typeMap: Record<string, TicketMessage['type']> = {
-    INTERNAL: 'internal_note',
-    INFO: 'system_event',
-    INVESTIGATION: 'internal_note',
-    ESCALATION: 'internal_note',
-  }
-  return {
-    id: n.id,
-    ticketId: n.ticketId,
-    type: typeMap[n.type] ?? 'internal_note',
-    authorId: n.createdByUser?.id != null ? String(n.createdByUser.id) : n.createdBy != null ? String(n.createdBy) : null,
-    authorName: n.createdByUser?.fullName ?? String(n.createdBy ?? ''),
-    authorUser: n.createdByUser
-      ? {
-          id: n.createdByUser.id != null ? String(n.createdByUser.id) : null,
-          fullName: n.createdByUser.fullName ?? '',
-          username: n.createdByUser.username ?? null,
-          email: n.createdByUser.email ?? null,
-        }
-      : null,
-    content: n.content,
-    mentions: Array.isArray(n.mentions)
-      ? n.mentions
-          .map((mention) => {
-            const userId = mention.mentionedUserId ?? mention.userId
-            if (userId == null) return null
-            const normalizedMention: NormalizedMention = {
-              userId: String(userId),
-              displayText: String(mention.displayText ?? mention.fullName ?? mention.username ?? ''),
-              fullName: mention.fullName ?? null,
-              username: mention.username ?? null,
-              email: mention.email ?? null,
-              startIndex: mention.startIndex ?? null,
-              endIndex: mention.endIndex ?? null,
-            }
-            return normalizedMention
-          })
-          .filter((mention): mention is NormalizedMention => Boolean(mention))
-      : [],
-    createdAt: n.createdAt,
-    attachments: [],
-    eventType: n.eventType ?? null,
-    metadataJson: n.metadataJson ?? null,
-  }
-}
+import { mapNoteResponseToTicketMessage } from '@/lib/noteMessage'
 
 function emailToMessage(e: EmailDocumentResponse): TicketMessage {
   return {
@@ -168,7 +116,7 @@ export const ticketService = {
     )
 
     return [
-      ...notes.map(noteToMessage),
+      ...notes.map(mapNoteResponseToTicketMessage),
       ...emailDetails.map(emailToMessage),
     ].sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   },
@@ -236,7 +184,7 @@ export const ticketService = {
       type: 'INTERNAL',
       mentionedUserIds,
     })
-    return noteToMessage(note)
+    return mapNoteResponseToTicketMessage(note)
   },
 
   addPublicReply: async (

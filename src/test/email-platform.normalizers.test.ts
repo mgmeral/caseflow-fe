@@ -109,6 +109,42 @@ describe('email-platform normalizers', () => {
       expect(result.defaultPriority).toBeNull()
       expect(result.lastPollAt).toBeNull()
     })
+
+    it('does not invent a polling status when the backend omits it', () => {
+      const result = normalizeMailbox({
+        id: 'mb-3',
+        name: 'No Status',
+        address: 'nostatus@example.com',
+        displayName: null,
+        providerType: 'IMAP',
+        inboundMode: 'POLLING',
+        outboundMode: 'SMTP',
+        imapHost: 'imap.example.com',
+        imapPort: 993,
+        imapUsername: 'nostatus@example.com',
+        imapUseSsl: true,
+        imapFolder: 'INBOX',
+        smtpHost: null,
+        smtpPort: null,
+        smtpUsername: null,
+        smtpUseSsl: null,
+        initialSyncStrategy: null,
+        pollingEnabled: false,
+        pollIntervalSeconds: 60,
+        lastPollAt: null,
+        lastPollError: 'Connection timeout',
+        isActive: false,
+        defaultGroupId: null,
+        defaultPriority: null,
+        lastSuccessfulInboundAt: null,
+        lastSuccessfulOutboundAt: null,
+        createdAt: '2024-12-01T00:00:00Z',
+        updatedAt: '2024-12-01T00:00:00Z',
+      })
+
+      expect(result.pollingStatus).toBeNull()
+      expect(result.lastPollError).toBe('Connection timeout')
+    })
   })
 
   describe('normalizeMailboxList', () => {

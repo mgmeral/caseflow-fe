@@ -206,4 +206,27 @@ describe('mailboxService backend contract', () => {
     expect(imapResult.success).toBe(true)
     expect(smtpResult.success).toBe(false)
   })
+
+  it('defaults new mailbox payloads to inactive with polling off when the caller does not opt in', async () => {
+    mockPost.mockResolvedValueOnce({ id: 'm2' })
+
+    await mailboxService.create({
+      name: 'Draft Mailbox',
+      displayName: null,
+      address: 'draft@caseflow.com',
+      providerType: 'IMAP',
+      inboundMode: 'POLLING',
+      outboundMode: 'SMTP',
+      imapHost: 'imap.caseflow.com',
+      imapPort: 993,
+      imapUsername: 'draft@caseflow.com',
+      imapFolder: 'INBOX',
+      initialSyncStrategy: 'NEW_MESSAGES_ONLY',
+    })
+
+    expect(mockPost).toHaveBeenCalledWith('/admin/mailboxes', expect.objectContaining({
+      isActive: false,
+      pollingEnabled: false,
+    }))
+  })
 })

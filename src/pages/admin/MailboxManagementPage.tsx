@@ -128,11 +128,9 @@ const FIELD_HELPERS = {
   oauthClientId: 'Bağlantı için kullanılan uygulama kimliği.',
   oauthClientSecret: 'Bağlantı için kullanılan gizli anahtar. Boş bırakırsanız mevcut değer korunur.',
   imapFolder: 'Genelde INBOX kullanılır.',
-  pollingEnabled: 'Aktifse bu mailbox otomatik olarak belirli aralıklarla taranır.',
+  pollingEnabled: 'Yeni mailboxlar polling kapalı kaydedilir. Bu seçenek yalnızca mailbox daha sonra aktive edildiğinde polling davranışını hazırlar.',
   initialSyncStrategy: 'İlk kurulumda eski maillerin taranıp taranmayacağını belirler. Güvenli başlangıç için New messages only önerilir.',
 } as const
-
-const POLLING_STATUSES = ['RUNNING', 'IDLE', 'PAUSED', 'ERROR']
 
 function getInitialSyncStrategyLabel(value: InitialSyncStrategy | null | undefined): string {
   const normalized = normalizeInitialSyncStrategy(value)
@@ -183,14 +181,10 @@ function getRiskSummary(strategy: InitialSyncStrategy | null | undefined): strin
   return 'This mailbox is configured to scan historical inbox mail before settling into new-message polling.'
 }
 
-function pollingBadge(status: string): { variant: 'success' | 'warning' | 'error' | 'default'; label: string } {
-  switch (status) {
-    case 'RUNNING': return { variant: 'success', label: 'Running' }
-    case 'IDLE': return { variant: 'default', label: 'Idle' }
-    case 'PAUSED': return { variant: 'warning', label: 'Paused' }
-    case 'ERROR': return { variant: 'error', label: 'Error' }
-    default: return { variant: 'default', label: status }
-  }
+function pollingBadge(enabled: boolean): { variant: 'success' | 'default'; label: string } {
+  return enabled
+    ? { variant: 'success', label: 'Polling On' }
+    : { variant: 'default', label: 'Polling Off' }
 }
 
 function formatTimestamp(value: string | null): string {
@@ -306,6 +300,10 @@ export function MailboxManagementPage() {
     : form.mailProvider === 'GMAIL'
       ? 'Authentication: Password / App Password'
       : `Authentication: ${getAuthTypeLabel(form.authType)}`
+  const quickFilterActive = search.trim().length > 0
+  const headerCountLabel = quickFilterActive
+    ? `${filteredMailboxes.length} of ${mailboxes.length} mailboxes on this page`
+    : `${filteredMailboxes.length} mailbox${filteredMailboxes.length !== 1 ? 'es' : ''}`
 
   const updateForm = (updater: (current: MailboxFormState) => MailboxFormState) => {
     setForm((current) => updater(current))
@@ -504,63 +502,45 @@ Mailbox adresi: ${mailboxAddress}`
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Mailboxes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{filteredMailboxes.length} mailbox{filteredMailboxes.length !== 1 ? 'es' : ''}</p>
+          <p className="text-sm text-gray-500 mt-0.5">{headerCountLabel}</p>
         </div>
         <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={openCreate}>
           New Mailbox
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search mailboxes..."
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value)
-              setFilters((current) => ({ ...current, page: 0 }))
-            }}
-            className="w-64 pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Filter current page..."
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value)
+                setFilters((current) => ({ ...current, page: 0 }))
+              }}
+              className="w-64 pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
+          <select
+            value={filters.active === undefined ? '' : String(filters.active)}
+            onChange={(event) => setFilters((current) => ({
+              ...current,
+              active: event.target.value === '' ? undefined : event.target.value === 'true',
+              page: 0,
+            }))}
+            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          >
+            <option value="">All Status</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
         </div>
-        <select
-          value={filters.active === undefined ? '' : String(filters.active)}
-          onChange={(event) => setFilters((current) => ({
-            ...current,
-            active: event.target.value === '' ? undefined : event.target.value === 'true',
-            page: 0,
-          }))}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        >
-          <option value="">All Status</option>
-          <option value="true">Active</option>
-          <option value="false">Inactive</option>
-        </select>
-        <select
-          value={filters.pollingEnabled === undefined ? '' : String(filters.pollingEnabled)}
-          onChange={(event) => setFilters((current) => ({
-            ...current,
-            pollingEnabled: event.target.value === '' ? undefined : event.target.value === 'true',
-            page: 0,
-          }))}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        >
-          <option value="">All Polling</option>
-          <option value="true">Polling On</option>
-          <option value="false">Polling Off</option>
-        </select>
-        <select
-          value={filters.pollingStatus ?? ''}
-          onChange={(event) => setFilters((current) => ({ ...current, pollingStatus: event.target.value || undefined, page: 0 }))}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-        >
-          <option value="">All Poll Status</option>
-          {POLLING_STATUSES.map((status) => (
-            <option key={status} value={status}>{status}</option>
-          ))}
-        </select>
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+          Status filtering is backed by the backend. Polling state indicators below are informational only, and the quick filter applies to the currently loaded page.
+        </div>
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -635,14 +615,12 @@ Mailbox adresi: ${mailboxAddress}`
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {mailbox.pollingEnabled ? (
-                          <div className="space-y-1">
-                            <Badge variant={pollingBadge(mailbox.pollingStatus).variant} size="sm">{pollingBadge(mailbox.pollingStatus).label}</Badge>
-                            <div className="text-xs text-gray-500">Every {mailbox.pollIntervalSeconds}s</div>
+                        <div className="space-y-1">
+                          <Badge variant={pollingBadge(mailbox.pollingEnabled).variant} size="sm">{pollingBadge(mailbox.pollingEnabled).label}</Badge>
+                          <div className="text-xs text-gray-500">
+                            {mailbox.pollingEnabled ? `Configured interval ${mailbox.pollIntervalSeconds}s` : 'No polling schedule armed'}
                           </div>
-                        ) : (
-                          <Badge variant="default" size="sm">Off</Badge>
-                        )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         {mailbox.isActive ? (
@@ -670,6 +648,12 @@ Mailbox adresi: ${mailboxAddress}`
                           <span className="font-medium text-gray-600">Last poll error:</span>{' '}
                           <span className={mailbox.lastPollError ? 'text-red-600' : 'text-gray-400'}>{mailbox.lastPollError ?? 'None'}</span>
                         </div>
+                        {mailbox.pollingStatus && (
+                          <div>
+                            <span className="font-medium text-gray-600">Backend poll state:</span>{' '}
+                            <span className="text-gray-700">{mailbox.pollingStatus}</span>
+                          </div>
+                        )}
                         <div className="mt-1">
                           <span className="font-medium text-gray-600">IMAP test:</span>{' '}
                           <span className={imapStatus.tone}>{imapStatus.label}</span>
@@ -1048,7 +1032,7 @@ Mailbox adresi: ${mailboxAddress}`
                   onChange={(event) => updateForm((current) => ({ ...current, pollingEnabled: event.target.checked }))}
                   className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                Polling Enabled
+                Arm polling after activation
               </label>
               <FieldHelper text={FIELD_HELPERS.pollingEnabled} />
             </div>
@@ -1075,9 +1059,17 @@ Mailbox adresi: ${mailboxAddress}`
               </div>
             )}
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
-              Saving stores mailbox configuration only. Activation and inbound polling remain separate controls. IMAP and SMTP tests are separate checks and IMAP success alone does not confirm outbound send health.
+              Saving stores mailbox configuration only. New mailboxes are saved inactive and polling off by default. Activation remains a separate operator action, and polling only starts if this mailbox is later activated with polling armed. IMAP and SMTP tests are separate checks and IMAP success alone does not confirm outbound send health.
             </div>
           </div>
+
+          {editingMailbox && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
+              <div className="font-semibold text-slate-900">Operational Recovery</div>
+              <div className="mt-1">Available in this environment: activate or deactivate the mailbox, then run IMAP and SMTP connection tests against the saved configuration.</div>
+              <div className="mt-1">Poll-now, cursor reset, ingress event retry, quarantine, and release actions are not exposed by the backend admin contract yet, so this screen does not simulate them.</div>
+            </div>
+          )}
 
           <div className="border-t border-gray-100 pt-5 space-y-3">
             <button
@@ -1282,7 +1274,7 @@ Mailbox adresi: ${mailboxAddress}`
             )}
             <Button variant="secondary" size="sm" onClick={closeModal}>Cancel</Button>
             <Button variant="primary" size="sm" onClick={handleSave} isLoading={saving}>
-              {modalMode === 'create' ? 'Create' : 'Save'}
+              {modalMode === 'create' ? 'Save Mailbox' : 'Save'}
             </Button>
           </div>
         </div>

@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useCustomerDetail, useCustomerTickets, useDeleteCustomer } from '@/hooks/useCustomers'
+import {
+  useActivateCustomer,
+  useCustomerDetail,
+  useCustomerTickets,
+  useDeactivateCustomer,
+  useDeleteCustomer,
+  useUpdateCustomer,
+} from '@/hooks/useCustomers'
 import { useCustomerReport } from '@/hooks/useReports'
 import {
   useCreateCustomerRoutingRule,
@@ -16,12 +23,17 @@ import { useGroupsQuery } from '@/hooks/useUsers'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errors'
-import type { UpsertCustomerEmailSettingsRequest, UpsertCustomerEmailRoutingRuleRequest } from '@/types/api.types'
+import type {
+  UpdateCustomerRequest,
+  UpsertCustomerEmailSettingsRequest,
+  UpsertCustomerEmailRoutingRuleRequest,
+} from '@/types/api.types'
 import type { CustomerEmailRoutingRule } from '@/types/email.types'
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge'
 import { PriorityBadge } from '@/components/tickets/PriorityBadge'
 import { Badge } from '@/components/shared/Badge'
 import { Button } from '@/components/shared/Button'
+import { ColorField, normalizeOptionalHexColor } from '@/components/shared/ColorField'
 import { Modal } from '@/components/shared/Modal'
 import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
@@ -44,6 +56,20 @@ function getRoutingRuleAllowSubdomains(rule: CustomerEmailRoutingRule, inherited
   return '—'
 }
 
+function formatCustomerTimestamp(value: string | null | undefined, pattern: string) {
+  return value ? format(new Date(value), pattern) : '—'
+}
+
+function CustomerColorDot({ colorHex, size = 'md' }: { colorHex: string | null; size?: 'sm' | 'md' }) {
+  return (
+    <span
+      className={size === 'sm' ? 'h-3 w-3 rounded-full border border-gray-200' : 'h-4 w-4 rounded-full border border-gray-200'}
+      style={{ backgroundColor: colorHex ?? '#e5e7eb' }}
+      aria-hidden="true"
+    />
+  )
+}
+
 export function CustomerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -60,6 +86,9 @@ export function CustomerDetailPage() {
   } = useCustomerReport(id)
   const { data: emailSettings, isLoading: settingsLoading } = useCustomerEmailSettings(id)
   const { data: routingRules = [], isLoading: rulesLoading } = useCustomerRoutingRules(id)
+  const updateCustomer = useUpdateCustomer()
+  const activateCustomer = useActivateCustomer()
+  const deactivateCustomer = useDeactivateCustomer()
   const deleteCustomer = useDeleteCustomer()
   const upsertSettings = useUpsertCustomerEmailSettings(id)
   const createRule = useCreateCustomerRoutingRule(id)
@@ -93,6 +122,10 @@ export function CustomerDetailPage() {
   const [savingRule, setSavingRule] = useState(false)
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null)
   const [showDeleteCustomerConfirm, setShowDeleteCustomerConfirm] = useState(false)
+  const [isEditCustomerOpen, setIsEditCustomerOpen] = useState(false)
+  const [customerName, setCustomerName] = useState('')
+  const [customerCode, setCustomerCode] = useState('')
+  const [customerColorHex, setCustomerColorHex] = useState('')
 
   const supportsDefaultStatus = emailSettings != null && Object.prototype.hasOwnProperty.call(emailSettings, 'defaultStatus')
 
@@ -110,6 +143,57 @@ export function CustomerDetailPage() {
         <EmptyState title="Customer not found" description="This customer doesn't exist." />
       </div>
     )
+  }
+
+  const normalizedCustomerCode = customerCode.trim().toUpperCase()
+  const normalizedCustomerColorHex = normalizeOptionalHexColor(customerColorHex)
+  const isCustomerColorValid = !customerColorHex.trim() || Boolean(normalizedCustomerColorHex)
+  const canSaveCustomer = customerName.trim().length >= 2 && normalizedCustomerCode.length >= 2 && isCustomerColorValid
+
+  const openEditCustomer = () => {
+    setCustomerName(customer.name)
+    setCustomerCode(customer.code)
+    setCustomerColorHex(customer.colorHex ?? '')
+    setIsEditCustomerOpen(true)
+  }
+
+  const closeEditCustomer = () => {
+    setIsEditCustomerOpen(false)
+    setCustomerName('')
+    setCustomerCode('')
+    setCustomerColorHex('')
+  }
+
+  const handleSaveCustomer = async () => {
+    if (!canSaveCustomer) return
+
+    const payload: UpdateCustomerRequest = {
+      name: customerName.trim(),
+      code: normalizedCustomerCode,
+      colorHex: normalizedCustomerColorHex,
+    }
+
+    try {
+      await updateCustomer.mutateAsync({ id, payload })
+      success('Customer updated')
+      closeEditCustomer()
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to update customer')
+    }
+  }
+
+  const handleToggleCustomerStatus = async () => {
+    try {
+      if (customer.isActive) {
+        await deactivateCustomer.mutateAsync(id)
+        success('Customer deactivated')
+      } else {
+        await activateCustomer.mutateAsync(id)
+        success('Customer activated')
+      }
+    } catch (err) {
+      showError(err instanceof Error ? err.message : 'Failed to update customer status')
+    }
   }
 
   // --- email settings handlers ---
@@ -280,19 +364,20 @@ export function CustomerDetailPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
+              <CustomerColorDot colorHex={customer.colorHex} />
               <h1 className="text-xl font-bold text-gray-900">{customer.name}</h1>
               <Badge variant="outline" size="sm">{customer.code}</Badge>
+              {customer.colorHex ? <span className="text-xs font-mono text-gray-400">{customer.colorHex}</span> : null}
               {customer.isActive
                 ? <Badge variant="success" size="sm">Active</Badge>
                 : <Badge variant="default" size="sm">Inactive</Badge>}
             </div>
             <div className="text-xs text-gray-400 mt-1">
-              Created {format(new Date(customer.createdAt), 'MMM d, yyyy')}
-              {customer.updatedAt && ` · Updated ${format(new Date(customer.updatedAt), 'MMM d, yyyy')}`}
+              Created {formatCustomerTimestamp(customer.createdAt, 'MMM d, yyyy')}
+              {customer.updatedAt && ` · Updated ${formatCustomerTimestamp(customer.updatedAt, 'MMM d, yyyy')}`}
             </div>
           </div>
-          {/* Quick status indicators */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap justify-end">
             {showEmailTab && emailSettings && (
               <div className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full ${emailSettings.isEnabled ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                 <Mail size={12} />
@@ -305,6 +390,18 @@ export function CustomerDetailPage() {
                 {activeRoutingRules.length} routing rule{activeRoutingRules.length !== 1 ? 's' : ''}
               </div>
             )}
+            <Button variant="secondary" size="sm" leftIcon={<Pencil size={12} />} onClick={openEditCustomer}>
+              Edit
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={customer.isActive ? <ToggleRight size={12} /> : <ToggleLeft size={12} />}
+              onClick={handleToggleCustomerStatus}
+              isLoading={activateCustomer.isPending || deactivateCustomer.isPending}
+            >
+              {customer.isActive ? 'Deactivate' : 'Activate'}
+            </Button>
             <Button variant="danger" size="sm" leftIcon={<Trash2 size={12} />} onClick={() => setShowDeleteCustomerConfirm(true)}>
               Delete Customer
             </Button>
@@ -338,9 +435,10 @@ export function CustomerDetailPage() {
             <div className="space-y-3 text-sm">
               <InfoRow label="Customer ID" value={customer.id} />
               <InfoRow label="Code" value={customer.code} />
+              <InfoRow label="Color" value={customer.colorHex ?? '—'} />
               <InfoRow label="Status" value={customer.isActive ? 'Active' : 'Inactive'} />
-              <InfoRow label="Created" value={format(new Date(customer.createdAt), 'dd MMM yyyy, HH:mm')} />
-              <InfoRow label="Last Updated" value={format(new Date(customer.updatedAt), 'dd MMM yyyy, HH:mm')} />
+              <InfoRow label="Created" value={formatCustomerTimestamp(customer.createdAt, 'dd MMM yyyy, HH:mm')} />
+              <InfoRow label="Last Updated" value={formatCustomerTimestamp(customer.updatedAt, 'dd MMM yyyy, HH:mm')} />
             </div>
           </div>
 
@@ -728,6 +826,41 @@ export function CustomerDetailPage() {
           )}
         </div>
       )}
+
+      <Modal
+        isOpen={isEditCustomerOpen}
+        onClose={closeEditCustomer}
+        title="Edit Customer"
+        size="md"
+      >
+        <div className="space-y-4 p-1">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Customer Name *</label>
+            <input
+              value={customerName}
+              onChange={(event) => setCustomerName(event.target.value)}
+              placeholder="e.g. Akbank"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Customer Code *</label>
+            <input
+              value={customerCode}
+              onChange={(event) => setCustomerCode(event.target.value.toUpperCase())}
+              placeholder="e.g. AKBANK"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <ColorField value={customerColorHex} onChange={setCustomerColorHex} label="Customer Color" />
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" size="sm" onClick={closeEditCustomer}>Cancel</Button>
+            <Button variant="primary" size="sm" onClick={handleSaveCustomer} isLoading={updateCustomer.isPending} disabled={!canSaveCustomer}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Routing rule modal */}
       <Modal

@@ -37,7 +37,7 @@ export function NotesList({ notes }: NotesListProps) {
 /* ── NoteItem ────────────────────────────────────────── */
 
 function NoteItem({ note }: { note: TicketMessage }) {
-  const displayName = note.authorUser?.fullName || note.authorName
+  const authorLabel = note.authorName || 'Unknown user'
 
   return (
     <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 px-3.5 py-2.5">
@@ -45,7 +45,7 @@ function NoteItem({ note }: { note: TicketMessage }) {
         <MentionText content={note.content} mentions={note.mentions} />
       </p>
       <div className="mt-2 flex items-center justify-between text-[11px] text-gray-400">
-        <span className="font-medium text-amber-700">{displayName}</span>
+        <span className="font-medium text-amber-700">{authorLabel}</span>
         <span>{format(new Date(note.createdAt), 'MMM d, HH:mm')}</span>
       </div>
     </div>

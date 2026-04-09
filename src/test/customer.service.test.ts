@@ -38,8 +38,7 @@ describe('customerService persistence contract', () => {
         name: 'Akbank',
         code: 'AKBANK',
         isActive: true,
-        createdAt: '2025-01-01T00:00:00Z',
-        updatedAt: '2025-01-02T00:00:00Z',
+        colorHex: '#0d5ac9',
       },
     ])
 
@@ -52,8 +51,9 @@ describe('customerService persistence contract', () => {
         name: 'Akbank',
         code: 'AKBANK',
         isActive: true,
-        createdAt: '2025-01-01T00:00:00Z',
-        updatedAt: '2025-01-02T00:00:00Z',
+        colorHex: '#0d5ac9',
+        createdAt: null,
+        updatedAt: null,
       },
     ])
   })
@@ -64,6 +64,7 @@ describe('customerService persistence contract', () => {
       name: 'Akbank',
       code: 'AKBANK',
       isActive: true,
+      colorHex: '#0d5ac9',
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-01T00:00:00Z',
     })
@@ -72,15 +73,16 @@ describe('customerService persistence contract', () => {
       name: 'Akbank Updated',
       code: 'AKBANK',
       isActive: true,
+      colorHex: null,
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-03T00:00:00Z',
     })
 
-    await customerService.create({ name: 'Akbank', code: 'AKBANK' })
-    await customerService.update('5', { name: 'Akbank Updated', code: 'AKBANK' })
+    await customerService.create({ name: 'Akbank', code: 'akbank', colorHex: '#0d5ac9' })
+    await customerService.update('5', { name: 'Akbank Updated', code: 'akbank', colorHex: '' as unknown as null })
 
-    expect(mockPost).toHaveBeenCalledWith('/customers', { name: 'Akbank', code: 'AKBANK' })
-    expect(mockPut).toHaveBeenCalledWith('/customers/5', { name: 'Akbank Updated', code: 'AKBANK' })
+    expect(mockPost).toHaveBeenCalledWith('/customers', { name: 'Akbank', code: 'AKBANK', colorHex: '#0d5ac9' })
+    expect(mockPut).toHaveBeenCalledWith('/customers/5', { name: 'Akbank Updated', code: 'AKBANK', colorHex: null })
   })
 
   it('activates and deactivates customer via backend', async () => {
@@ -89,6 +91,7 @@ describe('customerService persistence contract', () => {
       name: 'Akbank',
       code: 'AKBANK',
       isActive: true,
+      colorHex: '#0d5ac9',
       createdAt: '2025-01-01T00:00:00Z',
       updatedAt: '2025-01-03T00:00:00Z',
     })

@@ -82,7 +82,6 @@ function normalizeAttachment(attachment: TicketEmailAttachmentResponse): EmailAt
 }
 
 export function normalizeMailbox(mailbox: MailboxResponse): Mailbox {
-  const pollingStatus = mailbox.pollingStatus ?? (mailbox.lastPollError ? 'ERROR' : 'IDLE')
   const initialSyncStrategy = normalizeInitialSyncStrategy(mailbox.initialSyncStrategy)
   const cursorInitStrategy = normalizeInitialSyncStrategy(mailbox.cursorInitStrategy as InitialSyncStrategy | null | undefined) ?? mailbox.cursorInitStrategy ?? null
   const authType = normalizeMailboxAuthType(mailbox.authType)
@@ -110,13 +109,13 @@ export function normalizeMailbox(mailbox: MailboxResponse): Mailbox {
     smtpUsername: mailbox.smtpUsername ?? null,
     smtpStarttls: mailbox.smtpStarttls ?? null,
     smtpUseSsl: mailbox.smtpUseSsl ?? null,
-    pollingEnabled: mailbox.pollingEnabled ?? true,
+    pollingEnabled: mailbox.pollingEnabled ?? false,
     pollIntervalSeconds: mailbox.pollIntervalSeconds ?? 60,
     initialSyncStrategy,
     cursorInitStrategy,
     lastSeenUid: mailbox.lastSeenUid != null ? String(mailbox.lastSeenUid) : null,
     activationState: mailbox.activationState ?? null,
-    pollingStatus,
+    pollingStatus: mailbox.pollingStatus ?? null,
     isActive: mailbox.isActive,
     defaultGroupId: mailbox.defaultGroupId != null ? String(mailbox.defaultGroupId) : null,
     defaultPriority: mailbox.defaultPriority ?? null,

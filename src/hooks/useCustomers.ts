@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { customerService } from '@/services/customer.service'
+import type { CreateCustomerRequest, UpdateCustomerRequest } from '@/types/api.types'
 
 export function useCustomers(search = '', isActive?: boolean) {
   const { data, isLoading, ...rest } = useQuery({
@@ -31,7 +32,7 @@ export function useCustomerTickets(customerId: string) {
 export function useCreateCustomer() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (payload: { name: string; code: string }) => customerService.create(payload),
+    mutationFn: (payload: CreateCustomerRequest) => customerService.create(payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['customers'] })
     },
@@ -41,12 +42,40 @@ export function useCreateCustomer() {
 export function useUpdateCustomer() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, payload }: { id: string; payload: { name: string; code: string } }) =>
+    mutationFn: ({ id, payload }: { id: string; payload: UpdateCustomerRequest }) =>
       customerService.update(id, payload),
     onSuccess: async (_data, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['customers'] }),
         queryClient.invalidateQueries({ queryKey: ['customer', variables.id] }),
+      ])
+    },
+  })
+}
+
+export function useActivateCustomer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => customerService.activate(id),
+    onSuccess: async (_data, id) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
+        queryClient.invalidateQueries({ queryKey: ['customer', id] }),
+      ])
+    },
+  })
+}
+
+export function useDeactivateCustomer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => customerService.deactivate(id),
+    onSuccess: async (_data, id) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['customers'] }),
+        queryClient.invalidateQueries({ queryKey: ['customer', id] }),
       ])
     },
   })
