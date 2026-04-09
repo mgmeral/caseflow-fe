@@ -143,7 +143,22 @@ export interface TicketMessage {
   type: MessageType
   authorId: string | null
   authorName: string
+  authorUser?: {
+    id: string | null
+    fullName: string
+    username?: string | null
+    email?: string | null
+  } | null
   content: string
+  mentions?: Array<{
+    userId: string
+    displayText: string
+    fullName?: string | null
+    username?: string | null
+    email?: string | null
+    startIndex?: number | null
+    endIndex?: number | null
+  }>
   createdAt: string
   attachments: string[]
   eventType?: string | null

@@ -2,12 +2,12 @@ import { useCallback, useRef, useState } from 'react'
 import { Lock, Send } from 'lucide-react'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useUsers } from '@/hooks/useUsers'
-import { detectMentionQuery, filterMentionUsers, insertMention } from '@/lib/mentions'
+import { collectMentionedUserIds, detectMentionQuery, filterMentionUsers, insertMention } from '@/lib/mentions'
 import { MentionSuggestions } from './MentionSuggestions'
 import type { User } from '@/types/user.types'
 
 interface ComposeAreaProps {
-  onSendNote: (content: string) => void
+  onSendNote: (payload: { content: string; mentionedUserIds: string[] }) => void
   isSendingNote: boolean
 }
 
@@ -15,6 +15,7 @@ export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
   const { canAddInternalNote } = usePermissions()
   const { users } = useUsers()
   const [content, setContent] = useState('')
+  const [selectedMentions, setSelectedMentions] = useState<Array<{ userId: string; displayText: string }>>([])
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -25,8 +26,12 @@ export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
 
   const handleSend = () => {
     if (!content.trim()) return
-    onSendNote(content.trim())
+    onSendNote({
+      content: content.trim(),
+      mentionedUserIds: collectMentionedUserIds(content, selectedMentions),
+    })
     setContent('')
+    setSelectedMentions([])
     setMentionQuery(null)
   }
 
@@ -44,6 +49,10 @@ export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
       const pos = textareaRef.current?.selectionStart ?? content.length
       const { newText, newCursorPos } = insertMention(content, pos, user)
       setContent(newText)
+      setSelectedMentions((current) => {
+        if (current.some((mention) => mention.userId === user.id)) return current
+        return [...current, { userId: user.id, displayText: user.fullName }]
+      })
       setMentionQuery(null)
       setActiveIndex(0)
       // Restore cursor after React re-render

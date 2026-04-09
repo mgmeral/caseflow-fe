@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { customerService } from '@/services/customer.service'
 
-export function useCustomers(search = '', segment?: string) {
+export function useCustomers(search = '', isActive?: boolean) {
   const { data, isLoading, ...rest } = useQuery({
-    queryKey: ['customers', search, segment],
-    queryFn: () => customerService.getAll(search, segment),
+    queryKey: ['customers', search, isActive],
+    queryFn: () => customerService.getAll(search, isActive),
     staleTime: 60_000,
   })
   return { customers: data ?? [], isLoading, ...rest }

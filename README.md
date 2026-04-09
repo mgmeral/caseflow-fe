@@ -34,7 +34,7 @@ See `.env.example` for all available values.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_URL` | `http://localhost:8080/api` | Backend base URL (all API calls are prefixed with this) |
+| `VITE_API_URL` | `/api` | Runtime API base path used by the browser. Keep this relative in local dev and gateway/ngrok mode. |
 | `VITE_USE_MOCKS` | `false` | Set to `true` to run without a backend using in-memory mock data |
 
 ## Running modes
@@ -42,9 +42,9 @@ See `.env.example` for all available values.
 ### Real API mode (default)
 ```env
 VITE_USE_MOCKS=false
-VITE_API_URL=http://localhost:8080/api
+VITE_API_URL=/api
 ```
-All services call the real backend. The dev server proxies `/api/*` requests to the origin in `VITE_API_URL`, stripping the `/api` prefix before forwarding.
+All services call relative `/api/*` routes. In direct Vite dev, the dev server proxies `/api/*` to `http://localhost:8080` and preserves the full `/api/...` path. In gateway or ngrok mode, the browser stays same-origin and the gateway forwards `/api/*` to the backend.
 
 **Auth note**: Login calls `POST /auth/login → { token, user }`. If that endpoint is not yet deployed on the backend, the login form will show a 404 error — switch to mock mode until the endpoint is available.
 
@@ -95,7 +95,7 @@ Build the production image:
 
 ```bash
 docker build \
-  --build-arg VITE_API_URL=http://localhost:8080/api \
+  --build-arg VITE_API_URL=/api \
   --build-arg VITE_USE_MOCKS=false \
   -t csm-crm-fe .
 ```
@@ -113,7 +113,7 @@ Notes:
 
 ## API contract
 
-The frontend expects a REST backend at `VITE_API_URL` with the following endpoints:
+The frontend calls `VITE_API_URL` as a base path. In normal dev and gateway mode this should remain `/api`, with the hosting layer forwarding requests to the backend. The backend is expected to expose the following endpoints under that base path:
 
 ### Auth
 - `POST /auth/login` — `{ email, password }` → `{ token, user: User }`

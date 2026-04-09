@@ -7,7 +7,7 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_URL=http://localhost:8080/api
+ARG VITE_API_URL=/api
 ARG VITE_USE_MOCKS=false
 
 ENV VITE_API_URL=$VITE_API_URL

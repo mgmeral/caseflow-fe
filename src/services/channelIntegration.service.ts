@@ -1,5 +1,7 @@
 import { apiClient } from './api.client'
+import type { ChannelEventCatalogResponseItem } from '@/types/api.types'
 import type {
+  ChannelEventCatalogItem,
   ChannelConfig,
   ChannelConfigRequest,
   ChannelConfigResponse,
@@ -36,6 +38,26 @@ function normalizeChannelConfig(response: ChannelConfigResponse): ChannelConfig 
   }
 }
 
+function normalizeCatalogItem(raw: ChannelEventCatalogResponseItem | string): ChannelEventCatalogItem {
+  if (typeof raw === 'string') {
+    return {
+      value: raw,
+      label: raw.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase()),
+      group: 'Other',
+      description: null,
+    }
+  }
+
+  const value = raw.value ?? raw.code ?? raw.eventType ?? ''
+  const label = raw.label ?? raw.displayName ?? String(value)
+  return {
+    value: String(value),
+    label: String(label),
+    group: String(raw.group ?? raw.category ?? 'Other'),
+    description: raw.description ?? null,
+  }
+}
+
 export const channelIntegrationService = {
   listChannelConfigs: async (): Promise<ChannelConfig[]> => {
     const response = await apiClient.get<ChannelConfigResponse[]>('/admin/integrations/channels')
@@ -59,5 +81,10 @@ export const channelIntegrationService = {
 
   deleteChannelConfig: async (id: number): Promise<void> => {
     await apiClient.delete<void>(`/admin/integrations/channels/${id}`)
+  },
+
+  getEventCatalog: async (): Promise<ChannelEventCatalogItem[]> => {
+    const response = await apiClient.get<Array<ChannelEventCatalogResponseItem | string>>('/admin/integrations/channels/event-catalog')
+    return Array.isArray(response) ? response.map(normalizeCatalogItem).filter((item) => item.value) : []
   },
 }

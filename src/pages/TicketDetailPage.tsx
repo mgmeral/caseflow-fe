@@ -299,7 +299,7 @@ export function TicketDetailPage() {
               attachmentEmptyMessage={attachmentEmptyMessage}
               isActivityLoading={isHistoryLoading || emailThreadLoading}
               isAttachmentLoading={canViewTicketEmail && !!selectedEmailKey && selectedEmailLoading}
-              onSendNote={(content) => addNote(content)}
+              onSendNote={(payload) => addNote(payload)}
               isSendingNote={isAddingNote}
               onViewAttachments={() => setShowTicketAttachments(true)}
             />

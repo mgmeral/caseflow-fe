@@ -1,7 +1,9 @@
 import type {
+  MailProvider,
   MailboxSourceType,
   InboundMode,
   InitialSyncStrategy,
+  MailboxAuthType,
   OutboundDispatchStatus,
   OutboundMode,
   PollingStatus,
@@ -30,9 +32,14 @@ export interface Mailbox {
   name: string
   address: string
   displayName: string | null
+  mailProvider: MailProvider | null
+  authType: MailboxAuthType | null
   providerType: MailboxSourceType
   inboundMode: InboundMode
   outboundMode: OutboundMode
+  oauthTenantId: string | null
+  oauthClientId: string | null
+  oauthConfigured: boolean | null
   imapHost: string | null
   imapPort: number | null
   imapUsername: string | null
@@ -41,6 +48,7 @@ export interface Mailbox {
   smtpHost: string | null
   smtpPort: number | null
   smtpUsername: string | null
+  smtpStarttls: boolean | null
   smtpUseSsl: boolean | null
   pollingEnabled: boolean
   pollIntervalSeconds: number

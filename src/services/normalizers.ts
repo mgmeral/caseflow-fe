@@ -254,7 +254,11 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
     updatedAt,
     lastActionAt: raw.lastActionAt ? String(raw.lastActionAt) : updatedAt,
     lastActionSummary: String(raw.lastActionSummary ?? ''),
-    openDurationMinutes: typeof raw.openDurationMinutes === 'number' ? raw.openDurationMinutes : 0,
+    openDurationMinutes: typeof raw.openDurationMinutes === 'number'
+      ? raw.openDurationMinutes
+      : raw.createdAt
+        ? Math.max(0, Math.round((Date.now() - new Date(String(raw.createdAt)).getTime()) / 60000))
+        : 0,
     slaDeadlineAt: raw.slaDeadlineAt ? String(raw.slaDeadlineAt) : null,
     slaBreached: raw.slaBreached === true,
     messageCount: typeof raw.messageCount === 'number' ? raw.messageCount : 0,

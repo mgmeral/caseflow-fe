@@ -15,7 +15,7 @@ interface TicketWorkAreaProps {
   attachmentEmptyMessage?: string
   isActivityLoading?: boolean
   isAttachmentLoading?: boolean
-  onSendNote: (content: string) => void
+  onSendNote: (payload: { content: string; mentionedUserIds: string[] }) => void
   isSendingNote: boolean
   onViewAttachments?: () => void
 }

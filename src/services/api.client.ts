@@ -45,39 +45,44 @@ function isAbsoluteUrl(path: string): boolean {
   return /^https?:\/\//i.test(path)
 }
 
+function joinBasePath(basePath: string, path: string): string {
+  const normalizedBasePath = (basePath || '').replace(/\/+$/, '')
+  const normalizedPath = path || ''
+
+  if (!normalizedBasePath) return normalizedPath
+  if (!normalizedPath) return normalizedBasePath
+
+  const baseWithoutLeadingSlash = normalizedBasePath.replace(/^\/+/, '')
+  const pathWithoutLeadingSlash = normalizedPath.replace(/^\/+/, '')
+
+  if (
+    baseWithoutLeadingSlash
+    && (pathWithoutLeadingSlash === baseWithoutLeadingSlash
+      || pathWithoutLeadingSlash.startsWith(`${baseWithoutLeadingSlash}/`))
+  ) {
+    return `/${pathWithoutLeadingSlash}`
+  }
+
+  if (normalizedPath.startsWith('/')) {
+    return `${normalizedBasePath}${normalizedPath}`
+  }
+
+  return `${normalizedBasePath}/${pathWithoutLeadingSlash}`
+}
+
 function buildRequestUrl(path: string): string {
   if (!path) return BASE_URL
   if (!BASE_URL || isAbsoluteUrl(path)) return path
 
+  if (BASE_URL.startsWith('/')) {
+    return joinBasePath(BASE_URL, path)
+  }
+
   try {
     const base = new URL(BASE_URL)
-
-    if (path.startsWith('/')) {
-      const normalizedBasePath = base.pathname.replace(/\/+$/, '')
-      const normalizedRequestPath = path.replace(/\/+$/, '') || '/'
-
-      if (
-        normalizedBasePath
-        && normalizedBasePath !== '/'
-        && normalizedRequestPath === normalizedBasePath
-      ) {
-        return `${base.origin}${normalizedRequestPath}`
-      }
-
-      if (
-        normalizedBasePath
-        && normalizedBasePath !== '/'
-        && normalizedRequestPath.startsWith(`${normalizedBasePath}/`)
-      ) {
-        return `${base.origin}${normalizedRequestPath}`
-      }
-
-      return `${base.origin}${normalizedBasePath}${normalizedRequestPath}`
-    }
-
-    return `${BASE_URL.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+    return `${base.origin}${joinBasePath(base.pathname, path)}`
   } catch {
-    return `${BASE_URL.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+    return joinBasePath(BASE_URL, path)
   }
 }
 

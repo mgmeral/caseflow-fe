@@ -1,18 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import {
-  ShieldOff,
-  Plus,
-  Pencil,
-  ToggleLeft,
-  ToggleRight,
-  Mail,
-  Search,
+  AlertTriangle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  Mail,
+  Pencil,
   PlugZap,
-  AlertTriangle,
+  Plus,
+  Search,
+  ShieldOff,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react'
 import { useMailboxes } from '@/hooks/useMailboxes'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -21,17 +23,27 @@ import { normalizeInitialSyncStrategy } from '@/services/email-platform.normaliz
 import { mailboxService, type MailboxListFilters } from '@/services/mailbox.service'
 import type { Mailbox } from '@/types/email.types'
 import type {
-  CreateMailboxRequest,
   InitialSyncStrategy,
+  MailProvider,
   MailboxConnectionTestResponse,
   MailboxProtocolTestResult,
-  UpdateMailboxRequest,
 } from '@/types/api.types'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { Button } from '@/components/shared/Button'
 import { Modal } from '@/components/shared/Modal'
 import { Badge } from '@/components/shared/Badge'
+import {
+  applyAuthTypeSelection,
+  applyProviderSelection,
+  buildMailboxPayload,
+  createMailboxFormState,
+  EMPTY_FORM,
+  getAuthTypeLabel,
+  getProviderLabel,
+  type MailboxFormState,
+  validateMailboxForm,
+} from './mailboxForm'
 
 const SAFE_INITIAL_SYNC_STRATEGY: InitialSyncStrategy = 'NEW_MESSAGES_ONLY'
 
@@ -62,6 +74,65 @@ const INITIAL_SYNC_OPTIONS: Array<{ value: InitialSyncStrategy; label: string; d
     description: 'Safer than a full scan, but still processes recent historical inbox mail.',
   },
 ]
+
+const PROVIDER_OPTIONS: Array<{ value: MailProvider; label: string; description: string }> = [
+  { value: 'GMAIL', label: 'Gmail', description: 'App Password ile kurulur.' },
+  { value: 'OUTLOOK', label: 'Outlook / Microsoft 365', description: 'OAuth2 ile kurulur.' },
+  { value: 'OTHER', label: 'Other IMAP', description: 'Baglanti bilgilerini manuel girin.' },
+]
+
+const SECRET_PLACEHOLDER = 'Boş bırakırsanız mevcut değer korunur'
+
+const PROVIDER_GUIDANCE: Record<MailProvider, { title: string; body: string; footnote?: string }> = {
+  GMAIL: {
+    title: 'Gmail bağlantısı',
+    body: 'Normal Gmail şifrenizi değil, App Password kullanın. App Password oluşturmak için Google hesabınızda 2 Adımlı Doğrulama açık olmalıdır.',
+    footnote: 'Genelde IMAP Username ve SMTP Username alanlarına email adresiniz yazılır.',
+  },
+  OUTLOOK: {
+    title: 'Microsoft 365 bağlantısı',
+    body: 'Bu ekranda Outlook hesabınıza giriş yapmazsınız. Normal mailbox şifresi yerine, Microsoft 365 admin tarafından sağlanan bağlantı bilgilerini girersiniz.',
+    footnote: 'Gerekli bilgiler: IMAP Username, Tenant ID, Client ID ve Client Secret.',
+  },
+  OTHER: {
+    title: 'Manual IMAP bağlantısı',
+    body: 'Host, port, username ve password alanlarını mail sağlayıcınızın verdiği bilgilere göre doldurun.',
+  },
+}
+
+const PROVIDER_STEPS: Partial<Record<MailProvider, string[]>> = {
+  GMAIL: [
+    'Mailbox adresini girin',
+    'App Password oluşturun',
+    'Username ve password alanlarını doldurun',
+    'Test Connection ile doğrulayın',
+    'Kaydedin',
+  ],
+  OUTLOOK: [
+    'Mailbox adresini girin',
+    'IT / admin’den Tenant ID, Client ID ve Client Secret alın',
+    'Gerekli alanları doldurun',
+    'Test Connection ile doğrulayın',
+    'Kaydedin',
+  ],
+}
+
+const FIELD_HELPERS = {
+  mailboxName: 'Uygulama içinde görünen isim.',
+  address: 'Dinlenecek gerçek mailbox adresi.',
+  imapUsername: 'Çoğu durumda mailbox adresiyle aynıdır.',
+  imapPassword: 'Gmail için normal şifre değil, App Password kullanın.',
+  smtpUsername: 'Genelde mailbox adresiyle aynıdır.',
+  smtpPassword: 'Boş bırakırsanız mevcut değer korunur.',
+  oauthTenantId: 'Microsoft 365 kuruluş kimliği.',
+  oauthClientId: 'Bağlantı için kullanılan uygulama kimliği.',
+  oauthClientSecret: 'Bağlantı için kullanılan gizli anahtar. Boş bırakırsanız mevcut değer korunur.',
+  imapFolder: 'Genelde INBOX kullanılır.',
+  pollingEnabled: 'Aktifse bu mailbox otomatik olarak belirli aralıklarla taranır.',
+  initialSyncStrategy: 'İlk kurulumda eski maillerin taranıp taranmayacağını belirler. Güvenli başlangıç için New messages only önerilir.',
+} as const
+
+const POLLING_STATUSES = ['RUNNING', 'IDLE', 'PAUSED', 'ERROR']
 
 function getInitialSyncStrategyLabel(value: InitialSyncStrategy | null | undefined): string {
   const normalized = normalizeInitialSyncStrategy(value)
@@ -112,54 +183,6 @@ function getRiskSummary(strategy: InitialSyncStrategy | null | undefined): strin
   return 'This mailbox is configured to scan historical inbox mail before settling into new-message polling.'
 }
 
-interface MailboxFormState {
-  name: string
-  address: string
-  displayName: string
-  imapHost: string
-  imapPort: string
-  imapUsername: string
-  imapPassword: string
-  imapFolder: string
-  imapUseSsl: boolean
-  pollingEnabled: boolean
-  pollIntervalSeconds: string
-  initialSyncStrategy: InitialSyncStrategy
-  useCustomSmtp: boolean
-  smtpHost: string
-  smtpPort: string
-  smtpUsername: string
-  smtpPassword: string
-  smtpUseSsl: boolean
-  defaultGroupId: string
-  defaultPriority: string
-}
-
-const EMPTY_FORM: MailboxFormState = {
-  name: '',
-  address: '',
-  displayName: '',
-  imapHost: '',
-  imapPort: '993',
-  imapUsername: '',
-  imapPassword: '',
-  imapFolder: 'INBOX',
-  imapUseSsl: true,
-  pollingEnabled: true,
-  pollIntervalSeconds: '60',
-  initialSyncStrategy: 'NEW_MESSAGES_ONLY',
-  useCustomSmtp: false,
-  smtpHost: '',
-  smtpPort: '587',
-  smtpUsername: '',
-  smtpPassword: '',
-  smtpUseSsl: true,
-  defaultGroupId: '',
-  defaultPriority: '',
-}
-
-const POLLING_STATUSES = ['RUNNING', 'IDLE', 'PAUSED', 'ERROR']
-
 function pollingBadge(status: string): { variant: 'success' | 'warning' | 'error' | 'default'; label: string } {
   switch (status) {
     case 'RUNNING': return { variant: 'success', label: 'Running' }
@@ -174,34 +197,28 @@ function formatTimestamp(value: string | null): string {
   return value ? format(new Date(value), 'MMM d, HH:mm') : '—'
 }
 
-function buildMailboxPayload(form: MailboxFormState, currentMailbox?: Mailbox | null): CreateMailboxRequest {
-  const pollInterval = Math.min(86_400, Math.max(30, parseInt(form.pollIntervalSeconds, 10) || 60))
-
-  return {
-    name: form.name.trim(),
-    displayName: form.displayName.trim() || null,
-    address: form.address.trim(),
-    providerType: 'IMAP',
-    inboundMode: 'POLLING',
-    outboundMode: 'SMTP',
-    isActive: currentMailbox?.isActive ?? true,
-    imapHost: form.imapHost.trim(),
-    imapPort: parseInt(form.imapPort, 10) || 993,
-    imapUsername: form.imapUsername.trim(),
-    imapPassword: form.imapPassword.trim() || null,
-    imapUseSsl: form.imapUseSsl,
-    imapFolder: form.imapFolder.trim() || 'INBOX',
-    pollingEnabled: form.pollingEnabled,
-    pollIntervalSeconds: pollInterval,
-    initialSyncStrategy: form.initialSyncStrategy,
-    smtpHost: form.useCustomSmtp ? (form.smtpHost.trim() || null) : null,
-    smtpPort: form.useCustomSmtp ? (parseInt(form.smtpPort, 10) || 587) : null,
-    smtpUsername: form.useCustomSmtp ? (form.smtpUsername.trim() || null) : null,
-    smtpPassword: form.useCustomSmtp ? (form.smtpPassword.trim() || null) : null,
-    smtpUseSsl: form.useCustomSmtp ? form.smtpUseSsl : null,
-    defaultGroupId: form.defaultGroupId ? Number(form.defaultGroupId) : null,
-    defaultPriority: form.defaultPriority || null,
+function getProviderBadgeVariant(mailProvider: MailProvider | null | undefined): 'info' | 'success' | 'default' {
+  switch (mailProvider) {
+    case 'OUTLOOK': return 'info'
+    case 'GMAIL': return 'success'
+    default: return 'default'
   }
+}
+
+function getOauthConfiguredBadge(mailbox: Mailbox): { variant: 'success' | 'warning'; label: string } | null {
+  if (mailbox.authType !== 'OAUTH2') return null
+  return mailbox.oauthConfigured
+    ? { variant: 'success', label: 'OAuth ready' }
+    : { variant: 'warning', label: 'OAuth incomplete' }
+}
+
+function FieldError({ message, visible }: { message?: string; visible: boolean }) {
+  if (!visible || !message) return null
+  return <p className="mt-1 text-xs text-red-600">{message}</p>
+}
+
+function FieldHelper({ text }: { text: string }) {
+  return <p className="mt-1 text-xs leading-5 text-gray-500">{text}</p>
 }
 
 export function MailboxManagementPage() {
@@ -220,6 +237,9 @@ export function MailboxManagementPage() {
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
   const [editingMailbox, setEditingMailbox] = useState<Mailbox | null>(null)
   const [form, setForm] = useState<MailboxFormState>(EMPTY_FORM)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [providerHelpOpen, setProviderHelpOpen] = useState(false)
+  const [showValidation, setShowValidation] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [testingConnection, setTestingConnection] = useState<{ imap: boolean; smtp: boolean }>({ imap: false, smtp: false })
@@ -237,6 +257,11 @@ export function MailboxManagementPage() {
     }
     | null
   >(null)
+
+  const validationErrors = useMemo(
+    () => validateMailboxForm(form, modalMode ?? 'create', editingMailbox),
+    [editingMailbox, form, modalMode],
+  )
 
   if (!canManageEmailConfig) {
     return (
@@ -260,6 +285,8 @@ export function MailboxManagementPage() {
       mailbox.displayName ?? '',
       mailbox.imapHost ?? '',
       mailbox.smtpHost ?? '',
+      getProviderLabel(mailbox.mailProvider),
+      getAuthTypeLabel(mailbox.authType),
     ].some((value) => value.toLowerCase().includes(query))
   })
 
@@ -268,37 +295,37 @@ export function MailboxManagementPage() {
   const currentSmtpTestResult = getConnectionTestResult(currentConnectionResult, 'smtp')
   const smtpTestAvailable = Boolean(editingMailbox?.smtpHost || editingMailbox?.smtpPort || editingMailbox?.smtpUsername)
   const selectedInitialSyncOption = INITIAL_SYNC_OPTIONS.find((option) => option.value === normalizeInitialSyncStrategy(form.initialSyncStrategy))
+  const oauthConfiguredBadge = editingMailbox ? getOauthConfiguredBadge(editingMailbox) : null
+  const showProviderAuthSelector = form.mailProvider === 'OTHER'
+  const showOauthFields = form.authType === 'OAUTH2'
+  const showSmtpCredentials = form.mailProvider !== 'OUTLOOK'
+  const providerGuidance = PROVIDER_GUIDANCE[form.mailProvider]
+  const providerSteps = PROVIDER_STEPS[form.mailProvider] ?? []
+  const authSummaryLabel = form.mailProvider === 'OUTLOOK'
+    ? 'Authentication: OAuth2'
+    : form.mailProvider === 'GMAIL'
+      ? 'Authentication: Password / App Password'
+      : `Authentication: ${getAuthTypeLabel(form.authType)}`
+
+  const updateForm = (updater: (current: MailboxFormState) => MailboxFormState) => {
+    setForm((current) => updater(current))
+  }
 
   const openCreate = () => {
     setForm(EMPTY_FORM)
     setEditingMailbox(null)
+    setAdvancedOpen(false)
+    setProviderHelpOpen(false)
+    setShowValidation(false)
     setModalMode('create')
   }
 
   const openEdit = (mailbox: Mailbox) => {
-    setForm({
-      name: mailbox.name,
-      address: mailbox.address,
-      displayName: mailbox.displayName ?? '',
-      imapHost: mailbox.imapHost ?? '',
-      imapPort: String(mailbox.imapPort ?? 993),
-      imapUsername: mailbox.imapUsername ?? '',
-      imapPassword: '',
-      imapFolder: mailbox.imapFolder ?? 'INBOX',
-      imapUseSsl: mailbox.imapUseSsl ?? true,
-      pollingEnabled: mailbox.pollingEnabled,
-      pollIntervalSeconds: String(mailbox.pollIntervalSeconds),
-      initialSyncStrategy: normalizeInitialSyncStrategy(mailbox.initialSyncStrategy) ?? 'NEW_MESSAGES_ONLY',
-      useCustomSmtp: Boolean(mailbox.smtpHost || mailbox.smtpPort || mailbox.smtpUsername),
-      smtpHost: mailbox.smtpHost ?? '',
-      smtpPort: String(mailbox.smtpPort ?? 587),
-      smtpUsername: mailbox.smtpUsername ?? '',
-      smtpPassword: '',
-      smtpUseSsl: mailbox.smtpUseSsl ?? true,
-      defaultGroupId: mailbox.defaultGroupId ?? '',
-      defaultPriority: mailbox.defaultPriority?.toString() ?? '',
-    })
+    setForm(createMailboxFormState(mailbox))
     setEditingMailbox(mailbox)
+    setAdvancedOpen(mailbox.mailProvider === 'OTHER')
+    setProviderHelpOpen(false)
+    setShowValidation(false)
     setModalMode('edit')
   }
 
@@ -306,17 +333,35 @@ export function MailboxManagementPage() {
     setModalMode(null)
     setEditingMailbox(null)
     setForm(EMPTY_FORM)
+    setAdvancedOpen(false)
+    setProviderHelpOpen(false)
+    setShowValidation(false)
+  }
+
+  const handleCopyItRequest = async () => {
+    const mailboxAddress = form.address.trim() || '[email address]'
+    const copyText = `CaseFlow üzerinden Outlook / Microsoft 365 mailbox bağlantısı kurmam gerekiyor.
+Lütfen aşağıdaki bilgileri paylaşır mısınız?
+- Tenant ID
+- Client ID
+- Client Secret
+- Gerekli IMAP OAuth izinlerinin tanımlandığı bilgisi
+Mailbox adresi: ${mailboxAddress}`
+
+    if (!navigator.clipboard) {
+      error('Kopyalama bu tarayıcıda desteklenmiyor')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(copyText)
+      success('IT isteği panoya kopyalandı')
+    } catch {
+      error('Kopyalama başarısız oldu')
+    }
   }
 
   const executeSave = async () => {
-    const requiresImapPassword = modalMode === 'create'
-    const requiresSmtpPassword = modalMode === 'create' && form.useCustomSmtp
-
-    if (!form.name.trim() || !form.address.trim() || !form.imapHost.trim() || !form.imapUsername.trim()) return
-    if (requiresImapPassword && !form.imapPassword.trim()) return
-    if (form.useCustomSmtp && (!form.smtpHost.trim() || !form.smtpUsername.trim())) return
-    if (requiresSmtpPassword && !form.smtpPassword.trim()) return
-
     setSaving(true)
     try {
       const payload = buildMailboxPayload(form, editingMailbox)
@@ -325,7 +370,7 @@ export function MailboxManagementPage() {
         await mailboxService.create(payload)
         success('Mailbox created')
       } else if (editingMailbox) {
-        await mailboxService.update(editingMailbox.id, payload as UpdateMailboxRequest)
+        await mailboxService.update(editingMailbox.id, payload)
         success('Mailbox updated')
       }
 
@@ -347,6 +392,9 @@ export function MailboxManagementPage() {
   }
 
   const handleSave = async () => {
+    setShowValidation(true)
+    if (Object.keys(validationErrors).length > 0) return
+
     if (shouldConfirmRiskOnSave()) {
       setRiskConfirmation({
         action: 'save',
@@ -468,7 +516,7 @@ export function MailboxManagementPage() {
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search mailboxes…"
+            placeholder="Search mailboxes..."
             value={search}
             onChange={(event) => {
               setSearch(event.target.value)
@@ -556,11 +604,18 @@ export function MailboxManagementPage() {
                   const smtpTestResult = getConnectionTestResult(connectionResult, 'smtp')
                   const imapStatus = getProtocolTestStatusLabel(mailbox, 'imap', imapTestResult)
                   const smtpStatus = getProtocolTestStatusLabel(mailbox, 'smtp', smtpTestResult)
+                  const oauthBadge = getOauthConfiguredBadge(mailbox)
+
                   return (
                     <tr key={mailbox.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3">
                         <div className="font-medium text-gray-900">{mailbox.name}</div>
                         {mailbox.displayName && <div className="text-xs text-gray-400">{mailbox.displayName}</div>}
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          <Badge variant={getProviderBadgeVariant(mailbox.mailProvider)} size="sm">{getProviderLabel(mailbox.mailProvider)}</Badge>
+                          <Badge variant="outline" size="sm">{getAuthTypeLabel(mailbox.authType)}</Badge>
+                          {oauthBadge && <Badge variant={oauthBadge.variant} size="sm">{oauthBadge.label}</Badge>}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-gray-600">{mailbox.address}</td>
                       <td className="px-4 py-3 text-xs text-gray-600">
@@ -573,6 +628,7 @@ export function MailboxManagementPage() {
                           <>
                             <div className="font-mono">{mailbox.smtpHost}:{mailbox.smtpPort ?? '—'}</div>
                             <div>{mailbox.smtpUsername ?? '—'}</div>
+                            {mailbox.smtpStarttls != null && <div className="text-gray-400">STARTTLS: {mailbox.smtpStarttls ? 'On' : 'Off'}</div>}
                           </>
                         ) : (
                           <span className="text-gray-400">Default / not mailbox-specific</span>
@@ -696,135 +752,307 @@ export function MailboxManagementPage() {
       <Modal
         isOpen={modalMode !== null}
         onClose={closeModal}
-        title={modalMode === 'create' ? 'New Mailbox' : `Edit — ${editingMailbox?.name ?? ''}`}
-        size="lg"
+        title={modalMode === 'create' ? 'New Mailbox' : `Edit - ${editingMailbox?.name ?? ''}`}
+        size="xl"
       >
         <div className="space-y-4 p-1">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Mailbox Provider</div>
+                <p className="mt-1 text-sm text-gray-600">Choose the provider first so the form only shows fields that make sense.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant={getProviderBadgeVariant(form.mailProvider)} size="sm">{getProviderLabel(form.mailProvider)}</Badge>
+                <Badge variant="outline" size="sm">{getAuthTypeLabel(form.authType)}</Badge>
+                {oauthConfiguredBadge && <Badge variant={oauthConfiguredBadge.variant} size="sm">{oauthConfiguredBadge.label}</Badge>}
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {PROVIDER_OPTIONS.map((option) => {
+                const selected = form.mailProvider === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-label={option.label}
+                    onClick={() => {
+                      updateForm((current) => applyProviderSelection(current, option.value))
+                      setAdvancedOpen(option.value === 'OTHER')
+                      setProviderHelpOpen(false)
+                    }}
+                    className={`rounded-2xl border px-4 py-4 text-left transition ${selected ? 'border-indigo-400 bg-white shadow-sm ring-2 ring-indigo-100' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                  >
+                    <div className="text-sm font-semibold text-gray-900">{option.label}</div>
+                    <div className="mt-1 text-xs leading-5 text-gray-500">{option.description}</div>
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
+              <div className="text-sm font-semibold text-sky-900">{providerGuidance.title}</div>
+              <p className="mt-1 text-sm leading-6 text-sky-900">{providerGuidance.body}</p>
+              {providerGuidance.footnote ? (
+                <p className="mt-2 text-xs leading-5 text-sky-700">{providerGuidance.footnote}</p>
+              ) : null}
+              {form.mailProvider === 'OUTLOOK' ? (
+                <>
+                  <p className="mt-2 text-xs leading-5 text-sky-700">Bu bilgiler genelde IT / Microsoft 365 admin tarafından sağlanır.</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setProviderHelpOpen((current) => !current)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs font-medium text-sky-800 hover:bg-sky-100"
+                    >
+                      Bu bilgileri nereden alırım?
+                      {providerHelpOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    <Button variant="secondary" size="sm" onClick={handleCopyItRequest}>IT için isteği kopyala</Button>
+                  </div>
+                  {providerHelpOpen ? (
+                    <div className="mt-3 rounded-xl border border-sky-200 bg-white px-3 py-3 text-xs leading-5 text-sky-900">
+                      <div>Tenant ID: Microsoft 365 / Entra tenant kimliği</div>
+                      <div>Client ID: Entra App Registration uygulama kimliği</div>
+                      <div>Client Secret: Entra App Registration secret değeri</div>
+                      <div>Bu bilgiler genelde IT / Microsoft 365 admin tarafından sağlanır</div>
+                      <div className="mt-2 font-medium">Bu bilgileri bilmiyorsanız, şirketinizin Microsoft 365 yöneticisinden istemeniz gerekir.</div>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+              {providerSteps.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-sky-200/80 bg-white/70 px-3 py-3">
+                  <div className="text-xs font-semibold text-sky-900">Bağlantı adımları</div>
+                  <div className="mt-2 space-y-1.5 text-xs leading-5 text-sky-900">
+                    {providerSteps.map((step, index) => (
+                      <div key={step}>{index + 1}. {step}</div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Name *</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1">Mailbox Name *</label>
               <input
+                aria-label="Mailbox Name *"
                 value={form.name}
-                onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                onChange={(event) => updateForm((current) => ({ ...current, name: event.target.value }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
+              <FieldHelper text={FIELD_HELPERS.mailboxName} />
+              <FieldError message={validationErrors.name} visible={showValidation} />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Email Address *</label>
               <input
+                aria-label="Email Address *"
                 type="email"
                 value={form.address}
-                onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+                onChange={(event) => updateForm((current) => ({
+                  ...current,
+                  address: event.target.value,
+                  imapUsername: current.imapUsername || event.target.value,
+                  smtpUsername: current.smtpUsername || event.target.value,
+                }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 disabled={modalMode === 'edit'}
               />
+              <FieldHelper text={FIELD_HELPERS.address} />
+              <FieldError message={validationErrors.address} visible={showValidation} />
             </div>
           </div>
 
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Display Name</label>
             <input
+              aria-label="Display Name"
               value={form.displayName}
-              onChange={(event) => setForm((current) => ({ ...current, displayName: event.target.value }))}
+              onChange={(event) => updateForm((current) => ({ ...current, displayName: event.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
 
-          <div className="border-t border-gray-100 pt-4 space-y-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">IMAP Polling</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="col-span-2">
-                <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Host *</label>
-                <input
-                  value={form.imapHost}
-                  onChange={(event) => setForm((current) => ({ ...current, imapHost: event.target.value }))}
-                  placeholder="imap.example.com"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-5 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Port</label>
-                <input
-                  type="number"
-                  value={form.imapPort}
-                  onChange={(event) => setForm((current) => ({ ...current, imapPort: event.target.value }))}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
+                <h3 className="text-sm font-semibold text-gray-900">Authentication</h3>
+                <p className="mt-1 text-xs text-gray-500">Provider seçimine göre yalnızca gerekli giriş alanları gösterilir.</p>
               </div>
+              <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+                <span className="inline-flex w-fit rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-xs font-medium text-gray-700">{authSummaryLabel}</span>
+                {showProviderAuthSelector && (
+                  <div className="w-full max-w-xs md:w-auto">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Auth Type</label>
+                    <select
+                      aria-label="Auth Type"
+                      value={form.authType}
+                      onChange={(event) => updateForm((current) => applyAuthTypeSelection(current, event.target.value as 'PASSWORD' | 'OAUTH2'))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      <option value="PASSWORD">Password</option>
+                      <option value="OAUTH2">OAuth2</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Username *</label>
                 <input
+                  aria-label="IMAP Username *"
                   value={form.imapUsername}
-                  onChange={(event) => setForm((current) => ({ ...current, imapUsername: event.target.value }))}
+                  onChange={(event) => updateForm((current) => ({ ...current, imapUsername: event.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+                <FieldHelper text={FIELD_HELPERS.imapUsername} />
+                <FieldError message={validationErrors.imapUsername} visible={showValidation} />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Password{modalMode === 'create' ? ' *' : ''}</label>
-                <input
-                  type="password"
-                  value={form.imapPassword}
-                  onChange={(event) => setForm((current) => ({ ...current, imapPassword: event.target.value }))}
-                  placeholder={modalMode === 'create' ? 'IMAP password' : 'Leave blank to keep existing password'}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                />
-              </div>
+
+              {!showOauthFields ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Password{modalMode === 'create' ? ' *' : ''}</label>
+                  <input
+                    aria-label={`IMAP Password${modalMode === 'create' ? ' *' : ''}`}
+                    type="password"
+                    value={form.imapPassword}
+                    onChange={(event) => updateForm((current) => ({ ...current, imapPassword: event.target.value }))}
+                    placeholder={modalMode === 'create' ? 'IMAP password' : SECRET_PLACEHOLDER}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  />
+                  <FieldHelper text={FIELD_HELPERS.imapPassword} />
+                  <FieldError message={validationErrors.imapPassword} visible={showValidation} />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Tenant ID *</label>
+                    <input
+                      aria-label="Tenant ID *"
+                      value={form.oauthTenantId}
+                      onChange={(event) => updateForm((current) => ({ ...current, oauthTenantId: event.target.value }))}
+                      placeholder="Entra tenant ID"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldHelper text={FIELD_HELPERS.oauthTenantId} />
+                    <FieldError message={validationErrors.oauthTenantId} visible={showValidation} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Client ID *</label>
+                    <input
+                      aria-label="Client ID *"
+                      value={form.oauthClientId}
+                      onChange={(event) => updateForm((current) => ({ ...current, oauthClientId: event.target.value }))}
+                      placeholder="Application (client) ID"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldHelper text={FIELD_HELPERS.oauthClientId} />
+                    <FieldError message={validationErrors.oauthClientId} visible={showValidation} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Client Secret{modalMode === 'create' || editingMailbox?.oauthConfigured !== true ? ' *' : ''}</label>
+                    <input
+                      aria-label={`Client Secret${modalMode === 'create' || editingMailbox?.oauthConfigured !== true ? ' *' : ''}`}
+                      type="password"
+                      value={form.oauthClientSecret}
+                      onChange={(event) => updateForm((current) => ({ ...current, oauthClientSecret: event.target.value }))}
+                      placeholder={modalMode === 'create' ? 'Client secret' : SECRET_PLACEHOLDER}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldHelper text={FIELD_HELPERS.oauthClientSecret} />
+                    <FieldError message={validationErrors.oauthClientSecret} visible={showValidation} />
+                  </div>
+                </>
+              )}
+
+              {showSmtpCredentials && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Username</label>
+                    <input
+                      aria-label="SMTP Username"
+                      value={form.smtpUsername}
+                      onChange={(event) => updateForm((current) => ({ ...current, smtpUsername: event.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldHelper text={FIELD_HELPERS.smtpUsername} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Password</label>
+                    <input
+                      aria-label="SMTP Password"
+                      type="password"
+                      value={form.smtpPassword}
+                      onChange={(event) => updateForm((current) => ({ ...current, smtpPassword: event.target.value }))}
+                      placeholder={modalMode === 'create' ? 'SMTP password' : SECRET_PLACEHOLDER}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldHelper text={FIELD_HELPERS.smtpPassword} />
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-100 pt-5 space-y-5">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">IMAP Polling</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Folder</label>
                 <input
+                  aria-label="IMAP Folder"
                   value={form.imapFolder}
-                  onChange={(event) => setForm((current) => ({ ...current, imapFolder: event.target.value }))}
+                  onChange={(event) => updateForm((current) => ({ ...current, imapFolder: event.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+                <FieldHelper text={FIELD_HELPERS.imapFolder} />
+                <FieldError message={validationErrors.imapFolder} visible={showValidation} />
               </div>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={form.imapUseSsl}
-                onChange={(event) => setForm((current) => ({ ...current, imapUseSsl: event.target.checked }))}
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-              />
-              Use SSL/TLS for IMAP
-            </label>
-          </div>
-
-          <div className="border-t border-gray-100 pt-4 space-y-4">
-            <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Polling</h3>
-            <div className="flex flex-wrap items-center gap-6">
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Interval (sec)</label>
                 <input
-                  type="checkbox"
-                  checked={form.pollingEnabled}
-                  onChange={(event) => setForm((current) => ({ ...current, pollingEnabled: event.target.checked }))}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                Polling Enabled
-              </label>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-600">Interval (sec)</label>
-                <input
+                  aria-label="Interval (sec)"
                   type="number"
                   min="30"
                   max="86400"
                   value={form.pollIntervalSeconds}
-                  onChange={(event) => setForm((current) => ({ ...current, pollIntervalSeconds: event.target.value }))}
-                  className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  onChange={(event) => updateForm((current) => ({ ...current, pollIntervalSeconds: event.target.value }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-medium text-gray-600">Initial Sync</label>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Initial Sync</label>
                 <select
+                  aria-label="Initial Sync"
                   value={form.initialSyncStrategy}
-                  onChange={(event) => setForm((current) => ({ ...current, initialSyncStrategy: event.target.value as MailboxFormState['initialSyncStrategy'] }))}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  onChange={(event) => updateForm((current) => ({ ...current, initialSyncStrategy: event.target.value as MailboxFormState['initialSyncStrategy'] }))}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 >
                   {INITIAL_SYNC_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
+                <FieldHelper text={FIELD_HELPERS.initialSyncStrategy} />
               </div>
             </div>
+
+            <div className="space-y-1.5">
+              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.pollingEnabled}
+                  onChange={(event) => updateForm((current) => ({ ...current, pollingEnabled: event.target.checked }))}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                Polling Enabled
+              </label>
+              <FieldHelper text={FIELD_HELPERS.pollingEnabled} />
+            </div>
+
             {selectedInitialSyncOption && (
               <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
                 {selectedInitialSyncOption.description}
@@ -851,81 +1079,146 @@ export function MailboxManagementPage() {
             </div>
           </div>
 
-          <div className="border-t border-gray-100 pt-4 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">SMTP Delivery</h3>
-              <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.useCustomSmtp}
-                  onChange={(event) => setForm((current) => ({ ...current, useCustomSmtp: event.target.checked }))}
-                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                Use mailbox-specific SMTP
-              </label>
-            </div>
+          <div className="border-t border-gray-100 pt-5 space-y-3">
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((current) => !current)}
+              className="flex w-full items-center justify-between rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-left"
+            >
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider text-gray-500">Advanced Settings</div>
+                <div className="mt-1 text-sm text-gray-600">Host, port ve güvenlik ayarları burada tutulur.</div>
+              </div>
+              {advancedOpen ? <ChevronUp size={16} className="text-gray-500" /> : <ChevronDown size={16} className="text-gray-500" />}
+            </button>
 
-            {form.useCustomSmtp ? (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Host *</label>
-                  <input
-                    value={form.smtpHost}
-                    onChange={(event) => setForm((current) => ({ ...current, smtpHost: event.target.value }))}
-                    placeholder="smtp.example.com"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
+            {advancedOpen && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Host *</label>
+                    <input
+                      aria-label="IMAP Host *"
+                      value={form.imapHost}
+                      onChange={(event) => updateForm((current) => ({ ...current, imapHost: event.target.value }))}
+                      placeholder="imap.example.com"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldError message={validationErrors.imapHost} visible={showValidation} />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Port *</label>
+                    <input
+                      aria-label="IMAP Port *"
+                      type="number"
+                      value={form.imapPort}
+                      onChange={(event) => updateForm((current) => ({ ...current, imapPort: event.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <FieldError message={validationErrors.imapPort} visible={showValidation} />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Port</label>
-                  <input
-                    type="number"
-                    value={form.smtpPort}
-                    onChange={(event) => setForm((current) => ({ ...current, smtpPort: event.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.imapUseSsl}
+                      onChange={(event) => updateForm((current) => ({ ...current, imapUseSsl: event.target.checked }))}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Use SSL/TLS for IMAP
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.smtpStarttls}
+                      onChange={(event) => updateForm((current) => ({ ...current, smtpStarttls: event.target.checked }))}
+                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    Use STARTTLS for SMTP
+                  </label>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Username *</label>
-                  <input
-                    value={form.smtpUsername}
-                    onChange={(event) => setForm((current) => ({ ...current, smtpUsername: event.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Host</label>
+                    <input
+                      aria-label="SMTP Host"
+                      value={form.smtpHost}
+                      onChange={(event) => updateForm((current) => ({ ...current, smtpHost: event.target.value }))}
+                      placeholder="smtp.example.com"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Port</label>
+                    <input
+                      aria-label="SMTP Port"
+                      type="number"
+                      value={form.smtpPort}
+                      onChange={(event) => updateForm((current) => ({ ...current, smtpPort: event.target.value }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Password{modalMode === 'create' ? ' *' : ''}</label>
-                  <input
-                    type="password"
-                    value={form.smtpPassword}
-                    onChange={(event) => setForm((current) => ({ ...current, smtpPassword: event.target.value }))}
-                    placeholder={modalMode === 'create' ? 'SMTP password' : 'Leave blank to keep existing password'}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                  />
-                </div>
+
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={form.smtpUseSsl}
-                    onChange={(event) => setForm((current) => ({ ...current, smtpUseSsl: event.target.checked }))}
+                    onChange={(event) => updateForm((current) => ({ ...current, smtpUseSsl: event.target.checked }))}
                     className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  Use STARTTLS / SSL
+                  Require secure SMTP transport
                 </label>
+
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Provider Type</label>
+                    <input
+                      aria-label="Provider Type"
+                      value={form.providerType}
+                      onChange={(event) => updateForm((current) => ({ ...current, providerType: event.target.value as MailboxFormState['providerType'] }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Inbound Mode</label>
+                    <input
+                      aria-label="Inbound Mode"
+                      value={form.inboundMode}
+                      onChange={(event) => updateForm((current) => ({ ...current, inboundMode: event.target.value as MailboxFormState['inboundMode'] }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Outbound Mode</label>
+                    <input
+                      aria-label="Outbound Mode"
+                      value={form.outboundMode}
+                      onChange={(event) => updateForm((current) => ({ ...current, outboundMode: event.target.value as MailboxFormState['outboundMode'] }))}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                  Test Connection buttons use the saved mailbox configuration. Save changes before using them to verify updated advanced settings.
+                </div>
               </div>
-            ) : (
-              <p className="text-xs text-gray-500">SMTP fields stay hidden unless this mailbox uses mailbox-specific outbound delivery.</p>
             )}
           </div>
 
           <div className="border-t border-gray-100 pt-4">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Defaults</h3>
-            <div className="grid grid-cols-2 gap-4 mt-1">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 mt-1">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Default Group ID</label>
                 <input
+                  aria-label="Default Group ID"
                   value={form.defaultGroupId}
-                  onChange={(event) => setForm((current) => ({ ...current, defaultGroupId: event.target.value }))}
+                  onChange={(event) => updateForm((current) => ({ ...current, defaultGroupId: event.target.value }))}
                   placeholder="Optional"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
@@ -933,8 +1226,9 @@ export function MailboxManagementPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Default Priority</label>
                 <input
+                  aria-label="Default Priority"
                   value={form.defaultPriority}
-                  onChange={(event) => setForm((current) => ({ ...current, defaultPriority: event.target.value }))}
+                  onChange={(event) => updateForm((current) => ({ ...current, defaultPriority: event.target.value }))}
                   placeholder="Optional"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
@@ -963,39 +1257,31 @@ export function MailboxManagementPage() {
 
           <div className="flex justify-end gap-2 pt-2">
             {editingMailbox && (
-              <Button variant="ghost" size="sm" leftIcon={<PlugZap size={14} />} onClick={handleTestImapConnection} isLoading={testingConnection.imap}>
-                Test IMAP Connection
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                <Button variant="ghost" size="sm" leftIcon={<PlugZap size={14} />} onClick={handleTestImapConnection} isLoading={testingConnection.imap}>
+                  Test IMAP Connection
+                </Button>
+                <span className="text-[11px] text-gray-500">Bilgileri girdikten sonra bağlantıyı test edin.</span>
+              </div>
             )}
             {editingMailbox && (
-              <Button
-                variant="ghost"
-                size="sm"
-                leftIcon={<PlugZap size={14} />}
-                onClick={handleTestSmtpConnection}
-                isLoading={testingConnection.smtp}
-                disabled={!smtpTestAvailable}
-                title={!smtpTestAvailable ? 'Save mailbox-specific SMTP settings before running an SMTP connection test.' : undefined}
-              >
-                Test SMTP Connection
-              </Button>
+              <div className="flex flex-col items-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  leftIcon={<PlugZap size={14} />}
+                  onClick={handleTestSmtpConnection}
+                  isLoading={testingConnection.smtp}
+                  disabled={!smtpTestAvailable}
+                  title={!smtpTestAvailable ? 'Save mailbox-specific SMTP settings before running an SMTP connection test.' : undefined}
+                >
+                  Test SMTP Connection
+                </Button>
+                <span className="text-[11px] text-gray-500">Bilgileri girdikten sonra bağlantıyı test edin.</span>
+              </div>
             )}
             <Button variant="secondary" size="sm" onClick={closeModal}>Cancel</Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={handleSave}
-              isLoading={saving}
-              disabled={
-                !form.name.trim()
-                || !form.address.trim()
-                || !form.imapHost.trim()
-                || !form.imapUsername.trim()
-                || (modalMode === 'create' && !form.imapPassword.trim())
-                || (form.useCustomSmtp && !form.smtpHost.trim())
-                || (form.useCustomSmtp && !form.smtpUsername.trim())
-              }
-            >
+            <Button variant="primary" size="sm" onClick={handleSave} isLoading={saving}>
               {modalMode === 'create' ? 'Create' : 'Save'}
             </Button>
           </div>

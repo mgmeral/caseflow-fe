@@ -106,4 +106,27 @@ describe('CustomerListPage', () => {
       expect(mockNavigate).toHaveBeenCalledWith('/customers/99')
     })
   })
+
+  it('applies combined search and status filters reliably', async () => {
+    customersState.customers = [
+      { id: '1', name: 'Akbank', code: 'AKBANK', isActive: true },
+      { id: '2', name: 'Akbank Legacy', code: 'AKB-OLD', isActive: false },
+      { id: '3', name: 'Garanti', code: 'GARANTI', isActive: true },
+    ]
+
+    render(
+      <MemoryRouter>
+        <CustomerListPage />
+      </MemoryRouter>,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Search by name or code...'), { target: { value: 'akb' } })
+    fireEvent.change(screen.getByDisplayValue('All status'), { target: { value: 'inactive' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('Akbank Legacy')).toBeInTheDocument()
+      expect(screen.queryByText('Akbank')).not.toBeInTheDocument()
+      expect(screen.queryByText('Garanti')).not.toBeInTheDocument()
+    })
+  })
 })

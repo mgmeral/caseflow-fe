@@ -1,14 +1,13 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { clsx } from 'clsx'
-import type { TicketFilters, TicketStatus, TicketPriority } from '@/types/ticket.types'
-import type { Group } from '@/types/user.types'
-import type { User } from '@/types/user.types'
-import { TICKET_STATUS_LABELS, TICKET_PRIORITY_LABELS } from '@/constants/enums'
+import type { TicketFilters as TicketFiltersState, TicketPriority, TicketStatus } from '@/types/ticket.types'
+import type { Group, User } from '@/types/user.types'
+import { TICKET_PRIORITY_LABELS, TICKET_STATUS_LABELS } from '@/constants/enums'
 
 interface TicketFiltersProps {
-  filters: TicketFilters
-  onChange: (partial: Partial<TicketFilters>) => void
+  filters: TicketFiltersState
+  onChange: (partial: Partial<TicketFiltersState>) => void
   groups: Group[]
   users: User[]
 }
@@ -23,79 +22,18 @@ const ALL_STATUSES: TicketStatus[] = [
   'CLOSED',
   'REOPENED',
 ]
+
 const ALL_PRIORITIES: TicketPriority[] = ['critical', 'high', 'medium', 'low']
 
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
+
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(value), delay)
-    return () => clearTimeout(t)
-  }, [value, delay])
+    const timeoutId = setTimeout(() => setDebounced(value), delay)
+    return () => clearTimeout(timeoutId)
+  }, [delay, value])
+
   return debounced
-}
-
-interface MultiSelectDropdownProps {
-  label: string
-  options: { value: string; label: string }[]
-  selected: string[]
-  onChange: (vals: string[]) => void
-}
-
-function MultiSelectDropdown({ label, options, selected, onChange }: MultiSelectDropdownProps) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  const toggle = (val: string) => {
-    onChange(selected.includes(val) ? selected.filter((v) => v !== val) : [...selected, val])
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={clsx(
-          'flex items-center gap-1 px-2 py-1 text-xs border rounded-md bg-white hover:bg-gray-50 transition-colors',
-          selected.length > 0 ? 'border-indigo-400 text-indigo-700' : 'border-gray-300 text-gray-700',
-        )}
-      >
-        {label}
-        {selected.length > 0 && (
-          <span className="bg-indigo-100 text-indigo-700 text-xs px-1.5 rounded-full font-medium">
-            {selected.length}
-          </span>
-        )}
-        <ChevronDown size={14} />
-      </button>
-
-      {open && (
-        <div className="absolute top-full mt-1 left-0 z-30 min-w-[180px] bg-white border border-gray-200 rounded-lg shadow-lg py-1">
-          {options.map((opt) => (
-            <label
-              key={opt.value}
-              className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                checked={selected.includes(opt.value)}
-                onChange={() => toggle(opt.value)}
-              />
-              <span className="text-sm text-gray-700">{opt.label}</span>
-            </label>
-          ))}
-        </div>
-      )}
-    </div>
-  )
 }
 
 export function TicketFilters({ filters, onChange, groups, users }: TicketFiltersProps) {
@@ -104,55 +42,56 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
   const debouncedSearch = useDebounce(searchInput, 300)
 
   useEffect(() => {
-    onChange({ search: debouncedSearch })
-  }, [debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (filters.search !== searchInput) {
+      setSearchInput(filters.search)
+    }
+  }, [filters.search, searchInput])
 
-  const activeFilterCount = [
-    filters.statuses.length > 0,
-    filters.priorities.length > 0,
-    filters.assignedUserIds.length > 0,
-    filters.groupIds.length > 0,
-    filters.dateFrom || filters.dateTo,
-    filters.unassignedOnly,
-    filters.overdueOnly,
-    filters.openOnly,
-    filters.transferredOnly,
-  ].filter(Boolean).length
+  useEffect(() => {
+    if (debouncedSearch !== filters.search) {
+      onChange({ search: debouncedSearch })
+    }
+  }, [debouncedSearch, filters.search, onChange])
+
+  const selectedStatus = filters.statuses[0] ?? ''
+  const selectedPriority = filters.priorities[0] ?? ''
+  const selectedAssignee = filters.assignedUserIds[0] ?? ''
+  const selectedGroup = filters.groupIds[0] ?? ''
 
   const activeTags: Array<{ label: string; onRemove: () => void }> = []
-  if (filters.statuses.length > 0)
+  if (selectedStatus) {
     activeTags.push({
-      label: `Status (${filters.statuses.length})`,
+      label: `Status: ${TICKET_STATUS_LABELS[selectedStatus]}`,
       onRemove: () => onChange({ statuses: [] }),
     })
-  if (filters.priorities.length > 0)
+  }
+  if (selectedPriority) {
     activeTags.push({
-      label: `Priority (${filters.priorities.length})`,
+      label: `Priority: ${TICKET_PRIORITY_LABELS[selectedPriority]}`,
       onRemove: () => onChange({ priorities: [] }),
     })
-  if (filters.assignedUserIds.length > 0)
-    activeTags.push({
-      label: `Assignee (${filters.assignedUserIds.length})`,
-      onRemove: () => onChange({ assignedUserIds: [] }),
-    })
-  if (filters.groupIds.length > 0)
-    activeTags.push({
-      label: `Group (${filters.groupIds.length})`,
-      onRemove: () => onChange({ groupIds: [] }),
-    })
-  if (filters.unassignedOnly)
+  }
+  if (selectedAssignee) {
+    activeTags.push({ label: 'Assignee selected', onRemove: () => onChange({ assignedUserIds: [] }) })
+  }
+  if (selectedGroup) {
+    activeTags.push({ label: 'Group selected', onRemove: () => onChange({ groupIds: [] }) })
+  }
+  if (filters.unassignedOnly) {
     activeTags.push({ label: 'Unassigned Only', onRemove: () => onChange({ unassignedOnly: false }) })
-  if (filters.overdueOnly)
+  }
+  if (filters.overdueOnly) {
     activeTags.push({ label: 'Overdue Only', onRemove: () => onChange({ overdueOnly: false }) })
-  if (filters.openOnly)
+  }
+  if (filters.openOnly) {
     activeTags.push({ label: 'Open Only', onRemove: () => onChange({ openOnly: false }) })
-  if (filters.transferredOnly)
+  }
+  if (filters.transferredOnly) {
     activeTags.push({ label: 'Transferred Only', onRemove: () => onChange({ transferredOnly: false }) })
-  if (filters.dateFrom || filters.dateTo)
-    activeTags.push({
-      label: `Date Range`,
-      onRemove: () => onChange({ dateFrom: null, dateTo: null }),
-    })
+  }
+  if (filters.dateFrom || filters.dateTo) {
+    activeTags.push({ label: 'Date Range', onRemove: () => onChange({ dateFrom: null, dateTo: null }) })
+  }
 
   const clearAll = () => {
     setSearchInput('')
@@ -173,7 +112,6 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
 
   return (
     <div className="bg-white border-b border-gray-200 px-3 py-2 space-y-1.5">
-      {/* Row 1 */}
       <div className="flex items-center gap-1.5 flex-wrap">
         <div className="relative">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -181,44 +119,58 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
             type="text"
             placeholder="Search tickets..."
             value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(event) => setSearchInput(event.target.value)}
             className="pl-7 pr-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-[240px]"
           />
         </div>
 
-        <MultiSelectDropdown
-          label="Status"
-          options={ALL_STATUSES.map((s) => ({ value: s, label: TICKET_STATUS_LABELS[s] }))}
-          selected={filters.statuses}
-          onChange={(vals) => onChange({ statuses: vals as TicketStatus[] })}
-        />
+        <select
+          value={selectedStatus}
+          onChange={(event) => onChange({ statuses: event.target.value ? [event.target.value as TicketStatus] : [] })}
+          className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Statuses</option>
+          {ALL_STATUSES.map((status) => (
+            <option key={status} value={status}>{TICKET_STATUS_LABELS[status]}</option>
+          ))}
+        </select>
 
-        <MultiSelectDropdown
-          label="Priority"
-          options={ALL_PRIORITIES.map((p) => ({ value: p, label: TICKET_PRIORITY_LABELS[p] }))}
-          selected={filters.priorities}
-          onChange={(vals) => onChange({ priorities: vals as TicketPriority[] })}
-        />
+        <select
+          value={selectedPriority}
+          onChange={(event) => onChange({ priorities: event.target.value ? [event.target.value as TicketPriority] : [] })}
+          className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Priorities</option>
+          {ALL_PRIORITIES.map((priority) => (
+            <option key={priority} value={priority}>{TICKET_PRIORITY_LABELS[priority]}</option>
+          ))}
+        </select>
 
-        <MultiSelectDropdown
-          label="Assignee"
-          options={users
-            .filter((u) => u.isActive)
-            .map((u) => ({ value: u.id, label: u.fullName }))}
-          selected={filters.assignedUserIds}
-          onChange={(vals) => onChange({ assignedUserIds: vals })}
-        />
+        <select
+          value={selectedAssignee}
+          onChange={(event) => onChange({ assignedUserIds: event.target.value ? [event.target.value] : [] })}
+          className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Assignees</option>
+          {users.filter((user) => user.isActive).map((user) => (
+            <option key={user.id} value={user.id}>{user.fullName}</option>
+          ))}
+        </select>
 
-        <MultiSelectDropdown
-          label="Group"
-          options={groups.map((g) => ({ value: g.id, label: g.name }))}
-          selected={filters.groupIds}
-          onChange={(vals) => onChange({ groupIds: vals })}
-        />
+        <select
+          value={selectedGroup}
+          onChange={(event) => onChange({ groupIds: event.target.value ? [event.target.value] : [] })}
+          className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="">All Groups</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>{group.name}</option>
+          ))}
+        </select>
 
         <button
           type="button"
-          onClick={() => setShowMore((v) => !v)}
+          onClick={() => setShowMore((value) => !value)}
           className="flex items-center gap-1 px-2 py-1 text-xs text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 ml-auto"
         >
           {showMore ? 'Less' : 'More'}
@@ -226,15 +178,14 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
         </button>
       </div>
 
-      {/* Row 2 */}
-      {showMore && (
+      {showMore ? (
         <div className="flex items-center gap-2 flex-wrap pt-0.5">
           <div className="flex items-center gap-1.5">
             <label className="text-[11px] text-gray-500 font-medium">From</label>
             <input
               type="date"
               value={filters.dateFrom ?? ''}
-              onChange={(e) => onChange({ dateFrom: e.target.value || null })}
+              onChange={(event) => onChange({ dateFrom: event.target.value || null })}
               className="px-1.5 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
@@ -243,19 +194,17 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
             <input
               type="date"
               value={filters.dateTo ?? ''}
-              onChange={(e) => onChange({ dateTo: e.target.value || null })}
+              onChange={(event) => onChange({ dateTo: event.target.value || null })}
               className="px-1.5 py-1 text-xs border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
 
-          {(
-            [
-              { key: 'unassignedOnly', label: 'Unassigned Only' },
-              { key: 'overdueOnly', label: 'Overdue Only' },
-              { key: 'openOnly', label: 'Open Only' },
-              { key: 'transferredOnly', label: 'Transferred Only' },
-            ] as const
-          ).map(({ key, label }) => (
+          {([
+            { key: 'unassignedOnly', label: 'Unassigned Only' },
+            { key: 'overdueOnly', label: 'Overdue Only' },
+            { key: 'openOnly', label: 'Open Only' },
+            { key: 'transferredOnly', label: 'Transferred Only' },
+          ] as const).map(({ key, label }) => (
             <button
               key={key}
               type="button"
@@ -271,10 +220,9 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
             </button>
           ))}
         </div>
-      )}
+      ) : null}
 
-      {/* Active filter tags */}
-      {activeFilterCount > 0 && (
+      {activeTags.length > 0 ? (
         <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
           {activeTags.map((tag) => (
             <span
@@ -300,7 +248,7 @@ export function TicketFilters({ filters, onChange, groups, users }: TicketFilter
             Clear All
           </button>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

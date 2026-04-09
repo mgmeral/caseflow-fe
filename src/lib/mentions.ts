@@ -97,6 +97,59 @@ export interface MentionSegment {
   value: string
 }
 
+export interface StructuredMention {
+  userId: string
+  displayText: string
+  fullName?: string | null
+  username?: string | null
+  email?: string | null
+  startIndex?: number | null
+  endIndex?: number | null
+}
+
+export function collectMentionedUserIds(
+  content: string,
+  mentions: Array<{ userId: string; displayText: string }>,
+): string[] {
+  const unique = new Set<string>()
+  for (const mention of mentions) {
+    if (content.includes(`@${mention.displayText}`)) {
+      unique.add(mention.userId)
+    }
+  }
+  return [...unique]
+}
+
+function buildSegmentsFromStructuredMentions(content: string, mentions: StructuredMention[]): MentionSegment[] {
+  const positioned = mentions
+    .filter((mention) => typeof mention.startIndex === 'number' && typeof mention.endIndex === 'number')
+    .sort((left, right) => (left.startIndex ?? 0) - (right.startIndex ?? 0))
+
+  if (positioned.length === 0) return []
+
+  const segments: MentionSegment[] = []
+  let cursor = 0
+
+  for (const mention of positioned) {
+    const startIndex = mention.startIndex ?? 0
+    const endIndex = mention.endIndex ?? startIndex
+    if (startIndex < cursor || endIndex > content.length || startIndex >= endIndex) continue
+
+    if (startIndex > cursor) {
+      segments.push({ type: 'text', value: content.slice(cursor, startIndex) })
+    }
+
+    segments.push({ type: 'mention', value: content.slice(startIndex, endIndex) })
+    cursor = endIndex
+  }
+
+  if (cursor < content.length) {
+    segments.push({ type: 'text', value: content.slice(cursor) })
+  }
+
+  return segments
+}
+
 /**
  * Parses a note content string into segments of plain text and @mentions.
  * Used by MentionText renderer.
@@ -123,4 +176,13 @@ export function parseMentionSegments(content: string): MentionSegment[] {
   }
 
   return segments
+}
+
+export function parseMentionSegmentsWithMetadata(
+  content: string,
+  mentions?: StructuredMention[] | null,
+): MentionSegment[] {
+  const metadataSegments = mentions?.length ? buildSegmentsFromStructuredMentions(content, mentions) : []
+  if (metadataSegments.length > 0) return metadataSegments
+  return parseMentionSegments(content)
 }

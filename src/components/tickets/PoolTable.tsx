@@ -12,6 +12,7 @@ import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/shared/Button'
 import { PAGE_SIZE_OPTIONS } from '@/constants/enums'
+import { DEFAULT_TICKET_SORT, isSupportedQueueSortField } from '@/lib/ticketQueryContracts'
 
 interface PoolTableProps {
   tickets: Ticket[]
@@ -32,11 +33,11 @@ interface PoolTableProps {
 const COLUMNS: Array<{ key: string; label: string; sortable?: boolean; width?: string }> = [
   { key: 'checkbox', label: '', width: 'w-8' },
   { key: 'priority', label: 'Priority', sortable: true, width: 'w-20' },
-  { key: 'subject', label: 'Subject', sortable: true },
-  { key: 'customerName', label: 'Customer', sortable: true },
+  { key: 'subject', label: 'Subject' },
+  { key: 'customerName', label: 'Customer' },
   { key: 'status', label: 'Status', sortable: true },
-  { key: 'groupName', label: 'Group', sortable: true },
-  { key: 'openDurationMinutes', label: 'Age', sortable: true },
+  { key: 'groupName', label: 'Group' },
+  { key: 'openDurationMinutes', label: 'Age' },
   { key: 'updatedAt', label: 'Updated', sortable: true },
   { key: 'assign', label: '', width: 'w-24' },
 ]
@@ -70,8 +71,14 @@ export function PoolTable({
   const endItem = Math.min(page * pageSize, total)
 
   const handleSort = (field: string) => {
-    const newDir = sort.field === field && sort.direction === 'asc' ? 'desc' : 'asc'
-    onSortChange({ field, direction: newDir })
+    if (!isSupportedQueueSortField(field)) return
+    if (sort.field !== field) {
+      onSortChange({ field, direction: 'asc' })
+    } else if (sort.direction === 'asc') {
+      onSortChange({ field, direction: 'desc' })
+    } else {
+      onSortChange(DEFAULT_TICKET_SORT)
+    }
   }
 
   return (

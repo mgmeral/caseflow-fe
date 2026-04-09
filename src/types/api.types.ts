@@ -153,7 +153,9 @@ export type UnknownSenderPolicy = ExtensibleEnum<
 /** Phase 1 — only IMAP_POLLING is supported */
 export type MailboxSourceType = ExtensibleEnum<'IMAP' | 'WEBHOOK' | 'SMTP_RELAY' | 'IMAP_POLLING'>
 
-export type MailboxAuthType = ExtensibleEnum<'PLAIN' | 'OAUTH2' | 'APP_PASSWORD'>
+export type MailProvider = ExtensibleEnum<'GMAIL' | 'OUTLOOK' | 'OTHER'>
+
+export type MailboxAuthType = ExtensibleEnum<'PASSWORD' | 'PLAIN' | 'OAUTH2' | 'APP_PASSWORD'>
 
 export type InboundMode = ExtensibleEnum<'POLLING' | 'WEBHOOK'>
 
@@ -233,11 +235,56 @@ export interface NoteResponse {
   ticketId: string
   type: NoteType
   content: string
-  /** Backend field — the username or display name of the note creator */
-  createdBy: string
+  createdBy: string | number
+  createdByUser?: {
+    id?: string | number | null
+    fullName?: string | null
+    username?: string | null
+    email?: string | null
+  } | null
+  mentions?: Array<{
+    mentionedUserId?: string | number | null
+    userId?: string | number | null
+    displayText?: string | null
+    fullName?: string | null
+    username?: string | null
+    email?: string | null
+    startIndex?: number | null
+    endIndex?: number | null
+  }> | null
   createdAt: string
   eventType?: string | null
   metadataJson?: string | null
+}
+
+export interface DashboardStatsResponse {
+  totalTickets?: number | null
+  activeTickets?: number | null
+  resolvedTickets?: number | null
+  closedTickets?: number | null
+  unassignedTickets?: number | null
+  waitingOver24h?: number | null
+  myActionRequired?: number | null
+  myActionRequiredItems?: Record<string, unknown>[] | null
+}
+
+export interface QueueStatsResponse {
+  awaitingAssignment?: number | null
+  allUnassigned?: number | null
+  highCritical?: number | null
+  waitingOver8h?: number | null
+  slaBreached?: number | null
+}
+
+export interface ChannelEventCatalogResponseItem {
+  value?: string | null
+  code?: string | null
+  eventType?: string | null
+  label?: string | null
+  displayName?: string | null
+  group?: string | null
+  category?: string | null
+  description?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -361,15 +408,21 @@ export interface MailboxResponse {
   name: string
   displayName?: string | null
   address?: string
+  mailProvider?: MailProvider | null
+  authType?: MailboxAuthType | null
   providerType?: MailboxSourceType
   inboundMode?: InboundMode
   outboundMode?: OutboundMode
   isActive: boolean
   defaultGroupId: string | number | null
   defaultPriority: string | null
+  oauthTenantId?: string | null
+  oauthClientId?: string | null
+  oauthConfigured?: boolean | null
   smtpHost?: string | null
   smtpPort?: number | null
   smtpUsername?: string | null
+  smtpStarttls?: boolean | null
   smtpUseSsl?: boolean | null
   imapHost?: string | null
   imapPort?: number | null
@@ -397,16 +450,22 @@ export interface CreateMailboxRequest {
   name: string
   displayName?: string | null
   address: string
+  mailProvider?: MailProvider | null
+  authType?: MailboxAuthType | null
   providerType: MailboxSourceType
   inboundMode: InboundMode
   outboundMode: OutboundMode
   isActive?: boolean
   defaultGroupId?: number | string | null
   defaultPriority?: string | null
+  oauthTenantId?: string | null
+  oauthClientId?: string | null
+  oauthClientSecret?: string | null
   smtpHost?: string | null
   smtpPort?: number | null
   smtpUsername?: string | null
   smtpPassword?: string | null
+  smtpStarttls?: boolean | null
   smtpUseSsl?: boolean | null
   imapHost?: string | null
   imapPort?: number | null
@@ -981,6 +1040,7 @@ export interface AddNoteRequest {
   ticketId: string
   content: string
   type: NoteType
+  mentionedUserIds?: string[]
 }
 
 /**

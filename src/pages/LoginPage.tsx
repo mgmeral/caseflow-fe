@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth.store'
 import { Button } from '@/components/shared/Button'
-import { API_URL } from '@/lib/env'
 
 export function LoginPage() {
   const navigate = useNavigate()

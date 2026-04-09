@@ -4,7 +4,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 
 // Mock env so API_URL is set
-vi.mock('@/lib/env', () => ({ API_URL: 'http://api.test' }))
+vi.mock('@/lib/env', () => ({ API_URL: '/api' }))
 
 const { apiClient, ApiError } = await import('@/services/api.client')
 
@@ -31,7 +31,7 @@ describe('apiClient', () => {
     const spy = mockFetch(201, { accessToken: 'abc', refreshToken: 'ref', tokenType: 'Bearer', expiresIn: 3600 })
     await apiClient.post('/auth/login', { username: 'a@b.com', password: 'pw' })
     expect(spy).toHaveBeenCalledWith(
-      expect.stringContaining('/auth/login'),
+      '/api/auth/login',
       expect.objectContaining({ method: 'POST' }),
     )
   })
@@ -94,16 +94,12 @@ describe('apiClient', () => {
 
     expect(result).toBe(blob)
     expect(fetchSpy).toHaveBeenCalledWith(
-      'http://api.test/tickets/1/emails/2/attachments/3/content',
+      '/api/tickets/1/emails/2/attachments/3/content',
       expect.objectContaining({ method: 'GET' }),
     )
   })
 
-  it('does not double-prefix backend API paths that already start with /api', async () => {
-    vi.resetModules()
-    vi.doMock('@/lib/env', () => ({ API_URL: 'http://api.test/api' }))
-
-    const { apiClient: apiClientWithApiBase } = await import('@/services/api.client')
+  it('does not double-prefix relative backend API paths that already start with /api', async () => {
     const blob = new Blob(['file-bytes'], { type: 'application/pdf' })
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
       ok: true,
@@ -112,16 +108,27 @@ describe('apiClient', () => {
       blob: () => Promise.resolve(blob),
     } as unknown as Response)
 
-    const result = await apiClientWithApiBase.getBlob('/api/tickets/1/emails/2/attachments/3/content')
+    const result = await apiClient.getBlob('/api/tickets/1/emails/2/attachments/3/content')
 
     expect(result).toBe(blob)
     expect(fetchSpy).toHaveBeenCalledWith(
-      'http://api.test/api/tickets/1/emails/2/attachments/3/content',
+      '/api/tickets/1/emails/2/attachments/3/content',
       expect.objectContaining({ method: 'GET' }),
     )
     expect(fetchSpy).not.toHaveBeenCalledWith(
       expect.stringContaining('/api/api/tickets/1/emails/2/attachments/3/content'),
       expect.anything(),
+    )
+  })
+
+  it('keeps intentional absolute URLs untouched', async () => {
+    const spy = mockFetch(200, { ok: true })
+
+    await apiClient.get('https://files.caseflow.test/api/attachments/123')
+
+    expect(spy).toHaveBeenCalledWith(
+      'https://files.caseflow.test/api/attachments/123',
+      expect.objectContaining({ method: 'GET' }),
     )
   })
 })

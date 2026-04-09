@@ -10,6 +10,9 @@ import type {
 } from '@/types/api.types'
 import { apiClient, ApiError } from './api.client'
 import { normalizeStatus, normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
+import { DEFAULT_TICKET_SORT, isSupportedTicketSortField } from '@/lib/ticketQueryContracts'
+
+type NormalizedMention = NonNullable<TicketMessage['mentions']>[number]
 
 // ---------------------------------------------------------------------------
 // Helpers: map backend DTOs to TicketMessage view model
@@ -26,9 +29,35 @@ function noteToMessage(n: NoteResponse): TicketMessage {
     id: n.id,
     ticketId: n.ticketId,
     type: typeMap[n.type] ?? 'internal_note',
-    authorId: n.createdBy ?? null,
-    authorName: n.createdBy ?? '',
+    authorId: n.createdByUser?.id != null ? String(n.createdByUser.id) : n.createdBy != null ? String(n.createdBy) : null,
+    authorName: n.createdByUser?.fullName ?? String(n.createdBy ?? ''),
+    authorUser: n.createdByUser
+      ? {
+          id: n.createdByUser.id != null ? String(n.createdByUser.id) : null,
+          fullName: n.createdByUser.fullName ?? '',
+          username: n.createdByUser.username ?? null,
+          email: n.createdByUser.email ?? null,
+        }
+      : null,
     content: n.content,
+    mentions: Array.isArray(n.mentions)
+      ? n.mentions
+          .map((mention) => {
+            const userId = mention.mentionedUserId ?? mention.userId
+            if (userId == null) return null
+            const normalizedMention: NormalizedMention = {
+              userId: String(userId),
+              displayText: String(mention.displayText ?? mention.fullName ?? mention.username ?? ''),
+              fullName: mention.fullName ?? null,
+              username: mention.username ?? null,
+              email: mention.email ?? null,
+              startIndex: mention.startIndex ?? null,
+              endIndex: mention.endIndex ?? null,
+            }
+            return normalizedMention
+          })
+          .filter((mention): mention is NormalizedMention => Boolean(mention))
+      : [],
     createdAt: n.createdAt,
     attachments: [],
     eventType: n.eventType ?? null,
@@ -61,18 +90,19 @@ export const ticketService = {
     pageSize: number,
   ): Promise<{ data: Ticket[]; total: number }> => {
     const params = new URLSearchParams()
+    const safeSortField = isSupportedTicketSortField(sort.field) ? sort.field : DEFAULT_TICKET_SORT.field
 
     params.set('page', String(page - 1))
     params.set('size', String(pageSize))
 
-    if (sort.field) params.set('sort', sort.field)
+    if (safeSortField) params.set('sort', safeSortField)
     if (sort.direction) params.set('direction', sort.direction)
     if (filters.search) params.set('search', filters.search)
 
-    for (const s of filters.statuses) params.append('status', toBackendStatus(s))
-    for (const p of filters.priorities) params.append('priority', toBackendPriority(p))
-    for (const uid of filters.assignedUserIds) params.append('userId', uid)
-    for (const gid of filters.groupIds) params.append('groupId', gid)
+    if (filters.statuses[0]) params.set('status', toBackendStatus(filters.statuses[0]))
+    if (filters.priorities[0]) params.set('priority', toBackendPriority(filters.priorities[0]))
+    if (filters.assignedUserIds[0]) params.set('userId', filters.assignedUserIds[0])
+    if (filters.groupIds[0]) params.set('groupId', filters.groupIds[0])
 
     if (filters.dateFrom) params.set('from', filters.dateFrom)
     if (filters.dateTo) params.set('to', filters.dateTo)
@@ -198,13 +228,13 @@ export const ticketService = {
   addInternalNote: async (
     ticketId: string,
     content: string,
-    _authorId: string,
-    _authorName: string,
+    mentionedUserIds: string[],
   ): Promise<TicketMessage> => {
     const note = await apiClient.post<NoteResponse>('/notes', {
       ticketId: Number(ticketId),
       content,
       type: 'INTERNAL',
+      mentionedUserIds,
     })
     return noteToMessage(note)
   },

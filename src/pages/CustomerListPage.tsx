@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCreateCustomer, useCustomers } from '@/hooks/useCustomers'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
@@ -13,18 +13,38 @@ export function CustomerListPage() {
   const navigate = useNavigate()
   const { success, error: showError } = useToast()
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
-  const { customers, isLoading, isError, error } = useCustomers(search)
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300)
+    return () => clearTimeout(t)
+  }, [search])
+
+  const backendStatusFilter = statusFilter === 'all' ? undefined : statusFilter === 'active'
+  const { customers, isLoading, isError, error } = useCustomers(debouncedSearch, backendStatusFilter)
   const createCustomer = useCreateCustomer()
 
   const filteredCustomers = useMemo(() => {
-    if (statusFilter === 'all') return customers
-    const isActive = statusFilter === 'active'
-    return customers.filter((c) => c.isActive === isActive)
-  }, [customers, statusFilter])
+    let result = customers
+    // Fallback client-side guard in case backend ignores isActive
+    if (statusFilter !== 'all') {
+      const isActive = statusFilter === 'active'
+      result = result.filter((c) => c.isActive === isActive)
+    }
+    // Client-side search fallback for code matching (backend may only search by name)
+    if (debouncedSearch) {
+      const q = debouncedSearch.toLowerCase()
+      result = result.filter(
+        (c) => c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q),
+      )
+    }
+    return result
+  }, [customers, statusFilter, debouncedSearch])
 
   const normalizedCode = code.trim().toUpperCase()
   const canCreate = name.trim().length >= 2 && normalizedCode.length >= 2

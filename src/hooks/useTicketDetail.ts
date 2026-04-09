@@ -88,8 +88,8 @@ export function useTicketDetail(id: string) {
   })
 
   const addNoteMutation = useMutation({
-    mutationFn: (content: string) =>
-      ticketService.addInternalNote(id, content, currentUser?.id ?? '', currentUser?.fullName ?? 'Unknown'),
+    mutationFn: ({ content, mentionedUserIds }: { content: string; mentionedUserIds: string[] }) =>
+      ticketService.addInternalNote(id, content, mentionedUserIds),
     onSuccess: () => {
       success('İç not eklendi')
       invalidate()

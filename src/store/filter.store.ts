@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
 import type { TicketFilters } from '@/types/ticket.types'
 import type { SortState } from '@/types/common.types'
 
@@ -29,33 +28,22 @@ const defaultFilters: TicketFilters = {
   transferredOnly: false,
 }
 
-export const useFilterStore = create<FilterStore>()(
-  persist(
-    (set) => ({
-      filters: defaultFilters,
-      sort: { field: 'updatedAt', direction: 'desc' },
-      page: 1,
-      pageSize: 25,
+export const useFilterStore = create<FilterStore>()((set) => ({
+  filters: defaultFilters,
+  sort: { field: 'updatedAt', direction: 'desc' },
+  page: 1,
+  pageSize: 25,
 
-      setFilters: (partial) =>
-        set((s) => ({ filters: { ...s.filters, ...partial }, page: 1 })),
+  setFilters: (partial) =>
+    set((s) => ({ filters: { ...s.filters, ...partial }, page: 1 })),
 
-      setSort: (sort) => set({ sort, page: 1 }),
+  setSort: (sort) => set({ sort, page: 1 }),
 
-      setPage: (page) => set({ page }),
+  setPage: (page) => set({ page }),
 
-      setPageSize: (pageSize) => set({ pageSize, page: 1 }),
+  setPageSize: (pageSize) => set({ pageSize, page: 1 }),
 
-      resetFilters: () => set({ filters: defaultFilters, page: 1 }),
-    }),
-    {
-      name: 'csm-filters',
-      partialize: (state) => ({
-        sort: state.sort,
-        pageSize: state.pageSize,
-      }),
-    },
-  ),
-)
+  resetFilters: () => set({ filters: defaultFilters, sort: { field: 'updatedAt', direction: 'desc' }, page: 1, pageSize: 25 }),
+}))
 
 export { defaultFilters }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { BellRing, Plus, ShieldOff, Trash2, Pencil } from 'lucide-react'
-import { useChannelConfig, useChannelConfigs, useCreateChannelConfig, useDeleteChannelConfig, useUpdateChannelConfig } from '@/hooks/useIntegrations'
+import { useChannelConfig, useChannelConfigs, useCreateChannelConfig, useDeleteChannelConfig, useUpdateChannelConfig, useChannelEventCatalog } from '@/hooks/useIntegrations'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useCustomers } from '@/hooks/useCustomers'
 import { useGroupsQuery } from '@/hooks/useUsers'
@@ -11,15 +11,6 @@ import { Modal } from '@/components/shared/Modal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { getErrorMessage } from '@/lib/errors'
 import type { ChannelConfig, ChannelConfigRequest, ChannelType, NotificationEventType, ScopeType } from '@/types/integration.types'
-
-const EVENT_OPTIONS: Array<{ value: NotificationEventType; label: string }> = [
-  { value: 'TICKET_CREATED', label: 'Ticket Created' },
-  { value: 'TICKET_ASSIGNED', label: 'Ticket Assigned' },
-  { value: 'TICKET_TRANSFERRED', label: 'Ticket Transferred' },
-  { value: 'TICKET_RESOLVED', label: 'Ticket Resolved' },
-  { value: 'TICKET_CLOSED', label: 'Ticket Closed' },
-  { value: 'OUTBOUND_REPLY_FAILED', label: 'Outbound Reply Failed' },
-]
 
 interface ChannelFormState {
   name: string
@@ -94,6 +85,7 @@ export function ChannelIntegrationSettingsPage() {
   const createMutation = useCreateChannelConfig()
   const updateMutation = useUpdateChannelConfig()
   const deleteMutation = useDeleteChannelConfig()
+  const eventCatalogQuery = useChannelEventCatalog()
   const { customers } = useCustomers('')
   const groupsQuery = useGroupsQuery()
 
@@ -135,6 +127,37 @@ export function ChannelIntegrationSettingsPage() {
     : form.scopeType === 'CUSTOMER'
       ? customers.map((customer) => ({ id: customer.id, label: customer.name }))
       : []
+
+  const eventGroups = useMemo(() => {
+    const catalog = eventCatalogQuery.data ?? []
+    const fallbackValues = [
+      ...new Set([
+        ...catalog.map((item) => item.value),
+        ...form.subscribedEvents,
+        ...(channelConfigsQuery.data ?? []).flatMap((config) => config.subscribedEvents),
+      ]),
+    ]
+
+    const normalized = fallbackValues.map((value) => {
+      const catalogItem = catalog.find((item) => item.value === value)
+      return catalogItem ?? {
+        value,
+        label: value.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase()),
+        group: value.includes('OUTBOUND') ? 'Customer Communication' : 'Other',
+        description: null,
+      }
+    })
+
+    return normalized.reduce<Array<{ group: string; events: typeof normalized }>>((acc, item) => {
+      const existing = acc.find((group) => group.group === item.group)
+      if (existing) {
+        existing.events.push(item)
+      } else {
+        acc.push({ group: item.group, events: [item] })
+      }
+      return acc
+    }, [])
+  }, [channelConfigsQuery.data, eventCatalogQuery.data, form.subscribedEvents])
 
   const openCreate = () => {
     setModalMode('create')
@@ -420,18 +443,30 @@ export function ChannelIntegrationSettingsPage() {
 
             <div className="space-y-2">
               <div className="text-sm font-medium text-gray-800">Subscribed Events</div>
-              <p className="text-xs text-gray-500">Choose which ticket lifecycle events should be delivered to this channel. Select at least one event.</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {EVENT_OPTIONS.map((option) => (
-                  <label key={option.value} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={form.subscribedEvents.includes(option.value)}
-                      onChange={() => handleToggleEvent(option.value)}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400"
-                    />
-                    {option.label}
-                  </label>
+              <p className="text-xs text-gray-500">Choose which supported events should be delivered to this channel. Select at least one event.</p>
+              <div className="space-y-3">
+                {eventGroups.map((section) => (
+                  <div key={section.group} className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+                    <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      {section.group}
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {section.events.map((option) => (
+                        <label key={option.value} className="flex items-start gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={form.subscribedEvents.includes(option.value)}
+                            onChange={() => handleToggleEvent(option.value)}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-400"
+                          />
+                          <span>
+                            <span className="block">{option.label}</span>
+                            {option.description ? <span className="block text-xs text-gray-500">{option.description}</span> : null}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

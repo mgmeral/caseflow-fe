@@ -53,13 +53,14 @@ export type ChannelType = 'SLACK' | 'TEAMS'
 
 export type ScopeType = 'GLOBAL' | 'GROUP' | 'CUSTOMER'
 
-export type NotificationEventType =
-  | 'TICKET_CREATED'
-  | 'TICKET_ASSIGNED'
-  | 'TICKET_TRANSFERRED'
-  | 'TICKET_RESOLVED'
-  | 'TICKET_CLOSED'
-  | 'OUTBOUND_REPLY_FAILED'
+export type NotificationEventType = string
+
+export interface ChannelEventCatalogItem {
+  value: NotificationEventType
+  label: string
+  group: string
+  description?: string | null
+}
 
 export interface ChannelConfigResponse {
   id: number

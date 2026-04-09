@@ -4,6 +4,15 @@ import { fireEvent, render, screen } from '@testing-library/react'
 const createMutate = vi.hoisted(() => vi.fn())
 const updateMutate = vi.hoisted(() => vi.fn())
 const deleteMutate = vi.hoisted(() => vi.fn())
+const eventCatalogState = vi.hoisted(() => ({
+  data: [
+    { value: 'TICKET_CREATED', label: 'Ticket Created', group: 'Ticket Lifecycle', description: 'Triggered when a ticket is created.' },
+    { value: 'TICKET_RESOLVED', label: 'Ticket Resolved', group: 'Ticket Lifecycle', description: 'Triggered when a ticket is resolved.' },
+    { value: 'ASSIGNMENT_CHANGED', label: 'Assignment Changed', group: 'Ownership / Workflow', description: 'Triggered when assignment changes.' },
+    { value: 'OUTBOUND_EMAIL_SENT', label: 'Outbound Email Sent', group: 'Customer Communication', description: 'Triggered when an outbound email is sent.' },
+  ],
+  isLoading: false,
+}))
 
 const channelsState = vi.hoisted(() => ({
   data: [
@@ -58,6 +67,7 @@ vi.mock('@/hooks/useUsers', () => ({
 vi.mock('@/hooks/useIntegrations', () => ({
   useChannelConfigs: () => channelsState,
   useChannelConfig: () => channelDetailState,
+  useChannelEventCatalog: () => eventCatalogState,
   useCreateChannelConfig: () => ({ mutate: createMutate, isPending: false }),
   useUpdateChannelConfig: () => ({ mutate: updateMutate, isPending: false }),
   useDeleteChannelConfig: () => ({ mutate: deleteMutate, isPending: false }),
@@ -85,6 +95,9 @@ describe('ChannelIntegrationSettingsPage', () => {
     render(<ChannelIntegrationSettingsPage />)
 
     fireEvent.click(screen.getByRole('button', { name: 'New Channel' }))
+    expect(screen.getByText('Ticket Lifecycle')).toBeInTheDocument()
+    expect(screen.getByText('Ownership / Workflow')).toBeInTheDocument()
+    expect(screen.getByText('Customer Communication')).toBeInTheDocument()
     expect(screen.queryByText('Scope Target')).not.toBeInTheDocument()
     expect(screen.getByText('Paste the incoming Slack webhook URL for the channel that should receive ticket events.')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Ops Teams' } })

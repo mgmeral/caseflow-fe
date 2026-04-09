@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 const mockSuccess = vi.hoisted(() => vi.fn())
@@ -8,6 +8,7 @@ const mockTestImapConnection = vi.hoisted(() => vi.fn())
 const mockTestSmtpConnection = vi.hoisted(() => vi.fn())
 const mockActivate = vi.hoisted(() => vi.fn())
 const mockCreate = vi.hoisted(() => vi.fn())
+const mockUpdate = vi.hoisted(() => vi.fn())
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({ canManageEmailConfig: true }),
@@ -26,18 +27,24 @@ vi.mock('@/hooks/useMailboxes', () => ({
           name: 'Main',
           address: 'support@caseflow.com',
           displayName: 'Support',
+          mailProvider: 'GMAIL',
+          authType: 'PASSWORD',
           providerType: 'IMAP',
           inboundMode: 'POLLING',
           outboundMode: 'SMTP',
-          imapHost: 'imap.caseflow.com',
+          oauthTenantId: null,
+          oauthClientId: null,
+          oauthConfigured: null,
+          imapHost: 'imap.gmail.com',
           imapPort: 993,
           imapUsername: 'support@caseflow.com',
           imapUseSsl: true,
           imapFolder: 'INBOX',
-          smtpHost: null,
-          smtpPort: null,
-          smtpUsername: null,
-          smtpUseSsl: null,
+          smtpHost: 'smtp.gmail.com',
+          smtpPort: 587,
+          smtpUsername: 'support@caseflow.com',
+          smtpStarttls: true,
+          smtpUseSsl: true,
           pollingEnabled: true,
           pollIntervalSeconds: 60,
           initialSyncStrategy: 'START_FROM_LATEST',
@@ -60,17 +67,23 @@ vi.mock('@/hooks/useMailboxes', () => ({
           name: 'Archive',
           address: 'archive@caseflow.com',
           displayName: 'Archive',
+          mailProvider: 'OUTLOOK',
+          authType: 'OAUTH2',
           providerType: 'IMAP',
           inboundMode: 'POLLING',
           outboundMode: 'SMTP',
-          imapHost: 'imap.caseflow.com',
+          oauthTenantId: 'tenant-1',
+          oauthClientId: 'client-1',
+          oauthConfigured: true,
+          imapHost: 'outlook.office365.com',
           imapPort: 993,
           imapUsername: 'archive@caseflow.com',
           imapUseSsl: true,
           imapFolder: 'INBOX',
-          smtpHost: 'smtp.caseflow.com',
+          smtpHost: 'smtp-mail.outlook.com',
           smtpPort: 587,
           smtpUsername: 'archive@caseflow.com',
+          smtpStarttls: true,
           smtpUseSsl: true,
           pollingEnabled: true,
           pollIntervalSeconds: 60,
@@ -104,7 +117,7 @@ vi.mock('@/services/mailbox.service', () => ({
     testImapConnection: mockTestImapConnection,
     testSmtpConnection: mockTestSmtpConnection,
     create: mockCreate,
-    update: vi.fn(),
+    update: mockUpdate,
     activate: mockActivate,
     deactivate: vi.fn(),
   },
@@ -128,37 +141,107 @@ describe('MailboxManagementPage', () => {
     mockTestSmtpConnection.mockReset()
     mockActivate.mockReset()
     mockCreate.mockReset()
+    mockUpdate.mockReset()
   })
 
-  it('defaults the mailbox form to New messages only', () => {
+  it('renders provider and auth badges in the mailbox list', () => {
+    renderPage()
+
+    expect(screen.getByText('Gmail')).toBeInTheDocument()
+    expect(screen.getByText('Outlook / Microsoft 365')).toBeInTheDocument()
+    expect(screen.getAllByText('Password').length).toBeGreaterThan(0)
+    expect(screen.getByText('OAuth ready')).toBeInTheDocument()
+  })
+
+  it('defaults the mailbox form to Other IMAP with password auth', () => {
     renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
 
-    expect(screen.getByDisplayValue('New messages only')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Other IMAP' })).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Password')).toBeInTheDocument()
   })
 
-  it('shows a strong warning when scan from start is selected', () => {
+  it('switches to Gmail presets and keeps OAuth fields hidden', () => {
     renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
-    fireEvent.change(screen.getByDisplayValue('New messages only'), { target: { value: 'SCAN_FROM_START' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
+    fireEvent.click(screen.getByRole('button', { name: /Advanced Settings/i }))
 
-    expect(screen.getByText('Scan from start can process old inbox history.')).toBeInTheDocument()
+    expect(screen.getByText('Normal Gmail sifrenizi degil, 2 Adimli Dogrulama sonrasi uretilen App Password kullanin.')).toBeInTheDocument()
+    expect(screen.getByText('IMAP username ve SMTP username cogunlukla tam email adresidir.')).toBeInTheDocument()
+    expect(screen.getByText('Onerilen ayarlar: imap.gmail.com:993 SSL, smtp.gmail.com:587 STARTTLS.')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('imap.gmail.com')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('smtp.gmail.com')).toBeInTheDocument()
+    expect(screen.queryByLabelText('Tenant ID *')).not.toBeInTheDocument()
   })
 
-  it('keeps SMTP fields hidden until mailbox-specific SMTP is enabled', () => {
+  it('switches to Outlook OAuth2 fields and hides the IMAP password input', () => {
     renderPage()
 
-    fireEvent.click(screen.getAllByTitle('Edit')[0])
+    fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Outlook / Microsoft 365' }))
 
-    expect(screen.getByText('SMTP fields stay hidden unless this mailbox uses mailbox-specific outbound delivery.')).toBeInTheDocument()
-    expect(screen.queryByText('SMTP Host *')).not.toBeInTheDocument()
+    expect(screen.getByText('Normal mailbox sifresi kullanilmaz; OAuth2 / Modern Auth gerekir.')).toBeInTheDocument()
+    expect(screen.getByText('Tenant ID, Client ID ve Client Secret doldurulmalidir.')).toBeInTheDocument()
+    expect(screen.getByText('Onerilen ayarlar: outlook.office365.com:993 SSL, smtp-mail.outlook.com:587 STARTTLS.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Tenant ID *')).toBeInTheDocument()
+    expect(screen.getByLabelText('Client ID *')).toBeInTheDocument()
+    expect(screen.getByLabelText('Client Secret *')).toBeInTheDocument()
+    expect(screen.queryByLabelText('IMAP Password *')).not.toBeInTheDocument()
+  })
 
-    fireEvent.click(screen.getByLabelText('Use mailbox-specific SMTP'))
+  it('shows manual guidance for Other IMAP provider', () => {
+    renderPage()
 
-    expect(screen.getByText('SMTP Host *')).toBeInTheDocument()
-    expect(screen.getByText('SMTP Username *')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+
+    expect(screen.getByText('Sunucu bilgilerini saglayiciniza gore manuel doldurun.')).toBeInTheDocument()
+    expect(screen.getByLabelText('IMAP Password *')).toBeInTheDocument()
+  })
+
+  it('clears provider-specific secrets when switching providers', () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Outlook / Microsoft 365' }))
+    fireEvent.change(screen.getByLabelText('Client Secret *'), { target: { value: 'outlook-secret' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
+
+    expect(screen.queryByDisplayValue('outlook-secret')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('IMAP Password *')).toHaveValue('')
+  })
+
+  it('shows validation when Outlook OAuth2 fields are missing', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Outlook / Microsoft 365' }))
+    fireEvent.change(screen.getByLabelText('Name *'), { target: { value: 'Outlook Box' } })
+    fireEvent.change(screen.getByLabelText('Email Address *'), { target: { value: 'helpdesk@contoso.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+
+    expect(await screen.findByText('Tenant ID is required for OAuth2.')).toBeInTheDocument()
+    expect(screen.getByText('Client ID is required for OAuth2.')).toBeInTheDocument()
+    expect(screen.getByText('Client secret is required for OAuth2.')).toBeInTheDocument()
+  })
+
+  it('sends null secrets on edit when secrets stay blank', async () => {
+    mockUpdate.mockResolvedValueOnce({ id: 'm2' })
+    renderPage()
+
+    fireEvent.click(screen.getAllByTitle('Edit')[1])
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith('m2', expect.objectContaining({
+        oauthClientSecret: null,
+        imapPassword: null,
+        smtpPassword: null,
+      }))
+    })
   })
 
   it('runs IMAP and SMTP connection tests separately and renders them distinctly from poll errors', async () => {
@@ -174,10 +257,6 @@ describe('MailboxManagementPage', () => {
     })
 
     renderPage()
-
-    expect(screen.getAllByText('Last poll error:').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('IMAP test:').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('SMTP test:').length).toBeGreaterThan(0)
 
     fireEvent.click(screen.getAllByTitle('Edit')[1])
     fireEvent.click(screen.getByRole('button', { name: 'Test IMAP Connection' }))
@@ -215,19 +294,37 @@ describe('MailboxManagementPage', () => {
     renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
 
-    const dialog = screen.getByRole('dialog', { name: 'New Mailbox' })
-    const textboxes = within(dialog).getAllByRole('textbox')
+    fireEvent.change(screen.getByLabelText('Name *'), { target: { value: 'Risky mailbox' } })
+    fireEvent.change(screen.getByLabelText('Email Address *'), { target: { value: 'risk@example.com' } })
+    fireEvent.change(screen.getByLabelText('IMAP Username *'), { target: { value: 'risk@example.com' } })
+    fireEvent.change(screen.getByLabelText('IMAP Password *'), { target: { value: 'secret' } })
+    fireEvent.change(screen.getByLabelText('Initial Sync'), { target: { value: 'SCAN_LAST_3_DAYS' } })
 
-    fireEvent.change(textboxes[0], { target: { value: 'Risky mailbox' } })
-    fireEvent.change(textboxes[1], { target: { value: 'risk@example.com' } })
-    fireEvent.change(textboxes[3], { target: { value: 'imap.caseflow.com' } })
-    fireEvent.change(textboxes[4], { target: { value: 'risk@example.com' } })
-    fireEvent.change(within(dialog).getByPlaceholderText('IMAP password'), { target: { value: 'secret' } })
-    fireEvent.change(within(dialog).getByDisplayValue('New messages only'), { target: { value: 'SCAN_LAST_3_DAYS' } })
-
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 
     expect(screen.getByText('Saving this mailbox with polling enabled can allow historical inbox scanning as soon as the mailbox is activated and polling runs.')).toBeInTheDocument()
+  })
+
+  it('keeps the existing secret placeholder text in edit mode', () => {
+    renderPage()
+
+    fireEvent.click(screen.getAllByTitle('Edit')[1])
+
+    expect(screen.getByPlaceholderText('Bos birakirsan mevcut deger korunur')).toBeInTheDocument()
+  })
+
+  it('shows field helper text for the main credential inputs', () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gmail' }))
+
+    expect(screen.getByText('This should be the mailbox address CaseFlow will read and optionally send from.')).toBeInTheDocument()
+    expect(screen.getByText('Usually the full email address. Override only if your provider requires a different login name.')).toBeInTheDocument()
+    expect(screen.getByText('Use the mailbox password or app password required by your provider. Password auth is hidden for Outlook.')).toBeInTheDocument()
+    expect(screen.getByText('Usually the same as the email address when mailbox-specific SMTP auth is enabled.')).toBeInTheDocument()
+    expect(screen.getByText('Controls how much historical inbox content is scanned before steady-state polling starts.')).toBeInTheDocument()
   })
 })

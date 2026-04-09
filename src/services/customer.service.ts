@@ -20,9 +20,10 @@ export const customerService = {
    * GET /api/customers
    * Query: search only
    */
-  getAll: async (search = '', _segment?: string): Promise<Customer[]> => {
+  getAll: async (search = '', isActive?: boolean): Promise<Customer[]> => {
     const params = new URLSearchParams()
     if (search) params.set('search', search)
+    if (typeof isActive === 'boolean') params.set('isActive', String(isActive))
     const qs = params.toString()
     const res = await apiClient.get<CustomerResponse[]>(`/customers${qs ? `?${qs}` : ''}`)
     const list = Array.isArray(res) ? res : (res as unknown as { data: CustomerResponse[] }).data ?? []

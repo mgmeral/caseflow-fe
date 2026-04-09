@@ -4,6 +4,8 @@ import type {
   CustomerEmailRoutingRuleResponse,
   CustomerEmailSettingsResponse,
   InitialSyncStrategy,
+  MailProvider,
+  MailboxAuthType,
   MailboxResponse,
   SendTicketReplyResponse,
   TagResponse,
@@ -30,6 +32,36 @@ const LEGACY_INITIAL_SYNC_STRATEGY_MAP = {
   BACKFILL_ALL: 'SCAN_FROM_START',
 } as const satisfies Record<string, InitialSyncStrategy>
 
+function normalizeMailboxAuthType(value: MailboxAuthType | null | undefined): MailboxAuthType | null {
+  if (!value) return null
+  if (value === 'OAUTH2') return 'OAUTH2'
+  return 'PASSWORD'
+}
+
+function inferMailProvider(mailbox: Pick<MailboxResponse, 'mailProvider' | 'authType' | 'imapHost' | 'smtpHost' | 'oauthTenantId' | 'oauthClientId'>): MailProvider {
+  if (mailbox.mailProvider) return mailbox.mailProvider
+
+  const imapHost = mailbox.imapHost?.toLowerCase() ?? ''
+  const smtpHost = mailbox.smtpHost?.toLowerCase() ?? ''
+  const authType = normalizeMailboxAuthType(mailbox.authType)
+
+  if (
+    authType === 'OAUTH2'
+    || Boolean(mailbox.oauthTenantId)
+    || Boolean(mailbox.oauthClientId)
+    || imapHost.includes('outlook.office365.com')
+    || smtpHost.includes('smtp.office365.com')
+  ) {
+    return 'OUTLOOK'
+  }
+
+  if (imapHost.includes('gmail.com') || smtpHost.includes('gmail.com')) {
+    return 'GMAIL'
+  }
+
+  return 'OTHER'
+}
+
 export function normalizeInitialSyncStrategy(value: InitialSyncStrategy | null | undefined): InitialSyncStrategy | null {
   if (!value) return null
   return LEGACY_INITIAL_SYNC_STRATEGY_MAP[value as keyof typeof LEGACY_INITIAL_SYNC_STRATEGY_MAP] ?? value
@@ -53,15 +85,21 @@ export function normalizeMailbox(mailbox: MailboxResponse): Mailbox {
   const pollingStatus = mailbox.pollingStatus ?? (mailbox.lastPollError ? 'ERROR' : 'IDLE')
   const initialSyncStrategy = normalizeInitialSyncStrategy(mailbox.initialSyncStrategy)
   const cursorInitStrategy = normalizeInitialSyncStrategy(mailbox.cursorInitStrategy as InitialSyncStrategy | null | undefined) ?? mailbox.cursorInitStrategy ?? null
+  const authType = normalizeMailboxAuthType(mailbox.authType)
 
   return {
     id: String(mailbox.id),
     name: mailbox.name,
     address: mailbox.address ?? '',
     displayName: mailbox.displayName ?? null,
+    mailProvider: inferMailProvider(mailbox),
+    authType,
     providerType: mailbox.providerType ?? 'IMAP',
     inboundMode: mailbox.inboundMode ?? 'POLLING',
     outboundMode: mailbox.outboundMode ?? 'SMTP',
+    oauthTenantId: mailbox.oauthTenantId ?? null,
+    oauthClientId: mailbox.oauthClientId ?? null,
+    oauthConfigured: mailbox.oauthConfigured ?? (authType === 'OAUTH2' ? Boolean(mailbox.oauthClientId && mailbox.oauthTenantId) : null),
     imapHost: mailbox.imapHost ?? null,
     imapPort: mailbox.imapPort ?? null,
     imapUsername: mailbox.imapUsername ?? null,
@@ -70,6 +108,7 @@ export function normalizeMailbox(mailbox: MailboxResponse): Mailbox {
     smtpHost: mailbox.smtpHost ?? null,
     smtpPort: mailbox.smtpPort ?? null,
     smtpUsername: mailbox.smtpUsername ?? null,
+    smtpStarttls: mailbox.smtpStarttls ?? null,
     smtpUseSsl: mailbox.smtpUseSsl ?? null,
     pollingEnabled: mailbox.pollingEnabled ?? true,
     pollIntervalSeconds: mailbox.pollIntervalSeconds ?? 60,

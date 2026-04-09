@@ -81,6 +81,15 @@ export function useChannelConfig(id: number | null, enabled = true) {
   })
 }
 
+export function useChannelEventCatalog(enabled = true) {
+  return useQuery({
+    queryKey: ['channel-event-catalog'],
+    queryFn: () => channelIntegrationService.getEventCatalog(),
+    enabled,
+    staleTime: 300_000,
+  })
+}
+
 export function useCreateChannelConfig() {
   const queryClient = useQueryClient()
 

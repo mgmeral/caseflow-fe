@@ -1,15 +1,17 @@
-import { parseMentionSegments } from '@/lib/mentions'
+import type { TicketMessage } from '@/types/ticket.types'
+import { parseMentionSegmentsWithMetadata } from '@/lib/mentions'
 
 interface MentionTextProps {
   content: string
+  mentions?: TicketMessage['mentions']
 }
 
 /**
  * Renders note content with @mentions visually highlighted.
  * Reusable anywhere a note body needs to display mention tokens.
  */
-export function MentionText({ content }: MentionTextProps) {
-  const segments = parseMentionSegments(content)
+export function MentionText({ content, mentions }: MentionTextProps) {
+  const segments = parseMentionSegmentsWithMetadata(content, mentions)
 
   return (
     <>

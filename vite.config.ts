@@ -16,14 +16,28 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',
+      allowedHosts: true,
       proxy:
         env.VITE_USE_MOCKS === 'true'
           ? undefined
           : {
               '/api': {
-                target: env.VITE_API_URL || 'http://localhost:8080',
+                // The frontend always calls relative /api routes in normal dev.
+                // Vite forwards them to the local backend without changing the path.
+                target: 'http://localhost:8080',
                 changeOrigin: true,
-                rewrite: (p: string) => p.replace(/^\/api/, ''),
+                configure: (proxy) => {
+                  proxy.on('proxyReq', (proxyReq, req) => {
+                    if (req.headers.origin) {
+                      proxyReq.removeHeader('origin')
+                    }
+
+                    if (req.headers.referer) {
+                      proxyReq.removeHeader('referer')
+                    }
+                  })
+                },
               },
             },
     },

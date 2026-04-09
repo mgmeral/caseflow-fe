@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useTickets } from '@/hooks/useTickets'
+import { useQueue, useQueueStats } from '@/hooks/useQueue'
 import { useUsers } from '@/hooks/useUsers'
 import { usePermissions } from '@/hooks/usePermissions'
 import { assignmentService } from '@/services/assignment.service'
@@ -19,7 +19,6 @@ export function AdminPoolPage() {
   const { users, groups } = useUsers()
   const queryClient = useQueryClient()
 
-  /* ── Local state — fully decoupled from Tickets page ── */
   const [poolView, setPoolView] = useState<PoolView>('all')
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -29,63 +28,54 @@ export function AdminPoolPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(25)
 
-  /* ── Assignment state ── */
   const [assignTarget, setAssignTarget] = useState<Ticket | null>(null)
   const [bulkAssignIds, setBulkAssignIds] = useState<string[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [isAssigning, setIsAssigning] = useState(false)
 
-  /* ── Debounce search ── */
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchInput), 300)
-    return () => clearTimeout(t)
+    const timeoutId = setTimeout(() => setDebouncedSearch(searchInput), 300)
+    return () => clearTimeout(timeoutId)
   }, [searchInput])
 
-  /* ── Data — always unassigned + open only ── */
-  const { data, isLoading } = useTickets({
-    filters: {
-      search: debouncedSearch,
-      statuses: [],
-      priorities: priorityFilter ? [priorityFilter] : [],
-      assignedUserIds: [],
-      groupIds: groupFilter ? [groupFilter] : [],
-      dateFrom: null,
-      dateTo: null,
-      unassignedOnly: true,
-      overdueOnly: false,
-      openOnly: true,
-      transferredOnly: false,
-    },
+  const queueFilters = useMemo(
+    () => ({ search: debouncedSearch, priority: priorityFilter, groupId: groupFilter || undefined }),
+    [debouncedSearch, groupFilter, priorityFilter],
+  )
+
+  const { data, isLoading } = useQueue({
+    ...queueFilters,
     sort,
     page,
     pageSize,
   })
+  const queueStatsQuery = useQueueStats(queueFilters)
 
   const allPoolTickets = data?.tickets ?? []
 
-  /* ── Quick-triage counts ── */
   const poolCounts = useMemo(() => {
-    const highPriority = allPoolTickets.filter((t) => t.priority === 'critical' || t.priority === 'high').length
-    const slaRisk = allPoolTickets.filter((t) => t.slaBreached).length
-    const waitingLong = allPoolTickets.filter((t) => t.openDurationMinutes > 480).length
-    return { total: allPoolTickets.length, highPriority, slaRisk, waitingLong }
-  }, [allPoolTickets])
+    const stats = queueStatsQuery.data
+    return {
+      total: stats?.allUnassigned ?? stats?.awaitingAssignment ?? 0,
+      highPriority: stats?.highCritical,
+      slaRisk: stats?.slaBreached,
+      waitingLong: stats?.waitingOver8h,
+    }
+  }, [queueStatsQuery.data])
 
-  /* ── Client-side triage filtering ── */
   const visibleTickets = useMemo(() => {
     switch (poolView) {
       case 'high_priority':
-        return allPoolTickets.filter((t) => t.priority === 'critical' || t.priority === 'high')
+        return allPoolTickets.filter((ticket) => ticket.priority === 'critical' || ticket.priority === 'high')
       case 'sla_risk':
-        return allPoolTickets.filter((t) => t.slaBreached)
+        return allPoolTickets.filter((ticket) => ticket.slaBreached)
       case 'waiting_long':
-        return allPoolTickets.filter((t) => t.openDurationMinutes > 480)
+        return allPoolTickets.filter((ticket) => ticket.openDurationMinutes > 480)
       default:
         return allPoolTickets
     }
   }, [allPoolTickets, poolView])
 
-  /* ── Assign handler (single + bulk) ── */
   const handleAssign = useCallback(
     async (userId: string | null) => {
       if (!userId) return
@@ -95,12 +85,14 @@ export function AdminPoolPage() {
           await assignmentService.assign({ ticketId: assignTarget.id, assignedUserId: userId })
         } else if (bulkAssignIds.length > 0) {
           await Promise.all(
-            bulkAssignIds.map((id) =>
-              assignmentService.assign({ ticketId: id, assignedUserId: userId }),
-            ),
+            bulkAssignIds.map((id) => assignmentService.assign({ ticketId: id, assignedUserId: userId })),
           )
         }
-        queryClient.invalidateQueries({ queryKey: ['tickets'] })
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['queue'], refetchType: 'all' }),
+          queryClient.invalidateQueries({ queryKey: ['queue-stats'], refetchType: 'all' }),
+          queryClient.invalidateQueries({ queryKey: ['tickets'], refetchType: 'all' }),
+        ])
         setAssignTarget(null)
         setBulkAssignIds([])
         setSelectedIds([])
@@ -111,7 +103,6 @@ export function AdminPoolPage() {
     [assignTarget, bulkAssignIds, queryClient],
   )
 
-  /* ── Permission gate ── */
   if (!canViewAdminPool) {
     return (
       <div className="p-4">
@@ -124,7 +115,7 @@ export function AdminPoolPage() {
     )
   }
 
-  const VIEW_TABS: Array<{ key: PoolView; label: string; count: number; icon: typeof Inbox; color: string }> = [
+  const viewTabs: Array<{ key: PoolView; label: string; count?: number; icon: typeof Inbox; color: string }> = [
     { key: 'all', label: 'All Unassigned', count: poolCounts.total, icon: Inbox, color: 'text-gray-500' },
     { key: 'high_priority', label: 'High / Critical', count: poolCounts.highPriority, icon: Flame, color: 'text-orange-500' },
     { key: 'sla_risk', label: 'SLA Breached', count: poolCounts.slaRisk, icon: AlertTriangle, color: 'text-red-500' },
@@ -132,35 +123,33 @@ export function AdminPoolPage() {
   ]
 
   const isAssignModalOpen = !!assignTarget || bulkAssignIds.length > 0
-  const assignModalTicketNo = assignTarget
-    ? assignTarget.ticketNo
-    : `${bulkAssignIds.length} ticket${bulkAssignIds.length > 1 ? 's' : ''}`
-
-  const hasActiveFilter = searchInput || priorityFilter || groupFilter
+  const assignModalTicketNo = assignTarget ? assignTarget.ticketNo : `${bulkAssignIds.length} ticket${bulkAssignIds.length > 1 ? 's' : ''}`
+  const hasActiveFilter = Boolean(searchInput || priorityFilter || groupFilter)
 
   return (
     <div className="p-4 space-y-3">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Assignment Queue</h1>
-          <p className="text-xs text-gray-500">Triage and assign unassigned tickets to agents.</p>
+          <p className="text-xs text-gray-500">Triage and assign queue-eligible tickets to agents.</p>
         </div>
-        {!isLoading && (
+        {!isLoading ? (
           <div className="text-right">
             <span className="text-2xl font-bold text-gray-900">{poolCounts.total}</span>
             <p className="text-[11px] text-gray-500">awaiting assignment</p>
           </div>
-        )}
+        ) : null}
       </div>
 
-      {/* Quick triage tabs */}
       <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
-        {VIEW_TABS.map((tab) => (
+        {viewTabs.map((tab) => (
           <button
             key={tab.key}
             type="button"
-            onClick={() => { setPoolView(tab.key); setPage(1) }}
+            onClick={() => {
+              setPoolView(tab.key)
+              setPage(1)
+            }}
             className={clsx(
               'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
               poolView === tab.key
@@ -170,21 +159,22 @@ export function AdminPoolPage() {
           >
             <tab.icon className={clsx('w-3.5 h-3.5', poolView === tab.key ? tab.color : 'text-gray-400')} />
             {tab.label}
-            <span
-              className={clsx(
-                'text-[11px] px-1.5 rounded-full font-medium',
-                poolView === tab.key ? 'bg-gray-100 text-gray-700' : 'bg-gray-200/60 text-gray-400',
-                tab.key === 'sla_risk' && tab.count > 0 && 'bg-red-100 text-red-600',
-                tab.key === 'high_priority' && tab.count > 0 && poolView === tab.key && 'bg-orange-100 text-orange-600',
-              )}
-            >
-              {tab.count}
-            </span>
+            {typeof tab.count === 'number' ? (
+              <span
+                className={clsx(
+                  'text-[11px] px-1.5 rounded-full font-medium',
+                  poolView === tab.key ? 'bg-gray-100 text-gray-700' : 'bg-gray-200/60 text-gray-400',
+                  tab.key === 'sla_risk' && tab.count > 0 && 'bg-red-100 text-red-600',
+                  tab.key === 'high_priority' && tab.count > 0 && poolView === tab.key && 'bg-orange-100 text-orange-600',
+                )}
+              >
+                {tab.count}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
 
-      {/* Simplified filter bar — no Assignee, no Unassigned toggle */}
       <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
         <div className="relative">
           <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -192,14 +182,20 @@ export function AdminPoolPage() {
             type="text"
             placeholder="Search queue…"
             value={searchInput}
-            onChange={(e) => { setSearchInput(e.target.value); setPage(1) }}
+            onChange={(event) => {
+              setSearchInput(event.target.value)
+              setPage(1)
+            }}
             className="pl-7 pr-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-[200px]"
           />
         </div>
 
         <select
           value={priorityFilter}
-          onChange={(e) => { setPriorityFilter(e.target.value as TicketPriority | ''); setPage(1) }}
+          onChange={(event) => {
+            setPriorityFilter(event.target.value as TicketPriority | '')
+            setPage(1)
+          }}
           className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">All Priorities</option>
@@ -211,47 +207,62 @@ export function AdminPoolPage() {
 
         <select
           value={groupFilter}
-          onChange={(e) => { setGroupFilter(e.target.value); setPage(1) }}
+          onChange={(event) => {
+            setGroupFilter(event.target.value)
+            setPage(1)
+          }}
           className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
         >
           <option value="">All Groups</option>
-          {groups.map((g) => (
-            <option key={g.id} value={g.id}>{g.name}</option>
+          {groups.map((group) => (
+            <option key={group.id} value={group.id}>{group.name}</option>
           ))}
         </select>
 
-        {hasActiveFilter && (
+        {hasActiveFilter ? (
           <button
             type="button"
-            onClick={() => { setSearchInput(''); setPriorityFilter(''); setGroupFilter(''); setPage(1) }}
+            onClick={() => {
+              setSearchInput('')
+              setPriorityFilter('')
+              setGroupFilter('')
+              setPage(1)
+            }}
             className="text-xs text-indigo-600 hover:text-indigo-800 underline ml-auto"
           >
             Clear
           </button>
-        )}
+        ) : null}
       </div>
 
-      {/* Pool table */}
       <PoolTable
         tickets={visibleTickets}
         total={poolView === 'all' ? (data?.total ?? 0) : visibleTickets.length}
         isLoading={isLoading}
         sort={sort}
-        onSortChange={(s) => { setSort(s); setPage(1) }}
+        onSortChange={(nextSort) => {
+          setSort(nextSort)
+          setPage(1)
+        }}
         page={page}
         pageSize={pageSize}
         onPageChange={setPage}
-        onPageSizeChange={(s) => { setPageSize(s); setPage(1) }}
+        onPageSizeChange={(size) => {
+          setPageSize(size)
+          setPage(1)
+        }}
         onAssign={(ticket) => setAssignTarget(ticket)}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         onBulkAssign={() => setBulkAssignIds([...selectedIds])}
       />
 
-      {/* Assignment modal — reused for single + bulk */}
       <AssignmentModal
         isOpen={isAssignModalOpen}
-        onClose={() => { setAssignTarget(null); setBulkAssignIds([]) }}
+        onClose={() => {
+          setAssignTarget(null)
+          setBulkAssignIds([])
+        }}
         ticketId={assignTarget?.id ?? ''}
         ticketNo={assignModalTicketNo}
         currentAssigneeId={null}

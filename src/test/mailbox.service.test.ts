@@ -54,14 +54,20 @@ describe('mailboxService backend contract', () => {
       name: 'Main',
       displayName: null,
       address: 'support@caseflow.com',
+      mailProvider: 'OUTLOOK',
+      authType: 'OAUTH2',
       providerType: 'IMAP',
       inboundMode: 'POLLING',
       outboundMode: 'SMTP',
       isActive: true,
+      oauthTenantId: 'tenant-1',
+      oauthClientId: 'client-1',
+      oauthClientSecret: 'secret-1',
       smtpHost: null,
       smtpPort: null,
       smtpUsername: null,
       smtpPassword: null,
+      smtpStarttls: true,
       smtpUseSsl: null,
       imapHost: 'imap.caseflow.com',
       imapPort: 993,
@@ -79,14 +85,20 @@ describe('mailboxService backend contract', () => {
       name: 'Main',
       displayName: null,
       address: 'support@caseflow.com',
+      mailProvider: 'GMAIL',
+      authType: 'PASSWORD',
       providerType: 'IMAP',
       inboundMode: 'POLLING',
       outboundMode: 'SMTP',
       isActive: true,
+      oauthTenantId: null,
+      oauthClientId: null,
+      oauthClientSecret: null,
       smtpHost: 'smtp.caseflow.com',
       smtpPort: 587,
       smtpUsername: 'smtp-user',
       smtpPassword: null,
+      smtpStarttls: true,
       smtpUseSsl: true,
       imapHost: 'imap.caseflow.com',
       imapPort: 993,
@@ -105,21 +117,73 @@ describe('mailboxService backend contract', () => {
 
     expect(mockGet).toHaveBeenCalledWith('/admin/mailboxes/m1')
     expect(mockPost).toHaveBeenCalledWith('/admin/mailboxes', expect.objectContaining({
+      mailProvider: 'OUTLOOK',
+      authType: 'OAUTH2',
+      oauthTenantId: 'tenant-1',
+      oauthClientId: 'client-1',
+      oauthClientSecret: 'secret-1',
       imapHost: 'imap.caseflow.com',
       smtpHost: null,
       smtpPort: null,
       smtpUsername: null,
+      smtpStarttls: true,
       initialSyncStrategy: 'NEW_MESSAGES_ONLY',
     }))
     expect(mockPut).toHaveBeenCalledWith('/admin/mailboxes/m1', expect.objectContaining({
+      mailProvider: 'GMAIL',
+      authType: 'PASSWORD',
+      oauthTenantId: null,
       imapHost: 'imap.caseflow.com',
       smtpHost: 'smtp.caseflow.com',
       smtpPort: 587,
       smtpUsername: 'smtp-user',
+      smtpStarttls: true,
       initialSyncStrategy: 'NEW_MESSAGES_ONLY',
     }))
     expect(mockPatch).toHaveBeenNthCalledWith(1, '/admin/mailboxes/m1/activate', {})
     expect(mockPatch).toHaveBeenNthCalledWith(2, '/admin/mailboxes/m1/deactivate', {})
+  })
+
+  it('keeps blank edit secrets as null in update payloads', async () => {
+    mockPut.mockResolvedValueOnce({ id: 'm1' })
+
+    await mailboxService.update('m1', {
+      name: 'Main',
+      displayName: null,
+      address: 'support@caseflow.com',
+      mailProvider: 'OUTLOOK',
+      authType: 'OAUTH2',
+      providerType: 'IMAP',
+      inboundMode: 'POLLING',
+      outboundMode: 'SMTP',
+      isActive: true,
+      oauthTenantId: 'tenant-1',
+      oauthClientId: 'client-1',
+      oauthClientSecret: null,
+      smtpHost: 'smtp.office365.com',
+      smtpPort: 587,
+      smtpUsername: 'support@caseflow.com',
+      smtpPassword: null,
+      smtpStarttls: true,
+      smtpUseSsl: true,
+      imapHost: 'outlook.office365.com',
+      imapPort: 993,
+      imapUsername: 'support@caseflow.com',
+      imapPassword: null,
+      imapUseSsl: true,
+      imapFolder: 'INBOX',
+      pollingEnabled: true,
+      pollIntervalSeconds: 60,
+      defaultGroupId: null,
+      defaultPriority: null,
+      initialSyncStrategy: 'NEW_MESSAGES_ONLY',
+    })
+
+    expect(mockPut).toHaveBeenCalledWith('/admin/mailboxes/m1', expect.objectContaining({
+      oauthClientSecret: null,
+      imapPassword: null,
+      smtpPassword: null,
+    }))
   })
 
   it('tests IMAP and SMTP mailbox connectivity via separate admin endpoints', async () => {
