@@ -55,11 +55,11 @@ describe('reportService', () => {
     })
 
     await reportService.getCustomerReport('c1', {
-      from: '2026-04-01',
-      to: '2026-04-30',
+      dateFrom: '2026-04-01',
+      dateTo: '2026-04-30',
     })
 
-    expect(mockGet).toHaveBeenCalledWith('/customers/c1/reports/tickets?from=2026-04-01&to=2026-04-30')
+    expect(mockGet).toHaveBeenCalledWith('/customers/c1/reports/tickets?from=2026-04-01T00%3A00%3A00.000Z&to=2026-04-30T23%3A59%3A59.999Z')
   })
 
   it('loads paged admin aggregate report data from the backend', async () => {

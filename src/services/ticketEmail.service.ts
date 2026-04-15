@@ -14,25 +14,13 @@ import type {
   TicketEmailMessage,
 } from '@/types/email.types'
 import { apiClient } from './api.client'
+import { optionalNumericContractId, parseNumericContractId, requireNumericContractId, trimOptionalText } from '@/lib/ticketEmailContracts'
 import {
   normalizeTicketReplyPreview,
   normalizeSendTicketReplyResult,
   normalizeTicketEmailMessage,
   normalizeUnifiedTicketEmailDetail,
 } from './email-platform.normalizers'
-
-function extractEmailAddress(raw: string): string {
-  const value = raw.trim()
-  if (!value) return ''
-
-  // Prefer RFC-like display-name format: Name <user@example.com>
-  const angleMatch = value.match(/<\s*([^>\s]+@[^>\s]+)\s*>/)
-  if (angleMatch?.[1]) return angleMatch[1].trim()
-
-  // Fallback: find first email-looking token anywhere in the string.
-  const emailMatch = value.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
-  return emailMatch?.[0]?.trim() ?? ''
-}
 
 function inferEmailDocumentId(item: EmailThreadItemResponse): string | null {
   const explicitEmailDocumentId = item.emailDocumentId ?? item.emailId ?? item.documentId ?? item.inboundEmailId ?? item.outboundEmailId ?? null
@@ -54,6 +42,7 @@ function toThreadMessage(ticketId: string, item: EmailThreadItemResponse): Ticke
   const emailDocumentId = inferEmailDocumentId(item)
   const detailType = item.detailType ?? item.direction
   const detailId = item.detailId != null ? String(item.detailId) : emailDocumentId ?? String(item.id)
+  const sourceEventId = parseNumericContractId(item.sourceEventId ?? item.sourceEmailEventId ?? item.ingressEventId)
 
   return {
     id: String(item.id),
@@ -64,7 +53,7 @@ function toThreadMessage(ticketId: string, item: EmailThreadItemResponse): Ticke
     providerMessageId: null,
     mailboxId: item.mailboxId != null ? String(item.mailboxId) : null,
     mailboxName: item.mailboxName ?? null,
-    sourceEventId: item.sourceEventId ?? item.sourceEmailEventId ?? item.ingressEventId ?? (item.direction === 'INBOUND' ? String(item.id) : null),
+    sourceEventId,
     direction: item.direction,
     subject: item.subject ?? null,
     from: item.fromAddress ?? null,
@@ -139,61 +128,57 @@ function toEmailDocumentMessage(email: EmailDocumentResponse, direction: 'INBOUN
 
 function buildReplyPayload(payload: SendTicketReplyRequest): {
   mailboxId: number
+  sourceEventId: number
+  templateId: number | null
   subject: string
-  sourceEventId?: string
-  templateId?: string
-  toAddress?: string
-  textBody?: string
-  htmlBody?: string
-  inReplyToMessageId?: string
-  contentWasEdited?: boolean
+  textBody: string | null
+  htmlBody: string | null
+  contentWasEdited: boolean
 } {
-  if (!payload.mailboxId) {
-    throw new Error('mailboxId is required for ticket email replies')
+  const mailboxId = requireNumericContractId(
+    payload.mailboxId,
+    'Select the mailbox that should send this reply.',
+    'Reply context is invalid. Mailbox id must be numeric.',
+  )
+  const sourceEventId = requireNumericContractId(
+    payload.sourceEventId,
+    'This message cannot be replied to because its inbound event reference is missing.',
+    'Reply context is invalid. Source event id must be numeric.',
+  )
+  const templateId = optionalNumericContractId(payload.templateId, 'Selected template id is invalid.')
+  const subject = payload.subject.trim()
+  const textBody = trimOptionalText(payload.textBody)
+  const htmlBody = trimOptionalText(payload.htmlBody)
+
+  if (!subject) {
+    throw new Error('Reply subject cannot be empty.')
   }
-  const mailboxId = Number(payload.mailboxId)
-  if (Number.isNaN(mailboxId)) {
-    throw new Error('mailboxId must be numeric for ticket email replies')
+
+  if (!textBody && !htmlBody) {
+    throw new Error('Reply body cannot be empty.')
   }
 
-  const sourceEventId = payload.sourceEventId?.trim()
-  const toAddress = payload.toAddress ? extractEmailAddress(payload.toAddress) : ''
-
-  if (!sourceEventId && !toAddress) {
-    throw new Error('sourceEventId or toAddress is required for ticket email replies')
-  }
-
-  if (!payload.subject.trim()) {
-    throw new Error('subject is required for ticket email replies')
-  }
-
-  const textBody = payload.textBody
-  const htmlBody = payload.htmlBody
-
-  const requestBody: {
-    mailboxId: number
-    subject: string
-    sourceEventId?: string
-    templateId?: string
-    toAddress?: string
-    textBody?: string
-    htmlBody?: string
-    inReplyToMessageId?: string
-    contentWasEdited?: boolean
-  } = {
+  return {
     mailboxId,
-    subject: payload.subject,
+    sourceEventId,
+    templateId,
+    subject,
+    textBody,
+    htmlBody,
+    contentWasEdited: payload.contentWasEdited === true,
   }
+}
 
-  if (sourceEventId) requestBody.sourceEventId = sourceEventId
-  if (payload.templateId?.trim()) requestBody.templateId = payload.templateId.trim()
-  if (toAddress) requestBody.toAddress = toAddress
-  if (textBody && textBody.trim().length > 0) requestBody.textBody = textBody
-  if (htmlBody && htmlBody.trim().length > 0) requestBody.htmlBody = htmlBody
-  if (payload.inReplyToMessageId) requestBody.inReplyToMessageId = payload.inReplyToMessageId
-  if (typeof payload.contentWasEdited === 'boolean') requestBody.contentWasEdited = payload.contentWasEdited
-
-  return requestBody
+function buildReplyPreviewPayload(payload: TicketReplyPreviewRequest): TicketReplyPreviewRequest {
+  return {
+    sourceEventId: requireNumericContractId(
+      payload.sourceEventId,
+      'This message cannot be replied to because its inbound event reference is missing.',
+      'Reply context is invalid. Source event id must be numeric.',
+    ),
+    mailboxId: optionalNumericContractId(payload.mailboxId, 'Reply context is invalid. Mailbox id must be numeric.'),
+    templateId: optionalNumericContractId(payload.templateId, 'Selected template id is invalid.'),
+  }
 }
 
 export const ticketEmailService = {
@@ -216,7 +201,7 @@ export const ticketEmailService = {
   },
 
   previewReply: async (ticketPublicId: string, payload: TicketReplyPreviewRequest): Promise<TicketReplyPreview> => {
-    const response = await apiClient.post<TicketEmailReplyPreviewResponse>(`/tickets/${ticketPublicId}/email/reply/preview`, payload)
+    const response = await apiClient.post<TicketEmailReplyPreviewResponse>(`/tickets/${ticketPublicId}/email/reply/preview`, buildReplyPreviewPayload(payload))
     return normalizeTicketReplyPreview(response)
   },
 

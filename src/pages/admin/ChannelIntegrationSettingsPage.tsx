@@ -9,6 +9,8 @@ import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { Modal } from '@/components/shared/Modal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
+import { FieldHint, HelpDrawer, PageIntro, SectionHelp, WarningCallout } from '@/components/shared/help'
+import { notificationChannelsHelp } from '@/help/notification-channels.help'
 import { getErrorMessage } from '@/lib/errors'
 import type { ChannelConfig, ChannelConfigRequest, ChannelType, NotificationEventType, ScopeType } from '@/types/integration.types'
 
@@ -94,6 +96,7 @@ export function ChannelIntegrationSettingsPage() {
   const [deleteTarget, setDeleteTarget] = useState<ChannelConfig | null>(null)
   const [form, setForm] = useState<ChannelFormState>(EMPTY_FORM)
   const [formError, setFormError] = useState<string | null>(null)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
 
   const editingConfigQuery = useChannelConfig(editingId, modalMode === 'edit' && editingId != null)
 
@@ -237,19 +240,26 @@ export function ChannelIntegrationSettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Notification Channels</h1>
-          <p className="mt-1 text-sm text-gray-500">Manage the audited Slack and Teams webhook channel configurations used for outbound notifications.</p>
+          <h1 className="admin-page-title">Notification Channels</h1>
+          <p className="admin-page-subtitle">Manage the audited Slack and Teams webhook channel configurations used for outbound notifications.</p>
         </div>
-        <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={openCreate}>
-          New Channel
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setIsHelpOpen(true)}>
+            Help
+          </Button>
+          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={openCreate}>
+            New Channel
+          </Button>
+        </div>
       </div>
 
+      <PageIntro summary={notificationChannelsHelp.summary} />
+
       {channelConfigsQuery.isLoading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="admin-table-shell p-4">
           <table className="w-full"><tbody><SkeletonRow colCount={4} /><SkeletonRow colCount={4} /><SkeletonRow colCount={4} /></tbody></table>
         </div>
       ) : channelConfigsQuery.isError ? (
@@ -264,9 +274,11 @@ export function ChannelIntegrationSettingsPage() {
           action={<Button variant="primary" size="sm" onClick={openCreate}>Create Channel</Button>}
         />
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200 text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+        <div className="space-y-4">
+          <SectionHelp title={notificationChannelsHelp.sections.list.title} description={notificationChannelsHelp.sections.list.description} />
+          <div className="admin-table-shell overflow-hidden">
+          <table className="min-w-full text-sm">
+            <thead className="admin-table-head text-left text-xs uppercase tracking-wide text-blue-100/72">
               <tr>
                 <th className="px-4 py-3">Channel</th>
                 <th className="px-4 py-3">Events</th>
@@ -275,17 +287,17 @@ export function ChannelIntegrationSettingsPage() {
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="admin-table-striped divide-y divide-white/10">
               {(channelConfigsQuery.data ?? []).map((config) => (
-                <tr key={config.id}>
+                <tr key={config.id} className="transition-colors hover:bg-white/[0.08]">
                   <td className="px-4 py-3 align-top">
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">{config.name}</span>
+                        <span className="font-medium text-white">{config.name}</span>
                         <Badge variant={channelTypeVariant(config.channelType)}>{config.channelType}</Badge>
                         <Badge variant={config.enabled ? 'success' : 'default'}>{config.enabled ? 'Enabled' : 'Disabled'}</Badge>
                       </div>
-                      <div className="text-xs text-gray-500">Updated {new Date(config.updatedAt).toLocaleString()}</div>
+                      <div className="text-xs text-blue-100/52">Updated {new Date(config.updatedAt).toLocaleString()}</div>
                     </div>
                   </td>
                   <td className="px-4 py-3 align-top">
@@ -295,11 +307,11 @@ export function ChannelIntegrationSettingsPage() {
                       ))}
                     </div>
                   </td>
-                  <td className="px-4 py-3 align-top text-gray-700">
+                  <td className="px-4 py-3 align-top text-blue-100/72">
                     {scopeLabel(config.scopeType)}
                     {config.scopeType !== 'GLOBAL' && config.scopeId != null ? ` #${config.scopeId}` : ''}
                   </td>
-                  <td className="px-4 py-3 align-top text-gray-500">
+                  <td className="px-4 py-3 align-top text-blue-100/52">
                     {config.webhookConfigured ? 'Saved and hidden' : 'Not configured'}
                   </td>
                   <td className="px-4 py-3 align-top">
@@ -316,6 +328,7 @@ export function ChannelIntegrationSettingsPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -324,6 +337,7 @@ export function ChannelIntegrationSettingsPage() {
         onClose={closeModal}
         title={modalMode === 'edit' ? 'Edit Channel' : 'Create Channel'}
         size="lg"
+        variant="admin"
         footer={(
           <>
             <Button variant="secondary" size="sm" onClick={closeModal}>Cancel</Button>
@@ -337,10 +351,11 @@ export function ChannelIntegrationSettingsPage() {
           <table className="w-full"><tbody><SkeletonRow colCount={2} /><SkeletonRow colCount={2} /></tbody></table>
         ) : (
           <div className="space-y-4">
+            <SectionHelp title={notificationChannelsHelp.sections.form.title} description={notificationChannelsHelp.sections.form.description} />
             <div className="grid gap-x-4 gap-y-4 md:grid-cols-2 md:items-start">
               <label className="flex h-full flex-col gap-1.5 text-sm text-gray-700">
                 <span className="font-medium">Name</span>
-                <span className="min-h-[2.5rem] text-xs text-gray-500">Internal display name used in CaseFlow admin screens to identify this channel configuration.</span>
+                <FieldHint className="mt-0 min-h-[2.5rem]" text={notificationChannelsHelp.fieldHints.name} />
                 <input
                   aria-label="Name"
                   value={form.name}
@@ -354,7 +369,7 @@ export function ChannelIntegrationSettingsPage() {
 
               <label className="flex h-full flex-col gap-1.5 text-sm text-gray-700">
                 <span className="font-medium">Channel Type</span>
-                <span className="min-h-[2.5rem] text-xs text-gray-500">Choose which provider this channel posts to so the webhook format and guidance stay correct.</span>
+                <FieldHint className="mt-0 min-h-[2.5rem]" text={notificationChannelsHelp.fieldHints.channelType} />
                 <select
                   aria-label="Channel Type"
                   value={form.channelType}
@@ -382,12 +397,13 @@ export function ChannelIntegrationSettingsPage() {
                   placeholder={webhookInputPlaceholder}
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+                <FieldHint className="mt-0" text={notificationChannelsHelp.fieldHints.webhookUrl} />
                 <span className="text-xs text-gray-500">{webhookHint}</span>
               </label>
 
               <label className="flex h-full flex-col gap-1.5 text-sm text-gray-700">
                 <span className="font-medium">Scope</span>
-                <span className="min-h-[2.5rem] text-xs text-gray-500">Global sends events for the whole workspace. Group limits notifications to one team. Customer limits notifications to one customer context.</span>
+                <FieldHint className="mt-0 min-h-[2.5rem]" text={notificationChannelsHelp.fieldHints.scope} />
                 <select
                   aria-label="Scope"
                   value={form.scopeType}
@@ -406,7 +422,7 @@ export function ChannelIntegrationSettingsPage() {
               {form.scopeType !== 'GLOBAL' ? (
                 <label className="flex h-full flex-col gap-1.5 text-sm text-gray-700">
                   <span className="font-medium">Scope Target</span>
-                  <span className="min-h-[2.5rem] text-xs text-gray-500">Required. Choose the specific {scopeLabel(form.scopeType).toLowerCase()} this channel applies to.</span>
+                  <FieldHint className="mt-0 min-h-[2.5rem]" text={notificationChannelsHelp.fieldHints.scopeTarget} />
                   <select
                     aria-label="Scope Target"
                     value={form.scopeId}
@@ -425,6 +441,10 @@ export function ChannelIntegrationSettingsPage() {
               ) : null}
             </div>
 
+            <WarningCallout title={notificationChannelsHelp.warnings[0].title}>
+              {notificationChannelsHelp.warnings[0].description.defaultMessage}
+            </WarningCallout>
+
             <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
               <input
                 type="checkbox"
@@ -437,13 +457,13 @@ export function ChannelIntegrationSettingsPage() {
               />
               <div>
                 <div className="font-medium text-gray-900">Enabled</div>
-                <div className="text-xs text-gray-500">Turn this channel on to allow event delivery.</div>
+                <FieldHint className="mt-0" text={notificationChannelsHelp.fieldHints.enabled} />
               </div>
             </label>
 
             <div className="space-y-2">
               <div className="text-sm font-medium text-gray-800">Subscribed Events</div>
-              <p className="text-xs text-gray-500">Choose which supported events should be delivered to this channel. Select at least one event.</p>
+              <FieldHint className="mt-0" text={notificationChannelsHelp.fieldHints.subscribedEvents} />
               <div className="space-y-3">
                 {eventGroups.map((section) => (
                   <div key={section.group} className="rounded-lg border border-gray-200 bg-gray-50/50 p-3">
@@ -484,6 +504,7 @@ export function ChannelIntegrationSettingsPage() {
         isOpen={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         title="Delete Channel"
+        variant="admin"
         footer={(
           <>
             <Button variant="secondary" size="sm" onClick={() => setDeleteTarget(null)}>Cancel</Button>
@@ -495,6 +516,8 @@ export function ChannelIntegrationSettingsPage() {
           Delete <span className="font-semibold">{deleteTarget?.name}</span>? This removes the stored channel configuration immediately.
         </p>
       </Modal>
+
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={notificationChannelsHelp} />
     </div>
   )
 }

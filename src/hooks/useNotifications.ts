@@ -12,6 +12,9 @@ export function useNotifications(enabled = true) {
     queryFn: () => notificationService.getAll(),
     staleTime: 15_000,
     enabled,
+    refetchInterval: enabled ? 15_000 : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 }
 
@@ -21,6 +24,9 @@ export function useNotificationUnreadCount(enabled = true) {
     queryFn: () => notificationService.getUnreadCount(),
     staleTime: 15_000,
     enabled,
+    refetchInterval: enabled ? 10_000 : false,
+    refetchOnWindowFocus: true,
+    refetchOnReconnect: true,
   })
 }
 

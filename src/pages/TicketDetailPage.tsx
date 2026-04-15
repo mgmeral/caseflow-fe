@@ -16,7 +16,9 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { ArrowLeft, Ticket, Users, ArrowUpRight, Reply, XCircle, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useToast } from '@/hooks/useToast'
 import type { TicketEmailMessage } from '@/types/email.types'
 import type { TicketAttachment } from '@/types/ticket.types'
 import { AttachmentViewerModal } from '@/components/ticket-detail/AttachmentViewerModal'
@@ -24,6 +26,8 @@ import { TicketTagsCard } from '@/components/ticket-detail/TicketTagsCard'
 import { JiraIntegrationCard } from '@/components/ticket-detail/JiraIntegrationCard'
 import { ScheduledEmailsCard } from '@/components/ticket-detail/ScheduledEmailsCard'
 import { buildTicketActivityItems } from '@/lib/ticketActivity'
+import { mergeSelectedInboundEmail } from '@/lib/ticketReplySource'
+import { assignmentService } from '@/services/assignment.service'
 
 function getEmailSelectionKey(email: Pick<TicketEmailMessage, 'detailType' | 'detailId'>): string | null {
   return email.detailType && email.detailId ? `${email.detailType}:${email.detailId}` : null
@@ -57,17 +61,17 @@ export function TicketDetailPage() {
     isLoading,
     isHistoryLoading,
     addNote,
-    assign,
     changeStatus,
     changePriority,
-    transfer,
+    transferAsync,
     close,
     reopen,
     isAddingNote,
-    isAssigning,
     isTransferring,
     isClosing,
   } = useTicketDetail(id)
+  const queryClient = useQueryClient()
+  const { success, error: toastError } = useToast()
 
   const { users, groups } = useUsers()
   const { canAssignTickets, canTransferTickets, canSendTicketEmailReply, canViewTicketEmail, canCloseTickets } = usePermissions()
@@ -77,6 +81,7 @@ export function TicketDetailPage() {
   const [showTransfer, setShowTransfer] = useState(false)
   const [showClose, setShowClose] = useState(false)
   const [showReply, setShowReply] = useState(false)
+  const [isTicketAssigning, setIsTicketAssigning] = useState(false)
   const [selectedEmailKey, setSelectedEmailKey] = useState<string | null>(null)
   const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false)
   const [showTicketAttachments, setShowTicketAttachments] = useState(false)
@@ -97,9 +102,17 @@ export function TicketDetailPage() {
 
   const allMessages = messages ?? []
   const conversationMessages = allMessages.filter((message) => message.type !== 'system_event')
+  const namedTransfers = useMemo(
+    () => (transfers ?? []).map((transfer) => ({
+      ...transfer,
+      fromGroupName: transfer.fromGroupName || groups.find((group) => group.id === transfer.fromGroupId)?.name || '',
+      toGroupName: transfer.toGroupName || groups.find((group) => group.id === transfer.toGroupId)?.name || '',
+    })),
+    [groups, transfers],
+  )
   const activityItems = useMemo(
-    () => ticket ? buildTicketActivityItems({ ticket, messages: allMessages, transfers: transfers ?? [], emailThread }) : [],
-    [allMessages, emailThread, ticket, transfers],
+    () => ticket ? buildTicketActivityItems({ ticket, messages: allMessages, transfers: namedTransfers, emailThread }) : [],
+    [allMessages, emailThread, namedTransfers, ticket],
   )
   const selectedEmailAttachments = useMemo(
     () => mapSelectedEmailAttachments(selectedEmailDetail ?? null, ticket?.id ?? null),
@@ -108,6 +121,10 @@ export function TicketDetailPage() {
   const attachmentEmptyMessage = selectedEmailKey
     ? 'No attachments on this email.'
     : 'Select an email to inspect attachments.'
+  const selectedInboundEmail = useMemo(
+    () => mergeSelectedInboundEmail(selectedEmailSummary, selectedEmailDetail ?? null),
+    [selectedEmailDetail, selectedEmailSummary],
+  )
 
   useEffect(() => {
     if (!canViewTicketEmail || emailThread.length === 0) {
@@ -137,21 +154,24 @@ export function TicketDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <table className="w-full">
+      <div className="page-shell">
+        <div className="surface-card p-6">
+          <table className="w-full">
           <tbody>
             <SkeletonRow colCount={4} />
             <SkeletonRow colCount={4} />
             <SkeletonRow colCount={4} />
           </tbody>
-        </table>
+          </table>
+        </div>
       </div>
     )
   }
 
   if (!ticket) {
     return (
-      <div className="p-6">
+      <div className="page-shell">
+        <div className="surface-card p-6">
         <EmptyState
           icon={<Ticket className="w-10 h-10 text-gray-400" />}
           title="Ticket not found"
@@ -162,33 +182,60 @@ export function TicketDetailPage() {
             </Button>
           }
         />
+        </div>
       </div>
     )
   }
 
   const fromGroup = groups.find((g) => g.id === ticket.groupId)
   const transferableGroups = groups.filter((g) => g.id !== ticket.groupId)
+  const currentAssigneeLabel = ticket.assignedUserName ?? 'Unassigned'
 
   const lastInboundEmail = [...emailThread].reverse().find((e) => e.direction === 'INBOUND') ?? null
-  const selectedInboundEmail = (selectedEmailDetail ?? selectedEmailSummary)?.direction === 'INBOUND'
-    ? (selectedEmailDetail ?? selectedEmailSummary)
-    : null
-  const replySourceEmail = selectedInboundEmail ?? lastInboundEmail
+
+  const handleTicketAssign = async (userId: string | null, userName: string | null) => {
+    if (!userId) return
+
+    setIsTicketAssigning(true)
+    try {
+      if (ticket.assignedUserId) {
+        await assignmentService.reassign({
+          ticketId: ticket.id,
+          newUserId: userId,
+          ...(ticket.groupId ? { newGroupId: ticket.groupId } : {}),
+        })
+      } else {
+        await assignmentService.assign({ ticketId: ticket.id, assignedUserId: userId })
+      }
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['ticket', id], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['tickets'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['queue'], refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['queue-stats'], refetchType: 'all' }),
+      ])
+      success(userName ? `Ticket ${userName} adına atandı` : 'Ticket ataması güncellendi')
+      setShowAssign(false)
+    } catch {
+      toastError('Atama işlemi başarısız oldu')
+    } finally {
+      setIsTicketAssigning(false)
+    }
+  }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="page-shell flex h-full min-h-0 flex-col !gap-4">
       {/* Top navigation bar: breadcrumb + action buttons */}
-      <div className="flex items-center justify-between px-6 py-2.5 border-b border-gray-200/60 bg-white shrink-0">
+      <div className="surface-toolbar shrink-0">
         <div className="flex items-center gap-1.5 text-sm min-w-0">
           <button
             onClick={() => navigate('/tickets')}
-            className="flex items-center gap-1 text-gray-500 hover:text-gray-700 shrink-0"
+            className="flex shrink-0 items-center gap-1 rounded-full border border-transparent px-2 py-1 text-gray-500 transition-colors hover:border-[#d5e2ff] hover:bg-[#eef5ff] hover:text-[#1258e3]"
           >
             <ArrowLeft size={14} />
             Tickets
           </button>
           <span className="text-gray-300">/</span>
-          <span className="text-gray-400 shrink-0">{ticket.ticketNo}</span>
+          <span className="surface-chip shrink-0 px-2 py-0.5">{ticket.ticketNo}</span>
           <span className="text-gray-300">/</span>
           {ticket.isUnread && (
             <span
@@ -199,9 +246,9 @@ export function TicketDetailPage() {
               Unread
             </span>
           )}
-          <span className="text-gray-700 font-medium truncate">{ticket.subject}</span>
+          <span className="truncate font-medium text-gray-700">{ticket.subject}</span>
         </div>
-        <div className="flex items-center gap-2 shrink-0 ml-4">
+        <div className="ml-4 flex shrink-0 items-center gap-2">
           {canSendTicketEmailReply && (
             <Button
               variant="primary"
@@ -219,7 +266,7 @@ export function TicketDetailPage() {
               leftIcon={<Users size={14} />}
               onClick={() => setShowAssign(true)}
             >
-              Assign
+              {ticket.assignedUserId ? 'Reassign' : 'Assign'}
             </Button>
           )}
           {canTransferTickets && (
@@ -257,7 +304,7 @@ export function TicketDetailPage() {
 
       <TicketDetailLayout
         left={
-          <div className="flex flex-col h-full">
+          <div className="flex h-full min-h-0 flex-col">
             {/* Email thread — primary content, scrollable */}
             <div className="flex-1 overflow-y-auto min-h-0">
             {canViewTicketEmail && (
@@ -278,14 +325,14 @@ export function TicketDetailPage() {
                   }}
                 />
               ) : (
-                <div className="px-6 py-10 text-center text-sm text-gray-400">
+                <div className="px-6 py-10 text-center text-sm text-slate-400">
                   No email messages in this thread yet.
                 </div>
               )
             )}
 
             {!canViewTicketEmail && (
-              <div className="px-6 py-10 text-center text-sm text-gray-400">
+              <div className="px-6 py-10 text-center text-sm text-slate-400">
                 Email view is not available for your role.
               </div>
             )}
@@ -329,12 +376,12 @@ export function TicketDetailPage() {
         ticketNo={ticket.ticketNo}
         currentAssigneeId={ticket.assignedUserId}
         currentAssigneeName={ticket.assignedUserName}
+        currentGroupId={ticket.groupId}
+        currentGroupName={ticket.groupName}
         groups={groups}
         users={users}
-        onAssign={(userId, userName) => {
-          if (userId) assign({ userId, userName, note: undefined })
-        }}
-        isAssigning={isAssigning}
+        onAssign={handleTicketAssign}
+        isAssigning={isTicketAssigning}
       />
 
       <TransferModal
@@ -345,9 +392,10 @@ export function TicketDetailPage() {
         fromGroupId={ticket.groupId ?? ''}
         fromGroupName={fromGroup?.name ?? 'Unknown'}
         transferableGroups={transferableGroups}
-        onTransfer={(toGroupId, reason) => {
+        onTransfer={async (toGroupId, reason) => {
           const toGroupName = transferableGroups.find((g) => g.id === toGroupId)?.name ?? ''
-          transfer({ toGroupId, toGroupName, reason })
+          await transferAsync({ toGroupId, toGroupName, reason })
+          setShowTransfer(false)
         }}
         isTransferring={isTransferring}
       />
@@ -365,7 +413,8 @@ export function TicketDetailPage() {
         onClose={() => setShowReply(false)}
         ticketId={ticket.id}
         ticketPublicId={ticketPublicId}
-        lastInbound={replySourceEmail}
+        replySourceEmail={selectedInboundEmail}
+        lastInbound={lastInboundEmail}
         ticketSubject={ticket.subject}
         isTicketClosed={ticket.status === 'CLOSED'}
       />

@@ -20,7 +20,7 @@ export function MentionSuggestions({ users, activeIndex, onSelect }: MentionSugg
 
   if (users.length === 0) {
     return (
-      <div className="absolute bottom-full left-0 right-0 mb-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-2 px-3">
+      <div className="ui-flyout absolute bottom-full left-0 right-0 z-20 mb-1 px-3 py-2">
         <span className="text-xs text-gray-400">No matching users</span>
       </div>
     )
@@ -29,7 +29,7 @@ export function MentionSuggestions({ users, activeIndex, onSelect }: MentionSugg
   return (
     <div
       ref={listRef}
-      className="absolute bottom-full left-0 right-0 mb-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 max-h-48 overflow-y-auto"
+      className="ui-flyout absolute bottom-full left-0 right-0 z-20 mb-1 max-h-48 overflow-y-auto py-1"
       role="listbox"
     >
       {users.map((user, i) => (
@@ -39,8 +39,8 @@ export function MentionSuggestions({ users, activeIndex, onSelect }: MentionSugg
           role="option"
           aria-selected={i === activeIndex}
           className={clsx(
-            'flex items-center gap-2.5 w-full text-left px-3 py-1.5 transition-colors',
-            i === activeIndex ? 'bg-indigo-50' : 'hover:bg-gray-50',
+            'ui-flyout-item',
+            i === activeIndex && 'ui-flyout-item-active',
           )}
           onMouseDown={(e) => {
             e.preventDefault() // prevent textarea blur

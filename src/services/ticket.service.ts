@@ -1,6 +1,7 @@
 ﻿import type { Ticket, TicketFilters, TicketMessage, TicketStatus, TicketPriority, TransferRecord } from '@/types/ticket.types'
 import type { SortState } from '@/types/common.types'
 import type {
+  AssignTicketRequest,
   NoteResponse,
   EmailDocumentResponse,
   EmailDocumentSummaryResponse,
@@ -9,6 +10,7 @@ import type {
   PagedResponse,
 } from '@/types/api.types'
 import { apiClient, ApiError } from './api.client'
+import { assignmentService } from './assignment.service'
 import { normalizeStatus, normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
 import { DEFAULT_TICKET_SORT, isSupportedTicketSortField } from '@/lib/ticketQueryContracts'
 import { mapNoteResponseToTicketMessage } from '@/lib/noteMessage'
@@ -51,6 +53,12 @@ export const ticketService = {
     if (filters.priorities[0]) params.set('priority', toBackendPriority(filters.priorities[0]))
     if (filters.assignedUserIds[0]) params.set('userId', filters.assignedUserIds[0])
     if (filters.groupIds[0]) params.set('groupId', filters.groupIds[0])
+    if (filters.tagIds[0]) params.set('tagId', filters.tagIds[0])
+    if (filters.tagCodes[0]) params.set('tagCode', filters.tagCodes[0])
+    if (filters.openOnly) params.set('openOnly', 'true')
+    if (filters.unassignedOnly) params.set('unassignedOnly', 'true')
+    if (filters.overdueOnly) params.set('overdueOnly', 'true')
+    if (filters.transferredOnly) params.set('transferredOnly', 'true')
 
     if (filters.dateFrom) params.set('from', filters.dateFrom)
     if (filters.dateTo) params.set('to', filters.dateTo)
@@ -128,12 +136,12 @@ export const ticketService = {
         id: t.id,
         ticketId: String(t.ticketId),
         fromGroupId: String(t.fromGroupId),
-        fromGroupName: '',
+        fromGroupName: t.fromGroupName ?? '',
         toGroupId: String(t.toGroupId),
-        toGroupName: '',
-        transferredByName: '',
-        reason: '',
-        note: null,
+        toGroupName: t.toGroupName ?? '',
+        transferredByName: t.transferredByName ?? t.transferredBy ?? '',
+        reason: t.reason ?? '',
+        note: t.note ?? null,
         createdAt: t.transferredAt,
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -143,15 +151,18 @@ export const ticketService = {
     ticketId: string,
     userId: string | null,
     _userName: string | null,
+    assignedGroupId: string | null,
     _note?: string,
   ): Promise<Ticket> => {
     if (userId === null) {
       await apiClient.post('/assignments/unassign', { ticketId: Number(ticketId) })
     } else {
-      await apiClient.post('/assignments/assign', {
-        ticketId: Number(ticketId),
-        assignedUserId: Number(userId),
-      })
+      const request: AssignTicketRequest = {
+        ticketId,
+        assignedUserId: userId,
+        ...(assignedGroupId ? { assignedGroupId } : {}),
+      }
+      await assignmentService.assignOrReassign(request)
     }
     const raw = await apiClient.get<Record<string, unknown>>(`/tickets/${ticketId}`)
     return normalizeTicket(raw)

@@ -16,6 +16,8 @@ const mockDeleteCustomer = vi.hoisted(() => vi.fn())
 const mockUpdateCustomer = vi.hoisted(() => vi.fn())
 const mockActivateCustomer = vi.hoisted(() => vi.fn())
 const mockDeactivateCustomer = vi.hoisted(() => vi.fn())
+const useCustomerReportSpy = vi.hoisted(() => vi.fn())
+const exportCustomerReportPdf = vi.hoisted(() => vi.fn())
 
 const reportState = vi.hoisted(() => ({
   data: {
@@ -103,12 +105,15 @@ vi.mock('@/hooks/useCustomers', () => ({
 }))
 
 vi.mock('@/hooks/useReports', () => ({
-  useCustomerReport: () => ({
-    data: reportState.data,
-    isLoading: reportState.isLoading,
-    isError: reportState.isError,
-    error: reportState.error,
-  }),
+  useCustomerReport: (customerId: string, filters: unknown) => {
+    useCustomerReportSpy(customerId, filters)
+    return {
+      data: reportState.data,
+      isLoading: reportState.isLoading,
+      isError: reportState.isError,
+      error: reportState.error,
+    }
+  },
 }))
 
 vi.mock('@/hooks/useCustomerEmailSettings', () => ({
@@ -135,7 +140,12 @@ vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
     canManageEmailConfig: true,
     canViewEmailConfig: true,
+    canExport: true,
   }),
+}))
+
+vi.mock('@/lib/reportPdf', () => ({
+  exportCustomerReportPdf,
 }))
 
 vi.mock('@/hooks/useToast', () => ({
@@ -168,6 +178,7 @@ describe('CustomerDetailPage', () => {
     mockActivateCustomer.mockReset()
     mockDeactivateCustomer.mockReset()
     mockNavigate.mockReset()
+    useCustomerReportSpy.mockReset()
 
     mockUpsertSettings.mockResolvedValue(undefined)
     mockCreateRule.mockResolvedValue(undefined)
@@ -375,14 +386,47 @@ describe('CustomerDetailPage', () => {
   })
 
   it('renders the backend customer report data on the report tab', () => {
-    renderPage()
+    const { container } = renderPage()
 
     fireEvent.click(screen.getByRole('button', { name: 'Report' }))
 
-    expect(screen.getByText('Backend Customer Report')).toBeInTheDocument()
+    expect(screen.getByText('Customer Report')).toBeInTheDocument()
     expect(screen.getByText('Tag Breakdown')).toBeInTheDocument()
     expect(screen.getByText('VIP')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
+    expect(container.querySelector('[style*="background-color: rgb(239, 68, 68)"]')).toBeTruthy()
+  })
+
+  it('refetches customer report data when the compact date filter changes', async () => {
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Report date preset' }), { target: { value: 'allTime' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('Showing all time. Default stays controlled, but all-time remains available when needed.')).toBeInTheDocument()
+      expect(useCustomerReportSpy).toHaveBeenLastCalledWith('c1', {
+        dateFrom: null,
+        dateTo: null,
+      })
+    })
+  })
+
+  it('exports the current customer report as a pdf', async () => {
+    exportCustomerReportPdf.mockResolvedValue(undefined)
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }))
+
+    await waitFor(() => {
+      expect(exportCustomerReportPdf).toHaveBeenCalledWith(expect.objectContaining({
+        customerName: 'Akbank',
+        report: expect.objectContaining({ totalCount: 12 }),
+        range: expect.objectContaining({ preset: 'last30' }),
+      }))
+    })
   })
 
   it('shows a loading state while the customer report is fetching', () => {
@@ -412,7 +456,7 @@ describe('CustomerDetailPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Report' }))
 
-    expect(screen.getByText('No tag breakdown returned by the backend.')).toBeInTheDocument()
+    expect(screen.getByText('No customer report data was returned for the selected date range.')).toBeInTheDocument()
     expect(screen.getAllByText('0').length).toBeGreaterThan(0)
   })
 

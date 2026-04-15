@@ -69,6 +69,40 @@ export interface User {
   avatarColor: string
 }
 
+export type UserLocale = 'tr' | 'en'
+
+export interface UserProfileRole {
+  id: string
+  code: string
+  name: string
+}
+
+export interface UserProfileGroup {
+  id: string
+  name: string
+}
+
+export interface UserProfile {
+  id: string
+  username: string
+  email: string
+  displayName: string
+  firstName: string
+  lastName: string
+  fullName: string
+  roles: UserProfileRole[]
+  groups: UserProfileGroup[]
+  isActive: boolean
+  locale: UserLocale
+  avatarUrl: string | null
+  permissionCodes: string[]
+  roleCode?: string
+  roleName?: string
+  roleId?: string
+  groupIds: string[]
+  groupNames: string[]
+}
+
 export interface Group {
   id: string
   name: string

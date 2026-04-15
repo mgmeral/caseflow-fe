@@ -11,6 +11,7 @@ import { OwnerCell } from './OwnerCell'
 
 interface TicketTableRowProps {
   ticket: Ticket
+  rowIndex?: number
   isSelected: boolean
   onSelect: (id: string, checked: boolean) => void
   anySelected: boolean
@@ -20,6 +21,7 @@ interface TicketTableRowProps {
 
 export function TicketTableRow({
   ticket,
+  rowIndex = 0,
   isSelected,
   onSelect,
   anySelected,
@@ -31,14 +33,18 @@ export function TicketTableRow({
   const [menuOpen, setMenuOpen] = useState(false)
 
   const isUnassigned = !ticket.assignedUserId
+  const isEvenRow = rowIndex % 2 === 0
 
   return (
     <tr
       className={clsx(
-        'border-b border-gray-100 cursor-pointer transition-colors',
-        ticket.isUnread && 'border-l-[3px] border-l-indigo-500',
-        isUnassigned && !ticket.isUnread && 'bg-amber-50',
-        isSelected ? 'bg-indigo-50' : 'hover:bg-gray-50',
+        'cursor-pointer border-b border-white/60 transition-colors',
+        isEvenRow
+          ? 'bg-[linear-gradient(90deg,rgba(31,111,255,0.11)_0%,rgba(31,111,255,0.05)_52%,rgba(255,255,255,0.14)_100%)]'
+          : 'bg-[linear-gradient(90deg,rgba(148,163,184,0.13)_0%,rgba(148,163,184,0.06)_52%,rgba(255,255,255,0.1)_100%)]',
+        ticket.isUnread && 'border-l-[3px] border-l-[#1f6fff]',
+        isUnassigned && !ticket.isUnread && 'bg-[linear-gradient(90deg,rgba(251,191,36,0.1)_0%,transparent_38%)]',
+        isSelected ? 'bg-[linear-gradient(90deg,rgba(31,111,255,0.12)_0%,rgba(31,111,255,0.04)_100%)]' : 'hover:bg-[linear-gradient(90deg,rgba(31,111,255,0.05)_0%,transparent_55%)]',
       )}
       onClick={() => navigate(`/tickets/${ticket.id}`)}
       onMouseEnter={() => setHovering(true)}
@@ -111,7 +117,10 @@ export function TicketTableRow({
 
       {/* Group */}
       <td className="px-3 py-1.5">
-        <span className="text-[11px] text-gray-500 bg-gray-100 px-1.5 py-px rounded">{ticket.groupName}</span>
+        <div className="inline-flex flex-col gap-1">
+          <span className="rounded-full border border-slate-200/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(241,246,255,0.84)_100%)] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-600">{ticket.groupName}</span>
+          <span className="text-[11px] text-gray-400">Current group</span>
+        </div>
       </td>
 
       {/* Aging */}
@@ -138,17 +147,17 @@ export function TicketTableRow({
           <button
             type="button"
             onClick={() => setMenuOpen((o) => !o)}
-            className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-700"
+            className="rounded-lg border border-transparent p-1.5 text-gray-400 transition-all duration-200 hover:border-[#d5e2ff] hover:bg-[#eef5ff] hover:text-[#1258e3]"
             aria-label="Ticket actions"
           >
             <MoreHorizontal size={16} />
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-full mt-1 z-20 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+            <div className="absolute right-0 top-full z-20 mt-1 w-40 overflow-hidden rounded-xl border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(243,248,255,0.92)_100%)] py-1 shadow-elevated backdrop-blur-md">
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-slate-700 transition-colors hover:bg-[#eef5ff] hover:text-[#1258e3]"
                 onClick={() => {
                   setMenuOpen(false)
                   onAssign?.(ticket.id)
@@ -158,7 +167,7 @@ export function TicketTableRow({
               </button>
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-slate-700 transition-colors hover:bg-[#eef5ff] hover:text-[#1258e3]"
                 onClick={() => {
                   setMenuOpen(false)
                   onChangeStatus?.(ticket.id)
@@ -168,7 +177,7 @@ export function TicketTableRow({
               </button>
               <button
                 type="button"
-                className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                className="w-full px-3 py-2 text-left text-[13px] font-medium text-slate-700 transition-colors hover:bg-[#eef5ff] hover:text-[#1258e3]"
                 onClick={() => {
                   setMenuOpen(false)
                   navigate(`/tickets/${ticket.id}`)

@@ -82,10 +82,29 @@ export function AdminPoolPage() {
       setIsAssigning(true)
       try {
         if (assignTarget) {
-          await assignmentService.assign({ ticketId: assignTarget.id, assignedUserId: userId })
+          if (assignTarget.assignedUserId) {
+            await assignmentService.reassign({
+              ticketId: assignTarget.id,
+              newUserId: userId,
+              ...(assignTarget.groupId ? { newGroupId: assignTarget.groupId } : {}),
+            })
+          } else {
+            await assignmentService.assign({ ticketId: assignTarget.id, assignedUserId: userId })
+          }
         } else if (bulkAssignIds.length > 0) {
           await Promise.all(
-            bulkAssignIds.map((id) => assignmentService.assign({ ticketId: id, assignedUserId: userId })),
+            bulkAssignIds.map((id) => {
+              const ticket = allPoolTickets.find((item) => item.id === id)
+              if (ticket?.assignedUserId) {
+                return assignmentService.reassign({
+                  ticketId: id,
+                  newUserId: userId,
+                  ...(ticket.groupId ? { newGroupId: ticket.groupId } : {}),
+                })
+              }
+
+              return assignmentService.assign({ ticketId: id, assignedUserId: userId })
+            }),
           )
         }
         await Promise.all([
@@ -100,7 +119,7 @@ export function AdminPoolPage() {
         setIsAssigning(false)
       }
     },
-    [assignTarget, bulkAssignIds, queryClient],
+    [allPoolTickets, assignTarget, bulkAssignIds, queryClient],
   )
 
   if (!canViewAdminPool) {
@@ -127,21 +146,21 @@ export function AdminPoolPage() {
   const hasActiveFilter = Boolean(searchInput || priorityFilter || groupFilter)
 
   return (
-    <div className="p-4 space-y-3">
-      <div className="flex items-center justify-between">
+    <div className="page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">Assignment Queue</h1>
-          <p className="text-xs text-gray-500">Triage and assign queue-eligible tickets to agents.</p>
+          <h1 className="page-title">Assignment Queue</h1>
+          <p className="page-subtitle">Triage queue-eligible tickets, assign faster, and keep priority work visible.</p>
         </div>
         {!isLoading ? (
           <div className="text-right">
-            <span className="text-2xl font-bold text-gray-900">{poolCounts.total}</span>
-            <p className="text-[11px] text-gray-500">awaiting assignment</p>
+            <span className="text-[1.9rem] font-semibold tracking-[-0.04em] text-slate-950">{poolCounts.total}</span>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">awaiting assignment</p>
           </div>
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1 bg-gray-50 rounded-lg p-1 border border-gray-200">
+      <div className="surface-card flex flex-wrap items-center gap-1.5 p-1.5">
         {viewTabs.map((tab) => (
           <button
             key={tab.key}
@@ -151,10 +170,10 @@ export function AdminPoolPage() {
               setPage(1)
             }}
             className={clsx(
-              'flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors',
+              'flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold tracking-[-0.01em] transition-all duration-200',
               poolView === tab.key
-                ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                : 'text-gray-500 hover:text-gray-700 hover:bg-white/50',
+                ? 'border border-[#c6d8ff] bg-[linear-gradient(180deg,#ffffff_0%,#edf4ff_100%)] text-slate-950 shadow-soft'
+                : 'text-slate-500 hover:bg-white/60 hover:text-slate-800',
             )}
           >
             <tab.icon className={clsx('w-3.5 h-3.5', poolView === tab.key ? tab.color : 'text-gray-400')} />
@@ -163,7 +182,7 @@ export function AdminPoolPage() {
               <span
                 className={clsx(
                   'text-[11px] px-1.5 rounded-full font-medium',
-                  poolView === tab.key ? 'bg-gray-100 text-gray-700' : 'bg-gray-200/60 text-gray-400',
+                  poolView === tab.key ? 'bg-slate-100 text-slate-700' : 'bg-slate-200/60 text-slate-400',
                   tab.key === 'sla_risk' && tab.count > 0 && 'bg-red-100 text-red-600',
                   tab.key === 'high_priority' && tab.count > 0 && poolView === tab.key && 'bg-orange-100 text-orange-600',
                 )}
@@ -175,9 +194,9 @@ export function AdminPoolPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
-        <div className="relative">
-          <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="surface-card flex flex-wrap items-center gap-2.5 px-4 py-4">
+        <div className="relative min-w-[240px] flex-1 max-w-[320px]">
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search queue…"
@@ -186,7 +205,7 @@ export function AdminPoolPage() {
               setSearchInput(event.target.value)
               setPage(1)
             }}
-            className="pl-7 pr-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent w-[200px]"
+            className="ui-input ui-input-with-icon"
           />
         </div>
 
@@ -196,7 +215,7 @@ export function AdminPoolPage() {
             setPriorityFilter(event.target.value as TicketPriority | '')
             setPage(1)
           }}
-          className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="ui-select ui-field-inline px-3 text-[13px]"
         >
           <option value="">All Priorities</option>
           <option value="critical">Critical</option>
@@ -211,7 +230,7 @@ export function AdminPoolPage() {
             setGroupFilter(event.target.value)
             setPage(1)
           }}
-          className="px-2 py-1 text-xs border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="ui-select ui-field-inline px-3 text-[13px]"
         >
           <option value="">All Groups</option>
           {groups.map((group) => (
@@ -228,7 +247,7 @@ export function AdminPoolPage() {
               setGroupFilter('')
               setPage(1)
             }}
-            className="text-xs text-indigo-600 hover:text-indigo-800 underline ml-auto"
+            className="ml-auto text-xs font-medium text-indigo-600 hover:text-indigo-800"
           >
             Clear
           </button>

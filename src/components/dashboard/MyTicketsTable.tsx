@@ -45,7 +45,7 @@ export function MyTicketsTable({ tickets, isLoading }: MyTicketsTableProps) {
                 <th className="text-left px-3 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wide">Updated</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="table-body-striped divide-y divide-white/60">
               {tickets.map((t) => (
                 <tr
                   key={t.id}

@@ -7,7 +7,7 @@ import { useDashboardStats } from '@/hooks/useDashboard'
 import { PriorityBadge } from '@/components/tickets/PriorityBadge'
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge'
 
-type DashboardFilter = 'active' | 'unassigned' | 'waiting' | 'resolved'
+type DashboardFilter = 'active' | 'unassigned' | 'waiting' | 'resolved' | 'closed'
 
 export function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -22,17 +22,17 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-baseline justify-between">
+    <div className="page-shell">
+      <div className="page-header">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">
+          <h1 className="page-title">
             Good day, {currentUser?.fullName.split(' ')[0]}!
           </h1>
-          <p className="text-xs text-gray-500">Backend-driven operational snapshot.</p>
+          <p className="page-subtitle">Backend-driven operational snapshot.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <StatCard label="Total" value={stats?.totalTickets ?? 0} icon={Ticket} color="indigo" />
         <StatCard
           label="Active"
@@ -62,10 +62,17 @@ export function DashboardPage() {
           color="green"
           onClick={() => navigateToTickets('resolved')}
         />
+        <StatCard
+          label="Closed"
+          value={stats?.closedTickets ?? 0}
+          icon={CheckCircle2}
+          color="gray"
+          onClick={() => navigateToTickets('closed')}
+        />
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+      <div className="section-shell">
+        <div className="section-header">
           <h2 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">My Action Required</h2>
           <span className="text-xs text-gray-400">
             {statsQuery.isLoading ? '...' : stats?.myActionRequired ?? myActionItems.length}
@@ -80,12 +87,12 @@ export function DashboardPage() {
             <p className="text-xs text-gray-400">No tickets currently require your action.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-white/50">
             {myActionItems.slice(0, 5).map((ticket) => (
               <div
                 key={ticket.id}
                 onClick={() => navigate(`/tickets/${ticket.id}`)}
-                className="flex items-center gap-2 px-3 py-2 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex cursor-pointer items-center gap-2 px-4 py-3 transition-colors hover:bg-[rgba(255,255,255,0.74)]"
               >
                 <div className="flex-1 min-w-0">
                   <div className="text-sm text-gray-800 truncate font-medium">{ticket.subject}</div>
@@ -103,7 +110,7 @@ export function DashboardPage() {
               <button
                 type="button"
                 onClick={() => navigate('/tickets')}
-                className="text-xs text-indigo-600 hover:text-indigo-800 underline"
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
               >
                 View all tickets →
               </button>

@@ -297,7 +297,7 @@ describe('email-platform normalizers', () => {
         providerMessageId: 'prov-123',
         mailboxId: 'mb-1',
         mailboxName: 'Support',
-        sourceEventId: 'evt-1',
+        sourceEventId: 101,
         direction: 'INBOUND',
         subject: 'Issue report',
         from: 'customer@test.com',
@@ -336,7 +336,39 @@ describe('email-platform normalizers', () => {
       expect(result.attachments[0].previewUrl).toBe('/api/attachments/att-1/preview')
       expect(result.attachments[0].openUrl).toBe('/api/attachments/att-1/open')
       expect(result.attachments[0].downloadUrl).toBe('/api/attachments/att-1')
-      expect(result.sourceEventId).toBe('evt-1')
+      expect(result.sourceEventId).toBe(101)
+
+    })
+
+    it('does not map email document ids into sourceEventId', () => {
+      const response: TicketEmailMessageResponse = {
+        id: '69d8325094ebbe5f95845795',
+        emailDocumentId: '69d8325094ebbe5f95845795',
+        ticketId: 'tkt-1',
+        threadKey: 'thread-abc',
+        messageId: '<msg@mail.com>',
+        providerMessageId: 'prov-123',
+        mailboxId: 'mb-1',
+        mailboxName: 'Support',
+        direction: 'INBOUND',
+        subject: 'Issue report',
+        from: 'customer@test.com',
+        to: ['support@test.com'],
+        cc: [],
+        bcc: [],
+        bodyText: 'Help me',
+        bodyHtml: '<p>Help me</p>',
+        bodyPreview: 'Help me',
+        sentAt: null,
+        receivedAt: '2025-01-12T10:00:00Z',
+        dispatchStatus: null,
+        attachments: [],
+      }
+
+      const result = normalizeTicketEmailMessage(response)
+
+      expect(result.emailDocumentId).toBe('69d8325094ebbe5f95845795')
+      expect(result.sourceEventId).toBeNull()
     })
 
     it('maps outbound message with dispatch status', () => {

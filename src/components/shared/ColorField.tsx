@@ -42,8 +42,8 @@ export function ColorField({ value, onChange, label = 'Color', helperText }: Col
   return (
     <div className="space-y-3">
       <div>
-        <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
-        <p className="text-xs text-gray-500">
+        <label className="ui-label normal-case tracking-[0.04em]">{label}</label>
+        <p className="ui-hint">
           {helperText ?? 'Choose a curated accent or enter a custom hex value. Leave empty if no color should be applied.'}
         </p>
       </div>
@@ -53,8 +53,8 @@ export function ColorField({ value, onChange, label = 'Color', helperText }: Col
           type="button"
           onClick={() => onChange('')}
           className={clsx(
-            'inline-flex items-center rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors',
-            !normalizedValue ? 'border-indigo-400 bg-indigo-50 text-indigo-700' : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300',
+            'inline-flex items-center rounded-xl border px-3 py-2 text-xs font-semibold transition-all duration-200',
+            !normalizedValue ? 'border-indigo-300 bg-indigo-50 text-indigo-800 shadow-soft' : 'border-slate-200 bg-white/80 text-slate-600 hover:-translate-y-[1px] hover:border-slate-300 hover:bg-white',
           )}
         >
           No color
@@ -66,30 +66,30 @@ export function ColorField({ value, onChange, label = 'Color', helperText }: Col
             aria-label={`Select ${preset}`}
             onClick={() => onChange(preset)}
             className={clsx(
-              'h-8 w-8 rounded-full border-2 transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1',
-              normalizedValue === preset ? 'border-gray-900' : 'border-white shadow-sm',
+              'h-9 w-9 rounded-full border-[3px] transition-all duration-200 hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-500/15 focus:ring-offset-0',
+              normalizedValue === preset ? 'border-slate-900 shadow-card' : 'border-white/80 shadow-soft',
             )}
             style={{ backgroundColor: preset }}
           />
         ))}
       </div>
 
-      <div className="grid grid-cols-[auto,1fr] gap-3 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+      <div className="surface-section grid grid-cols-[auto,1fr] items-center gap-3 px-3 py-3">
         <span
-          className="h-8 w-8 rounded-full border border-gray-200 bg-white"
+          className="h-9 w-9 rounded-full border border-white/90 bg-white shadow-soft"
           style={{ backgroundColor: normalizedValue || '#ffffff' }}
           aria-hidden="true"
         />
         <div>
-          <label htmlFor="customer-color-hex" className="block text-xs font-medium text-gray-600 mb-1">Custom Hex</label>
+          <label htmlFor="customer-color-hex" className="ui-label normal-case tracking-[0.04em]">Custom Hex</label>
           <input
             id="customer-color-hex"
             value={hasCustomValue ? normalizedValue : value}
             onChange={(event) => onChange(event.target.value)}
             placeholder="#0d5ac9"
             className={clsx(
-              'w-full border rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500',
-              isInvalid ? 'border-red-300 text-red-700' : 'border-gray-300',
+              'ui-input font-mono uppercase',
+              isInvalid && 'border-red-300 text-red-700 focus:ring-red-500/15',
             )}
           />
         </div>

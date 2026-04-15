@@ -256,11 +256,11 @@ export function RoleManagementPage() {
   }
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Role Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Define what each role can access and do within the system.</p>
+          <h1 className="admin-page-title">Role Management</h1>
+          <p className="admin-page-subtitle">Define what each role can access and do within the system.</p>
         </div>
         <Button variant="primary" size="md" leftIcon={<Plus size={16} />} onClick={openCreate}>
           New Role
@@ -277,36 +277,36 @@ export function RoleManagementPage() {
           action={<Button variant="primary" size="sm" onClick={openCreate}>New Role</Button>}
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="relative z-10 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {roles.map((role) => {
             return (
               <div
                 key={role.id}
-                className={`bg-white rounded-xl border p-5 hover:border-indigo-200 transition-colors ${
-                  role.isActive ? 'border-gray-200' : 'border-gray-100 opacity-60'
+                className={`admin-panel-soft p-5 transition-colors ${
+                  role.isActive ? 'border-white/12' : 'border-white/8 opacity-70'
                 }`}
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className={`p-2 rounded-lg ${role.isActive ? 'bg-indigo-50' : 'bg-gray-100'}`}>
-                      <Shield size={16} className={role.isActive ? 'text-indigo-600' : 'text-gray-400'} />
+                    <div className={`rounded-lg border p-2 ${role.isActive ? 'border-white/12 bg-white/[0.08]' : 'border-white/8 bg-white/[0.05]'}`}>
+                      <Shield size={16} className={role.isActive ? 'text-blue-50' : 'text-blue-100/58'} />
                     </div>
                     <div>
-                      <div className="text-sm font-semibold text-gray-900">{role.name}</div>
-                      <div className="text-xs text-gray-500 font-mono">{role.code}</div>
-                      <div className="text-xs text-gray-400">Scope: {role.ticketScope}</div>
-                      <div className="text-xs text-gray-400">
+                      <div className="text-sm font-semibold text-white">{role.name}</div>
+                      <div className="text-xs font-mono text-blue-100/72">{role.code}</div>
+                      <div className="text-xs text-blue-100/62">Scope: {role.ticketScope}</div>
+                      <div className="text-xs text-blue-100/58">
                         {role.userCount != null ? `${role.userCount} user${role.userCount !== 1 ? 's' : ''}` : ''}
                         {!role.isActive && <span className="ml-1 text-amber-600">Inactive</span>}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Badge variant="outline" size="sm">{role.permissionCount} perms</Badge>
+                    <span className="admin-badge">{role.permissionCount} perms</span>
                     <button
                       type="button"
                       onClick={() => openEdit(role)}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      className="rounded-md p-1.5 text-blue-100/58 transition-colors hover:bg-white/[0.08] hover:text-white"
                       title="Edit"
                     >
                       <Pencil size={13} />
@@ -316,8 +316,8 @@ export function RoleManagementPage() {
                       onClick={() => handleToggleActive(role)}
                       className={`p-1.5 rounded-md transition-colors ${
                         role.isActive
-                          ? 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
-                          : 'text-gray-400 hover:text-green-600 hover:bg-green-50'
+                            ? 'text-blue-100/58 hover:bg-amber-500/12 hover:text-amber-200'
+                            : 'text-blue-100/58 hover:bg-emerald-500/12 hover:text-emerald-200'
                       }`}
                       title={role.isActive ? 'Deactivate' : 'Activate'}
                     >
@@ -326,7 +326,7 @@ export function RoleManagementPage() {
                     <button
                       type="button"
                       onClick={() => setDeletingRole(role)}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                      className="rounded-md p-1.5 text-blue-100/58 transition-colors hover:bg-red-500/12 hover:text-red-200"
                       title="Delete"
                     >
                       <Trash2 size={13} />
@@ -334,7 +334,7 @@ export function RoleManagementPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+                <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3 text-xs text-blue-100/62">
                   <span>{role.permissionCount} assigned permission{role.permissionCount !== 1 ? 's' : ''}</span>
                   {role.userCount != null && <span>{role.userCount} user{role.userCount !== 1 ? 's' : ''}</span>}
                 </div>
@@ -350,6 +350,7 @@ export function RoleManagementPage() {
           onClose={closeEdit}
           title={`Edit - ${editingRole.name}`}
           size="md"
+          variant="admin"
           footer={
             <div className="flex justify-end gap-2">
               <Button variant="secondary" size="sm" onClick={closeEdit} disabled={saving}>Cancel</Button>
@@ -432,6 +433,7 @@ export function RoleManagementPage() {
         onClose={() => setShowCreate(false)}
         title="New Role"
         size="md"
+        variant="admin"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => setShowCreate(false)} disabled={creating}>Cancel</Button>
@@ -516,6 +518,7 @@ export function RoleManagementPage() {
         confirmLabel="Delete"
         isDestructive
         isLoading={deleting}
+        variant="admin"
       />
     </div>
   )

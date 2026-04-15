@@ -6,6 +6,8 @@ import { EmptyState } from '@/components/shared/EmptyState'
 import { Button } from '@/components/shared/Button'
 import { Badge } from '@/components/shared/Badge'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
+import { FieldHint, HelpDrawer, PageIntro, SectionHelp } from '@/components/shared/help'
+import { jiraHelp } from '@/help/jira.help'
 import { getErrorMessage } from '@/lib/errors'
 import { ApiError } from '@/services/api.client'
 import type { JiraConfigRequest } from '@/types/integration.types'
@@ -92,6 +94,7 @@ export function JiraIntegrationSettingsPage() {
   const [saveError, setSaveError] = useState<unknown>(null)
   const [validation, setValidation] = useState<ValidationState>(EMPTY_VALIDATION)
   const [testFeedback, setTestFeedback] = useState<{ success: boolean; message: string } | null>(null)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
 
   useEffect(() => {
     if (!configQuery.data) {
@@ -224,19 +227,24 @@ export function JiraIntegrationSettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Jira Integration</h1>
-          <p className="mt-1 max-w-2xl text-sm text-gray-500">Configure the Jira connection CaseFlow uses to create linked issues from tickets, with clear status, safer credentials handling, and guided setup.</p>
+          <h1 className="admin-page-title">Jira Integration</h1>
+          <p className="admin-page-subtitle max-w-2xl">Configure the Jira connection CaseFlow uses to create linked issues from tickets, with clear status, safer credentials handling, and guided setup.</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setIsHelpOpen(true)}>
+            Help
+          </Button>
           <Badge variant={status.variant} size="md">{status.label}</Badge>
         </div>
       </div>
 
+      <PageIntro summary={jiraHelp.summary} />
+
       {configQuery.isLoading ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="admin-table-shell p-4">
           <table className="w-full"><tbody><SkeletonRow colCount={2} /><SkeletonRow colCount={2} /><SkeletonRow colCount={2} /></tbody></table>
         </div>
       ) : configQuery.isError ? (
@@ -245,13 +253,14 @@ export function JiraIntegrationSettingsPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          <div className="rounded-xl border border-gray-200 bg-white p-5">
+          <div className="admin-panel p-5">
+            <SectionHelp title={jiraHelp.sections.main.title} description={jiraHelp.sections.main.description} className="mb-5" />
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-1">
-                <h2 className="text-base font-semibold text-gray-900">Main configuration</h2>
-                <p className="text-sm text-gray-500">Enter the Jira workspace and issue defaults used when CaseFlow creates linked issues for tickets.</p>
+                <h2 className="text-base font-semibold text-white">Main configuration</h2>
+                <p className="text-sm text-blue-100/62">Enter the Jira workspace and issue defaults used when CaseFlow creates linked issues for tickets.</p>
               </div>
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900 lg:max-w-sm">
+              <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-blue-50/88 lg:max-w-sm">
                 <div className="flex items-start gap-2">
                   <RefreshCw size={16} className="mt-0.5 shrink-0" />
                   <div>
@@ -264,7 +273,7 @@ export function JiraIntegrationSettingsPage() {
             <div className="mt-5 grid gap-5 md:grid-cols-2">
               <label className="space-y-1 text-sm text-gray-700">
                 <span className="font-medium">Base URL</span>
-                <span className="block text-xs text-gray-500">Your Jira workspace URL, for example https://company.atlassian.net.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.baseUrl} />
                 <input
                   value={form.baseUrl}
                   onChange={(event) => handleChange('baseUrl', event.target.value)}
@@ -277,7 +286,7 @@ export function JiraIntegrationSettingsPage() {
 
               <label className="space-y-1 text-sm text-gray-700">
                 <span className="font-medium">Authentication</span>
-                <span className="block text-xs text-gray-500">Jira currently uses Basic authentication for this integration.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.authentication} />
                 <input
                   value={form.authType || 'BASIC'}
                   readOnly
@@ -288,7 +297,7 @@ export function JiraIntegrationSettingsPage() {
 
               <label className="space-y-1 text-sm text-gray-700">
                 <span className="font-medium">Username</span>
-                <span className="block text-xs text-gray-500">Usually the Jira account email used to generate the API token.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.username} />
                 <input
                   value={form.username}
                   onChange={(event) => handleChange('username', event.target.value)}
@@ -299,7 +308,7 @@ export function JiraIntegrationSettingsPage() {
 
               <label className="space-y-1 text-sm text-gray-700">
                 <span className="font-medium">API Token</span>
-                <span className="block text-xs text-gray-500">Leave blank to keep the current token. Enter a value only when rotating credentials.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.apiToken} />
                 <input
                   type="password"
                   value={form.apiToken}
@@ -314,7 +323,7 @@ export function JiraIntegrationSettingsPage() {
 
               <label className="space-y-1 text-sm text-gray-700">
                 <span className="font-medium">Project Key</span>
-                <span className="block text-xs text-gray-500">The Jira project key where new issues should be created, for example SUPPORT.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.projectKey} />
                 <input
                   value={form.projectKey}
                   onChange={(event) => handleChange('projectKey', event.target.value.toUpperCase())}
@@ -327,7 +336,7 @@ export function JiraIntegrationSettingsPage() {
 
               <label className="space-y-1 text-sm text-gray-700">
                 <span className="font-medium">Issue Type</span>
-                <span className="block text-xs text-gray-500">Enter the Jira issue type name exactly as it exists in the target project. Common values are Task, Bug, and Story.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.issueType} />
                 <input
                   list="jira-issue-types"
                   value={form.issueType}
@@ -343,7 +352,7 @@ export function JiraIntegrationSettingsPage() {
               <div className="space-y-2 text-sm text-gray-700 md:col-span-2">
                 <div className="space-y-1">
                   <span className="font-medium">Default Labels</span>
-                  <p className="text-xs text-gray-500">Add labels that should be applied to every Jira issue created from CaseFlow. Labels are still saved as the existing comma-separated backend string.</p>
+                  <FieldHint className="mt-0" text={jiraHelp.fieldHints.defaultLabels} />
                 </div>
 
                 <div className="rounded-lg border border-gray-300 px-3 py-3 focus-within:border-indigo-400 focus-within:ring-2 focus-within:ring-indigo-400">
@@ -393,7 +402,7 @@ export function JiraIntegrationSettingsPage() {
 
               <label className="space-y-1 text-sm text-gray-700 md:col-span-2">
                 <span className="font-medium">CaseFlow App Base URL</span>
-                <span className="block text-xs text-gray-500">Used when Jira issue links point back into CaseFlow ticket pages. Set this to the URL users open in their browser.</span>
+                <FieldHint className="mt-0" text={jiraHelp.fieldHints.appBaseUrl} />
                 <input
                   value={form.appBaseUrl}
                   onChange={(event) => handleChange('appBaseUrl', event.target.value)}
@@ -404,10 +413,11 @@ export function JiraIntegrationSettingsPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
+          <div className="admin-panel p-5 space-y-5">
+            <SectionHelp title={jiraHelp.sections.behavior.title} description={jiraHelp.sections.behavior.description} />
             <div className="space-y-1">
-              <h2 className="text-base font-semibold text-gray-900">Configuration behavior</h2>
-              <p className="text-sm text-gray-500">Control whether ticket workflows can create Jira issues and verify the saved connection.</p>
+              <h2 className="text-base font-semibold text-white">Configuration behavior</h2>
+              <p className="text-sm text-blue-100/62">Control whether ticket workflows can create Jira issues and verify the saved connection.</p>
             </div>
 
             <label className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-sm text-gray-700">
@@ -420,6 +430,7 @@ export function JiraIntegrationSettingsPage() {
               <div>
                 <div className="font-medium text-gray-900">Enable Jira issue creation for tickets</div>
                 <div className="mt-1 text-xs text-gray-500">When enabled, ticket detail views can request Jira issue creation using this saved configuration.</div>
+                <FieldHint className="mt-1" text={jiraHelp.fieldHints.enabled} />
               </div>
             </label>
 
@@ -446,22 +457,23 @@ export function JiraIntegrationSettingsPage() {
               </div>
             ) : null}
 
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+            <div className="rounded-lg border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-blue-50/88">
               <div className="flex items-start gap-2">
                 {isDirty ? <AlertCircle size={16} className="mt-0.5 shrink-0 text-amber-600" /> : <Info size={16} className="mt-0.5 shrink-0 text-blue-600" />}
                 <div>
-                  <div className="font-medium text-gray-900">Connection testing uses the saved configuration</div>
-                  <div className="mt-1 text-xs text-gray-500">
+                  <div className="font-medium text-white">Connection testing uses the saved configuration</div>
+                  <div className="mt-1 text-xs text-blue-100/60">
                     {isDirty
                       ? 'You have unsaved changes. Save configuration first if you want the test to reflect the values currently shown in the form.'
                       : 'The backend test endpoint checks the last saved Jira settings, not transient form edits.'}
                   </div>
+                  <FieldHint className="mt-1 text-blue-100/80" text={jiraHelp.fieldHints.testConnection} />
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
-              <div className="text-xs text-gray-500">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4">
+              <div className="text-xs text-blue-100/52">
                 {configQuery.data?.updatedAt ? `Last updated ${new Date(configQuery.data.updatedAt).toLocaleString()}` : 'No Jira configuration has been saved yet.'}
               </div>
               <div className="flex items-center gap-2">
@@ -483,6 +495,8 @@ export function JiraIntegrationSettingsPage() {
           </div>
         </div>
       )}
+
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={jiraHelp} />
     </div>
   )
 }

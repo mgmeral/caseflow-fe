@@ -56,11 +56,11 @@ function iconMeta(kind: TicketActivityItem['kind']): { icon: React.ReactNode; bg
 function DateDivider({ date }: { date: Date }) {
   return (
     <div className="flex items-center gap-3 py-1">
-      <div className="flex-1 h-px bg-gray-100" />
-      <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+      <div className="ticket-detail-activity-divider flex-1 h-px" />
+      <span className="ticket-detail-activity-divider-label text-[10px] font-semibold uppercase tracking-wider">
         {format(date, 'EEEE, MMM d')}
       </span>
-      <div className="flex-1 h-px bg-gray-100" />
+      <div className="ticket-detail-activity-divider flex-1 h-px" />
     </div>
   )
 }
@@ -73,13 +73,13 @@ function TimelineEvent({ activity, isLast }: { activity: TicketActivityItem; isL
     <div className="relative flex gap-3 group">
       {/* Connector line */}
       {!isLast && (
-        <div className="absolute left-[13px] top-7 bottom-0 w-px bg-gray-100" />
+        <div className="ticket-detail-activity-connector absolute left-[13px] top-7 bottom-0 w-px" />
       )}
 
       {/* Icon node */}
       <div
         className={clsx(
-          'relative z-10 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full ring-1',
+          'ticket-detail-activity-node relative z-10 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full ring-1',
           meta.bg,
         )}
       >
@@ -95,8 +95,8 @@ function TimelineEvent({ activity, isLast }: { activity: TicketActivityItem; isL
       >
         <div
           className={clsx(
-            'rounded-lg px-3 py-2',
-            isError ? 'bg-red-50/60 border border-red-100' : 'hover:bg-gray-50/80',
+            'ticket-detail-activity-card rounded-lg px-3 py-2',
+            isError && 'ticket-detail-activity-card-error',
           )}
         >
           <div className="flex items-start justify-between gap-2">

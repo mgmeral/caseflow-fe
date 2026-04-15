@@ -97,16 +97,16 @@ export function TicketTable({
   const endItem = Math.min(page * pageSize, total)
 
   return (
-    <div className="relative">
+    <div className="relative table-shell">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[900px]">
           <thead>
-            <tr className="bg-gray-50/80 border-b border-gray-200">
+            <tr className="border-b border-white/60 bg-[linear-gradient(90deg,rgba(31,111,255,0.05)_0,rgba(31,111,255,0.05)_72px,transparent_72px),linear-gradient(180deg,rgba(255,255,255,0.78)_0%,rgba(244,248,255,0.66)_100%)]">
               {COLUMNS.map((col) => (
                 <th
                   key={col.key}
                   className={clsx(
-                    'px-3 py-2 text-left text-[11px] font-medium text-gray-400 uppercase tracking-wide',
+                    'px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400',
                     col.width,
                     col.sortable && 'cursor-pointer select-none hover:text-gray-600',
                     sort.field === col.key && 'text-indigo-600',
@@ -145,10 +145,11 @@ export function TicketTable({
                 </td>
               </tr>
             ) : (
-              tickets.map((ticket) => (
+              tickets.map((ticket, index) => (
                 <TicketTableRow
                   key={ticket.id}
                   ticket={ticket}
+                  rowIndex={index}
                   isSelected={selectedIds.includes(ticket.id)}
                   onSelect={toggleOne}
                   anySelected={selectedIds.length > 0}
@@ -163,15 +164,15 @@ export function TicketTable({
 
       {/* Pagination */}
       {!isLoading && total > 0 && (
-        <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 bg-white">
+        <div className="flex items-center justify-between border-t border-white/60 bg-[linear-gradient(180deg,rgba(250,252,255,0.84)_0%,rgba(244,247,252,0.72)_100%)] px-4 py-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">
+            <span className="text-xs text-slate-500">
               {startItem}–{endItem} of {total}
             </span>
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-select w-auto min-w-[104px] px-3 py-1.5 text-[11px]"
             >
               {PAGE_SIZE_OPTIONS.map((s) => (
                 <option key={s} value={s}>
@@ -198,10 +199,10 @@ export function TicketTable({
                   key={p}
                   onClick={() => onPageChange(p)}
                   className={clsx(
-                    'px-3 py-1 text-sm rounded border',
+                    'rounded-lg border px-2.5 py-1 text-[13px] font-medium transition-all duration-200',
                     p === page
-                      ? 'bg-indigo-600 text-white border-indigo-600'
-                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50',
+                      ? 'border-[#1258e3] bg-[#1258e3] text-white shadow-soft'
+                      : 'border-slate-200 bg-white/80 text-slate-700 hover:-translate-y-[1px] hover:border-[#b7d0ff] hover:bg-[#f7fbff] hover:text-[#1258e3]',
                   )}
                 >
                   {p}
@@ -222,22 +223,22 @@ export function TicketTable({
 
       {/* Bulk action bar */}
       {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 bg-gray-900 text-white px-5 py-3 rounded-xl shadow-2xl">
-          <span className="text-sm font-medium">{selectedIds.length} tickets selected</span>
-          <div className="w-px h-5 bg-gray-600" />
-          <Button variant="ghost" size="sm" className="text-white hover:bg-gray-700" onClick={onBulkAssign}>
+        <div className="fixed bottom-6 left-1/2 z-40 flex -translate-x-1/2 items-center gap-3 rounded-2xl border border-[#b7cdfc] bg-[linear-gradient(180deg,rgba(255,255,255,0.96)_0%,rgba(237,244,255,0.94)_100%)] px-5 py-3 text-slate-900 shadow-elevated backdrop-blur-md">
+          <span className="text-sm font-medium text-slate-900">{selectedIds.length} tickets selected</span>
+          <div className="h-5 w-px bg-sky-200" />
+          <Button variant="ghost" size="sm" className="text-sky-700 hover:bg-sky-50 hover:text-sky-800" onClick={onBulkAssign}>
             Assign
           </Button>
-          <Button variant="ghost" size="sm" className="text-white hover:bg-gray-700" onClick={onBulkStatusChange}>
+          <Button variant="ghost" size="sm" className="text-sky-700 hover:bg-sky-50 hover:text-sky-800" onClick={onBulkStatusChange}>
             Change Status
           </Button>
-          <Button variant="ghost" size="sm" className="text-white hover:bg-gray-700">
+          <Button variant="ghost" size="sm" className="text-sky-700 hover:bg-sky-50 hover:text-sky-800">
             Export
           </Button>
           <button
             type="button"
             onClick={() => onSelectionChange?.([])}
-            className="text-gray-400 hover:text-white text-sm"
+            className="text-slate-500 hover:text-slate-900 text-sm"
           >
             Clear
           </button>

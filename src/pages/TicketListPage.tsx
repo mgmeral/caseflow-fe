@@ -1,14 +1,16 @@
 import { useCallback, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useFilterStore } from '@/store/filter.store'
+import { defaultFilters, useFilterStore } from '@/store/filter.store'
 import { useTickets } from '@/hooks/useTickets'
 import { useUsers } from '@/hooks/useUsers'
+import { useAllTags } from '@/hooks/useTags'
 import { TicketFilters } from '@/components/tickets/TicketFilters'
 import { TicketTable } from '@/components/tickets/TicketTable'
+import type { TicketFilters as TicketFiltersState } from '@/types/ticket.types'
 
-type DashboardFilterPreset = 'active' | 'unassigned' | 'waiting' | 'resolved'
+type DashboardFilterPreset = 'active' | 'unassigned' | 'waiting' | 'resolved' | 'closed'
 
-function getDashboardPresetFilters(filter: DashboardFilterPreset) {
+function getDashboardPresetFilters(filter: DashboardFilterPreset): Partial<TicketFiltersState> {
   switch (filter) {
     case 'active':
       return { openOnly: true }
@@ -18,27 +20,32 @@ function getDashboardPresetFilters(filter: DashboardFilterPreset) {
       return { statuses: ['WAITING_CUSTOMER'] }
     case 'resolved':
       return { statuses: ['RESOLVED'] }
+    case 'closed':
+      return { statuses: ['CLOSED'] }
   }
 }
 
 export function TicketListPage() {
   const [searchParams] = useSearchParams()
-  const { filters, sort, page, pageSize, setFilters, setSort, setPage, setPageSize, resetFilters } =
+  const dashboardFilter = searchParams.get('dashboardFilter')
+  const { filters, sort, page, pageSize, setFilters, replaceFilters, setSort, setPage, setPageSize } =
     useFilterStore()
+  const tagsQuery = useAllTags()
 
   useEffect(() => {
-    const dashboardFilter = searchParams.get('dashboardFilter')
-    resetFilters()
-
     if (
       dashboardFilter === 'active'
       || dashboardFilter === 'unassigned'
       || dashboardFilter === 'waiting'
       || dashboardFilter === 'resolved'
+      || dashboardFilter === 'closed'
     ) {
-      setFilters(getDashboardPresetFilters(dashboardFilter))
+      replaceFilters({
+        ...defaultFilters,
+        ...getDashboardPresetFilters(dashboardFilter),
+      })
     }
-  }, [resetFilters, searchParams, setFilters])
+  }, [dashboardFilter, replaceFilters])
 
   const handleFilterChange = useCallback(
     (partial: Parameters<typeof setFilters>[0]) => {
@@ -51,14 +58,22 @@ export function TicketListPage() {
   const { users, groups } = useUsers()
 
   return (
-    <div className="p-4 space-y-3">
-      <h1 className="text-lg font-bold text-gray-900">Tickets</h1>
+    <div className="page-shell">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Tickets</h1>
+          <p className="page-subtitle">Operational queue with layered filters, ownership context, and recent activity visibility.</p>
+        </div>
+      </div>
 
       <TicketFilters
         filters={filters}
         onChange={handleFilterChange}
         groups={groups}
         users={users}
+        tags={tagsQuery.data ?? []}
+        isTagsLoading={tagsQuery.isLoading}
+        tagsUnavailable={tagsQuery.isError}
       />
 
       <TicketTable

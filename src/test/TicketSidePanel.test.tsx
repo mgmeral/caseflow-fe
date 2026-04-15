@@ -41,7 +41,7 @@ const baseTicket = {
 }
 
 describe('TicketSidePanel', () => {
-  it('renders only backend-allowed status action buttons', () => {
+  it('renders only backend-allowed status actions in the select', () => {
     const onChangeStatus = vi.fn()
 
     render(
@@ -53,29 +53,36 @@ describe('TicketSidePanel', () => {
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Triaged' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Waiting Customer' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Triaged' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Waiting Customer' })).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Triaged' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Status Action' }), { target: { value: 'TRIAGED' } })
     expect(onChangeStatus).toHaveBeenCalledWith('TRIAGED')
   })
 
-  it('shows status & priority in merged section with correct heading', () => {
+  it('shows summary fields and compact action selects in one panel', () => {
+    const onChangePriority = vi.fn()
+
     render(
       <TicketSidePanel
         ticket={baseTicket as any}
         allowedTransitions={['RESOLVED', 'CLOSED']}
         onChangeStatus={vi.fn()}
-        onChangePriority={vi.fn()}
+        onChangePriority={onChangePriority}
       />,
     )
 
-    expect(screen.getByText('Status & Priority')).toBeInTheDocument()
+    expect(screen.getByText('Overview')).toBeInTheDocument()
+    expect(screen.getByText('Assignee')).toBeInTheDocument()
+    expect(screen.getByText('Group')).toBeInTheDocument()
     expect(screen.getByText('Assigned')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Medium' })).toBeInTheDocument()
-    // Close/Reopen are in the top action bar, not the side panel
-    expect(screen.queryByRole('button', { name: 'Close Ticket' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Reopen Ticket' })).not.toBeInTheDocument()
+    expect(screen.getByText('Priority')).toBeInTheDocument()
+    expect(screen.getByText('Tier 1')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Status Action' })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Priority Action' })).toBeInTheDocument()
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Priority Action' }), { target: { value: 'high' } })
+    expect(onChangePriority).toHaveBeenCalledWith('high')
   })
 
   it('renders SLA section', () => {

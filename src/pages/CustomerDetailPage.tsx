@@ -23,6 +23,7 @@ import { useGroupsQuery } from '@/hooks/useUsers'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errors'
+import { exportCustomerReportPdf } from '@/lib/reportPdf'
 import type {
   UpdateCustomerRequest,
   UpsertCustomerEmailSettingsRequest,
@@ -40,9 +41,11 @@ import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { EmptyState } from '@/components/shared/EmptyState'
 import {
   ArrowLeft, Ticket, Mail, Settings, Plus, Pencil, Trash2,
-  ToggleLeft, ToggleRight, Save, Globe, AtSign, BarChart2,
+  ToggleLeft, ToggleRight, Save, Globe, AtSign, BarChart2, Download,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { ReportDateFilter } from '@/components/reports/ReportDateFilter'
+import { buildReportDateRange, type ReportDateRange } from '@/lib/reportDateRange'
 
 const UNKNOWN_SENDER_POLICIES = ['MANUAL_REVIEW', 'IGNORE', 'REJECT'] as const
 
@@ -74,8 +77,9 @@ export function CustomerDetailPage() {
   const { id = '' } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { success, error: showError } = useToast()
-  const { canManageEmailConfig, canViewEmailConfig } = usePermissions()
+  const { canManageEmailConfig, canViewEmailConfig, canExport } = usePermissions()
 
+  const [customerReportRange, setCustomerReportRange] = useState<ReportDateRange>(() => buildReportDateRange('last30'))
   const { customer, isLoading } = useCustomerDetail(id)
   const { tickets, isLoading: ticketsLoading } = useCustomerTickets(id)
   const {
@@ -83,7 +87,10 @@ export function CustomerDetailPage() {
     isLoading: customerReportLoading,
     isError: customerReportError,
     error: customerReportQueryError,
-  } = useCustomerReport(id)
+  } = useCustomerReport(id, {
+    dateFrom: customerReportRange.dateFrom,
+    dateTo: customerReportRange.dateTo,
+  })
   const { data: emailSettings, isLoading: settingsLoading } = useCustomerEmailSettings(id)
   const { data: routingRules = [], isLoading: rulesLoading } = useCustomerRoutingRules(id)
   const updateCustomer = useUpdateCustomer()
@@ -131,16 +138,20 @@ export function CustomerDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6">
-        <table className="w-full"><tbody><SkeletonRow colCount={3} /></tbody></table>
+      <div className="page-shell">
+        <div className="surface-card p-6">
+          <table className="w-full"><tbody><SkeletonRow colCount={3} /></tbody></table>
+        </div>
       </div>
     )
   }
 
   if (!customer) {
     return (
-      <div className="p-6">
+      <div className="page-shell">
+        <div className="surface-card p-6">
         <EmptyState title="Customer not found" description="This customer doesn't exist." />
+        </div>
       </div>
     )
   }
@@ -229,6 +240,21 @@ export function CustomerDetailPage() {
       showError(err instanceof Error ? err.message : 'Failed to delete customer')
     } finally {
       setShowDeleteCustomerConfirm(false)
+    }
+  }
+
+  const handleExportCustomerReport = async () => {
+    if (!customerReport || customerReportLoading || customerReportError) return
+
+    try {
+      await exportCustomerReportPdf({
+        customerName: customer.name,
+        report: customerReport,
+        range: customerReportRange,
+      })
+      success('Customer report PDF exported.')
+    } catch (exportError) {
+      showError(getErrorMessage(exportError, 'Customer report PDF could not be exported.'))
     }
   }
 
@@ -350,17 +376,17 @@ export function CustomerDetailPage() {
   ]
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="page-shell">
       <button
         onClick={() => navigate('/customers')}
-        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700"
+        className="inline-flex w-fit items-center gap-1.5 rounded-full border border-transparent px-2.5 py-1.5 text-sm text-gray-500 transition-colors hover:border-[#d5e2ff] hover:bg-[#eef5ff] hover:text-[#1258e3]"
       >
         <ArrowLeft size={14} />
         Back to Customers
       </button>
 
       {/* Header */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
+      <div className="surface-card p-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex items-center gap-3 mb-1">
@@ -410,15 +436,15 @@ export function CustomerDetailPage() {
       </div>
 
       {/* Tab bar */}
-      <div className="flex border-b border-gray-200">
+      <div className="surface-tabbar">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+            className={`surface-tab ${
               activeTab === tab.id
-                ? 'border-indigo-500 text-indigo-700'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? 'surface-tab-active'
+                : ''
             }`}
           >
             {tab.label}
@@ -430,7 +456,7 @@ export function CustomerDetailPage() {
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Customer info card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <div className="surface-card p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Customer Information</h2>
             <div className="space-y-3 text-sm">
               <InfoRow label="Customer ID" value={customer.id} />
@@ -444,10 +470,10 @@ export function CustomerDetailPage() {
 
           {/* Email routing summary card */}
           {showEmailTab && (
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
+            <div className="surface-card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-sm font-semibold text-gray-700">Email Routing</h2>
-                <button onClick={() => setActiveTab('email')} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">Manage →</button>
+                <button onClick={() => setActiveTab('email')} className="rounded-full border border-[#d6e3ff] bg-[#eef5ff] px-3 py-1 text-xs font-semibold text-indigo-600 transition-colors hover:bg-[#e4efff]">Manage</button>
               </div>
               {settingsLoading ? (
                 <SkeletonRow colCount={2} />
@@ -470,7 +496,7 @@ export function CustomerDetailPage() {
                       <div className="text-xs text-gray-500 mb-1.5">Sender Patterns ({activeRoutingRules.length} active)</div>
                       <div className="flex flex-wrap gap-1.5">
                         {activeRoutingRules.slice(0, 5).map((r) => (
-                          <span key={r.id} className="inline-flex items-center gap-1 text-xs bg-gray-100 text-gray-700 px-2 py-0.5 rounded-md font-mono">
+                          <span key={r.id} className="inline-flex items-center gap-1 rounded-full border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.88)_0%,rgba(240,245,255,0.8)_100%)] px-2.5 py-1 text-xs font-mono text-gray-700 shadow-soft">
                             {r.senderMatchType === 'DOMAIN_SUFFIX' ? <Globe size={10} /> : <AtSign size={10} />}
                             {r.senderMatchValue}
                           </span>
@@ -487,10 +513,10 @@ export function CustomerDetailPage() {
           )}
 
           {/* Recent tickets card */}
-          <div className="bg-white rounded-xl border border-gray-200 p-5 lg:col-span-2">
+          <div className="surface-card p-5 lg:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-sm font-semibold text-gray-700">Recent Tickets</h2>
-              <button onClick={() => setActiveTab('tickets')} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium">View all →</button>
+              <button onClick={() => setActiveTab('tickets')} className="rounded-full border border-[#d6e3ff] bg-[#eef5ff] px-3 py-1 text-xs font-semibold text-indigo-600 transition-colors hover:bg-[#e4efff]">View all</button>
             </div>
             {ticketsLoading ? (
               <SkeletonRow colCount={4} />
@@ -502,7 +528,7 @@ export function CustomerDetailPage() {
                   <div
                     key={t.id}
                     onClick={() => navigate(`/tickets/${t.id}`)}
-                    className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="flex cursor-pointer items-center justify-between rounded-xl border border-transparent px-3 py-2.5 transition-all duration-200 hover:border-white/80 hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.82)_0%,rgba(243,247,255,0.74)_100%)] hover:shadow-soft"
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <span className="font-mono text-xs text-gray-400 shrink-0">{t.ticketNo}</span>
@@ -522,6 +548,23 @@ export function CustomerDetailPage() {
 
       {activeTab === 'report' && (
         <div className="space-y-6">
+          <ReportDateFilter
+            compact
+            value={customerReportRange}
+            onChange={setCustomerReportRange}
+            actions={canExport ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                leftIcon={<Download size={14} />}
+                onClick={handleExportCustomerReport}
+                disabled={customerReportLoading || customerReportError || !customerReport}
+              >
+                Export PDF
+              </Button>
+            ) : null}
+          />
+
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <ReportStatCard label="Total" value={customerReport?.totalCount ?? 0} isLoading={customerReportLoading} />
             <ReportStatCard label="Open" value={customerReport?.openCount ?? 0} isLoading={customerReportLoading} />
@@ -529,10 +572,10 @@ export function CustomerDetailPage() {
             <ReportStatCard label="Waiting Customer" value={customerReport?.waitingCustomerCount ?? 0} isLoading={customerReportLoading} />
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="table-shell overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
               <BarChart2 className="w-4 h-4 text-gray-400" />
-              <h2 className="text-sm font-semibold text-gray-700">Backend Customer Report</h2>
+              <h2 className="text-sm font-semibold text-gray-700">Customer Report</h2>
             </div>
             {customerReportLoading ? (
               <div className="p-5">
@@ -546,6 +589,8 @@ export function CustomerDetailPage() {
               <div className="p-5 text-sm text-amber-700">{getErrorMessage(customerReportQueryError, 'Failed to load customer report.')}</div>
             ) : !customerReport ? (
               <div className="p-5 text-sm text-gray-400">No report data available.</div>
+            ) : customerReport.totalCount === 0 && customerReport.byTag.length === 0 ? (
+              <div className="p-5 text-sm text-slate-500">No customer report data was returned for the selected date range.</div>
             ) : (
               <div className="p-5 space-y-4">
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
@@ -562,7 +607,7 @@ export function CustomerDetailPage() {
                   ) : (
                     <div className="space-y-2">
                       {customerReport.byTag.map((item) => (
-                        <div key={`${item.tagId}:${item.tagCode}`} className="flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                        <div key={`${item.tagId}:${item.tagCode}`} className="flex items-center justify-between rounded-xl border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.82)_0%,rgba(243,247,255,0.74)_100%)] px-3 py-2 text-sm shadow-soft">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: item.tagColor ?? '#94a3b8' }} />
                             <span className="truncate text-gray-800">{item.tagName}</span>
@@ -583,7 +628,7 @@ export function CustomerDetailPage() {
       {activeTab === 'email' && showEmailTab && (
         <div className="space-y-6">
           {/* Email Settings card */}
-          <div className="bg-white rounded-xl border border-gray-200">
+          <div className="surface-card">
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
               <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                 <Settings size={14} className="text-gray-400" />
@@ -635,7 +680,7 @@ export function CustomerDetailPage() {
                   <select
                     value={settingsForm.unknownSenderPolicy}
                     onChange={(e) => setSettingsForm((f) => f && ({ ...f, unknownSenderPolicy: e.target.value }))}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    className="ui-select"
                   >
                     {UNKNOWN_SENDER_POLICIES.map((p) => (
                       <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
@@ -659,7 +704,7 @@ export function CustomerDetailPage() {
                     <select
                       value={settingsForm.defaultGroupId ?? ''}
                       onChange={(e) => setSettingsForm((f) => f && ({ ...f, defaultGroupId: e.target.value || null }))}
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="ui-select"
                     >
                       <option value="">— None —</option>
                       {groups.map((g) => (
@@ -673,7 +718,7 @@ export function CustomerDetailPage() {
                       value={settingsForm.defaultPriority ?? ''}
                       onChange={(e) => setSettingsForm((f) => f && ({ ...f, defaultPriority: e.target.value || null }))}
                       placeholder="Optional"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="ui-input"
                     />
                   </div>
                 </div>
@@ -685,7 +730,7 @@ export function CustomerDetailPage() {
                       value={settingsForm.defaultStatus ?? ''}
                       onChange={(e) => setSettingsForm((f) => f && ({ ...f, defaultStatus: e.target.value || null }))}
                       placeholder="Optional"
-                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="ui-input"
                     />
                   </div>
                 )}
@@ -701,7 +746,7 @@ export function CustomerDetailPage() {
           </div>
 
           {/* Sender Patterns / Routing Rules */}
-          <div className="bg-white rounded-xl border border-gray-200">
+          <div className="table-shell">
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
               <div>
                 <span className="text-sm font-semibold text-gray-800 flex items-center gap-2">
@@ -733,7 +778,7 @@ export function CustomerDetailPage() {
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr className="border-b border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.8)_0%,rgba(243,247,255,0.72)_100%)]">
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Type</th>
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Pattern</th>
                     <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Subdomains</th>
@@ -743,9 +788,9 @@ export function CustomerDetailPage() {
                     {canManageEmailConfig && <th className="px-4 py-2 text-right font-semibold text-gray-600 text-xs">Actions</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="table-body-striped divide-y divide-white/70">
                   {routingRules.map((rule) => (
-                    <tr key={rule.id} className="hover:bg-gray-50">
+                    <tr key={rule.id} className="transition-colors hover:bg-[linear-gradient(90deg,rgba(31,111,255,0.05)_0%,transparent_55%)]">
                       <td className="px-4 py-2">
                         <Badge variant={rule.senderMatchType === 'EXACT_EMAIL' ? 'info' : 'default'} size="sm">
                           {getRoutingRuleTypeLabel(rule.senderMatchType)}
@@ -763,11 +808,11 @@ export function CustomerDetailPage() {
                       {canManageEmailConfig && (
                         <td className="px-4 py-2 text-right">
                           <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => openEditRule(rule)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="Edit"><Pencil size={13} /></button>
-                            <button onClick={() => handleToggleRule(rule)} className="p-1 rounded hover:bg-gray-100 text-gray-500" title={rule.isActive ? 'Deactivate' : 'Activate'}>
+                            <button onClick={() => openEditRule(rule)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-[#eef5ff] hover:text-indigo-600" title="Edit"><Pencil size={13} /></button>
+                            <button onClick={() => handleToggleRule(rule)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-[#eef5ff]" title={rule.isActive ? 'Deactivate' : 'Activate'}>
                               {rule.isActive ? <ToggleRight size={13} className="text-green-500" /> : <ToggleLeft size={13} />}
                             </button>
-                            <button onClick={() => setDeletingRuleId(rule.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-red-600" title="Delete"><Trash2 size={13} /></button>
+                            <button onClick={() => setDeletingRuleId(rule.id)} className="rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600" title="Delete"><Trash2 size={13} /></button>
                           </div>
                         </td>
                       )}
@@ -782,7 +827,7 @@ export function CustomerDetailPage() {
 
       {/* Tickets tab */}
       {activeTab === 'tickets' && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="table-shell overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="text-sm font-semibold text-gray-700">Tickets</h2>
           </div>
@@ -799,7 +844,7 @@ export function CustomerDetailPage() {
           ) : (
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
+                <tr className="border-b border-white/70 bg-[linear-gradient(180deg,rgba(255,255,255,0.8)_0%,rgba(243,247,255,0.72)_100%)]">
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">#</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Subject</th>
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Status</th>
@@ -807,12 +852,12 @@ export function CustomerDetailPage() {
                   <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Updated</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="table-body-striped divide-y divide-white/70">
                 {tickets.map((t) => (
                   <tr
                     key={t.id}
                     onClick={() => navigate(`/tickets/${t.id}`)}
-                    className="hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="cursor-pointer transition-colors hover:bg-[linear-gradient(90deg,rgba(31,111,255,0.05)_0%,transparent_55%)]"
                   >
                     <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{t.ticketNo}</td>
                     <td className="px-4 py-2.5 font-medium text-gray-800 truncate max-w-xs">{t.subject}</td>
@@ -840,7 +885,7 @@ export function CustomerDetailPage() {
               value={customerName}
               onChange={(event) => setCustomerName(event.target.value)}
               placeholder="e.g. Akbank"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-input"
             />
           </div>
           <div>
@@ -849,7 +894,7 @@ export function CustomerDetailPage() {
               value={customerCode}
               onChange={(event) => setCustomerCode(event.target.value.toUpperCase())}
               placeholder="e.g. AKBANK"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-input font-mono uppercase"
             />
           </div>
           <ColorField value={customerColorHex} onChange={setCustomerColorHex} label="Customer Color" />
@@ -874,7 +919,7 @@ export function CustomerDetailPage() {
             <select
               value={ruleForm.senderMatchType}
               onChange={(e) => setRuleForm((f) => ({ ...f, senderMatchType: e.target.value as 'EXACT_EMAIL' | 'DOMAIN_SUFFIX' }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="ui-select"
             >
               <option value="EXACT_EMAIL">Exact Email</option>
               <option value="DOMAIN_SUFFIX">Domain Suffix</option>
@@ -886,7 +931,7 @@ export function CustomerDetailPage() {
               value={ruleForm.senderMatchValue}
               onChange={(e) => setRuleForm((f) => ({ ...f, senderMatchValue: e.target.value }))}
               placeholder={ruleForm.senderMatchType === 'EXACT_EMAIL' ? 'user@example.com' : '@example.com'}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="ui-input"
             />
             <p className="text-xs text-gray-400 mt-1">
               {ruleForm.senderMatchType === 'EXACT_EMAIL'
@@ -899,7 +944,7 @@ export function CustomerDetailPage() {
             <select
               value={ruleForm.recipientMailboxId ?? ''}
               onChange={(e) => setRuleForm((f) => ({ ...f, recipientMailboxId: e.target.value || null }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="ui-select"
             >
               <option value="">— Default —</option>
               {mailboxes.map((m) => (
@@ -914,7 +959,7 @@ export function CustomerDetailPage() {
               min="0"
               value={ruleForm.priority}
               onChange={(e) => setRuleForm((f) => ({ ...f, priority: parseInt(e.target.value, 10) || 0 }))}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="ui-input"
             />
           </div>
           <div>
@@ -924,7 +969,7 @@ export function CustomerDetailPage() {
               onChange={(e) => setRuleForm((f) => ({ ...f, notes: e.target.value || null }))}
               rows={2}
               placeholder="Optional notes…"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="ui-textarea"
             />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
@@ -967,17 +1012,17 @@ export function CustomerDetailPage() {
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-800 font-medium">{value}</span>
+    <div className="ui-info-row">
+      <span className="ui-info-row-label">{label}</span>
+      <span className="ui-info-row-value">{value}</span>
     </div>
   )
 }
 
 function ReportStatCard({ label, value, isLoading }: { label: string; value: number; isLoading: boolean }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</div>
+    <div className="premium-stat-card p-4">
+      <div className="premium-stat-kicker text-xs tracking-wide">{label}</div>
       <div className="mt-2 text-2xl font-semibold text-gray-900">{isLoading ? '...' : value}</div>
     </div>
   )

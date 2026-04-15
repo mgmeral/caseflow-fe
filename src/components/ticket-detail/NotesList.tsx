@@ -40,7 +40,7 @@ function NoteItem({ note }: { note: TicketMessage }) {
   const authorLabel = note.authorName || 'Unknown user'
 
   return (
-    <div className="rounded-lg border border-amber-200/70 bg-amber-50/50 px-3.5 py-2.5">
+    <div className="ticket-detail-note-card">
       <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">
         <MentionText content={note.content} mentions={note.mentions} />
       </p>

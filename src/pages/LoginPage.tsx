@@ -30,8 +30,9 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm w-full max-w-sm p-8">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(31,111,255,0.18),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(14,165,233,0.16),transparent_28%),linear-gradient(180deg,#f4f7fb_0%,#ecf2f9_100%)] p-4">
+      <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.26)_0%,transparent_42%,rgba(31,111,255,0.06)_100%)]" aria-hidden="true" />
+      <div className="surface-floating relative w-full max-w-sm p-8">
         {/* Brand */}
         <div className="text-center mb-8">
           <img src="/logo-full.png" alt="CaseFlow" className="h-44 mx-auto -mb-8" />
@@ -48,7 +49,7 @@ export function LoginPage() {
               placeholder="admin"
               autoFocus
               autoComplete="username"
-              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-input"
             />
           </div>
 
@@ -60,7 +61,7 @@ export function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               autoComplete="current-password"
-              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-input"
             />
           </div>
 

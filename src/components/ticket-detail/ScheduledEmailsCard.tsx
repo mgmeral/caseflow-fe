@@ -78,7 +78,7 @@ function ScheduledEmailRow({
       ) : null}
       {(item.status === 'PENDING' || item.status === 'QUEUED') ? (
         <div className="mt-3">
-          <Button variant="secondary" size="sm" leftIcon={<MailX size={13} />} onClick={() => onCancel(item.id)} isLoading={canceling}>
+          <Button variant="secondary" size="sm" leftIcon={<MailX size={13} />} onClick={() => onCancel(Number(item.id))} isLoading={canceling}>
             Cancel Schedule
           </Button>
         </div>

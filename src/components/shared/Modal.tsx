@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { clsx } from 'clsx'
 
 type ModalSize = 'sm' | 'md' | 'lg' | 'xl'
+type ModalVariant = 'default' | 'admin'
 
 interface ModalProps {
   isOpen: boolean
@@ -11,6 +12,7 @@ interface ModalProps {
   children: ReactNode
   size?: ModalSize
   footer?: ReactNode
+  variant?: ModalVariant
 }
 
 const SIZE_CLASSES: Record<ModalSize, string> = {
@@ -20,7 +22,7 @@ const SIZE_CLASSES: Record<ModalSize, string> = {
   xl: 'max-w-2xl',
 }
 
-export function Modal({ isOpen, onClose, title, children, size = 'md', footer }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, size = 'md', footer, variant = 'default' }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return
     const handler = (e: KeyboardEvent) => {
@@ -34,40 +36,52 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', footer }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      <div className="absolute inset-0 bg-slate-950/28 backdrop-blur-md" />
 
-      {/* Panel */}
       <div
         className={clsx(
-          'relative w-full overflow-hidden bg-white rounded-2xl shadow-elevated flex flex-col max-h-[90vh]',
+          'relative flex max-h-[90vh] w-full flex-col overflow-hidden',
+          variant === 'admin' ? 'admin-modal' : 'operational-modal',
           SIZE_CLASSES[size],
-          'animate-in fade-in zoom-in-95 duration-150',
+          'animate-in fade-in zoom-in-95 duration-200',
         )}
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <h2 id="modal-title" className="text-base font-semibold text-gray-900">
+        <div className={clsx(
+          'flex shrink-0 items-center justify-between px-6 py-4',
+          variant === 'admin'
+            ? 'admin-modal-header'
+            : 'operational-modal-header',
+        )}>
+          <h2 id="modal-title" className={clsx(
+            'text-[15px] font-semibold tracking-[-0.02em]',
+            variant === 'admin' ? 'text-blue-50' : 'text-slate-900',
+          )}>
             {title}
           </h2>
           <button
             onClick={onClose}
-            className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+            className="ui-icon-button h-9 w-9"
             aria-label="Close modal"
           >
             <X size={18} />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="min-w-0 overflow-y-auto overflow-x-hidden flex-1 px-4 py-4 sm:px-6">{children}</div>
+        <div className={clsx(
+          'min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-5 sm:px-6',
+          variant === 'admin' ? 'admin-modal-body' : 'operational-modal-body',
+        )}>{children}</div>
 
-        {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-3 shrink-0">
+          <div className={clsx(
+            'flex shrink-0 items-center justify-end gap-3 px-6 py-4',
+            variant === 'admin'
+              ? 'admin-modal-footer'
+              : 'operational-modal-footer',
+          )}>
             {footer}
           </div>
         )}

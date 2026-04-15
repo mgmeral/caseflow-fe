@@ -3,12 +3,17 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
+const mockLogout = vi.hoisted(() => vi.fn())
+
 vi.mock('@/store/auth.store', () => ({
   useAuthStore: () => ({
     currentUser: {
       fullName: 'Case Flow',
+      email: 'caseflow@test.com',
+      role: 'agent',
       avatarColor: '#123456',
     },
+    logout: mockLogout,
   }),
 }))
 
@@ -63,5 +68,14 @@ describe('Topbar', () => {
     expect(screen.getByText('Ticket updated')).toBeInTheDocument()
     expect(screen.getByText('TK-1 has a new reply')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mark all read' })).toBeInTheDocument()
+  })
+
+  it('exposes profile access from the user menu', () => {
+    renderTopbar()
+
+    fireEvent.click(screen.getByRole('button', { name: 'User menu' }))
+
+    expect(screen.getByRole('button', { name: 'My Profile' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Logout' })).toBeInTheDocument()
   })
 })

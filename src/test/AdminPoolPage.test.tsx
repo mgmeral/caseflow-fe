@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 const assign = vi.hoisted(() => vi.fn())
+const reassign = vi.hoisted(() => vi.fn())
 const invalidateQueries = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
 
 vi.mock('@tanstack/react-query', async () => {
@@ -71,7 +72,7 @@ vi.mock('@/hooks/useQueue', () => ({
 }))
 
 vi.mock('@/services/assignment.service', () => ({
-  assignmentService: { assign },
+  assignmentService: { assign, reassign },
 }))
 
 vi.mock('@/components/modals/AssignmentModal', () => ({
@@ -84,8 +85,10 @@ const { AdminPoolPage } = await import('@/pages/AdminPoolPage')
 describe('AdminPoolPage', () => {
   beforeEach(() => {
     assign.mockReset()
+    reassign.mockReset()
     invalidateQueries.mockClear()
     assign.mockResolvedValue(undefined)
+    reassign.mockResolvedValue(undefined)
   })
 
   it('refetches ticket queries after assignment to keep queue counts fresh', async () => {
@@ -100,6 +103,7 @@ describe('AdminPoolPage', () => {
 
     await waitFor(() => {
       expect(assign).toHaveBeenCalledWith({ ticketId: '1', assignedUserId: 'u1' })
+      expect(reassign).not.toHaveBeenCalled()
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['queue'], refetchType: 'all' })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['queue-stats'], refetchType: 'all' })
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['tickets'], refetchType: 'all' })

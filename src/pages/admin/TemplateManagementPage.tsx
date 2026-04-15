@@ -9,6 +9,8 @@ import { Badge } from '@/components/shared/Badge'
 import { Modal } from '@/components/shared/Modal'
 import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { EmptyState } from '@/components/shared/EmptyState'
+import { FieldHint, HelpDrawer, InlineCallout, PageIntro, SectionHelp } from '@/components/shared/help'
+import { templatesHelp } from '@/help/templates.help'
 import { useTemplates, useCreateTemplate, useUpdateTemplate, useDeleteTemplate, useTemplatePreview } from '@/hooks/useTemplates'
 import type { MailTemplate } from '@/types/template.types'
 import { getTemplateSaveErrorMessage } from '@/services/template.service'
@@ -16,6 +18,7 @@ import { getTemplateSaveErrorMessage } from '@/services/template.service'
 interface TemplateFormState {
   name: string
   code: string
+  usageType: string
   subjectTemplate: string
   htmlTemplate: string
   plainTextTemplate: string
@@ -25,10 +28,27 @@ interface TemplateFormState {
 const EMPTY_FORM: TemplateFormState = {
   name: '',
   code: '',
+  usageType: '',
   subjectTemplate: '',
   htmlTemplate: '',
   plainTextTemplate: '',
   isActive: true,
+}
+
+function normalizeTemplateCode(value: string): string {
+  return value
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+function extractPlaceholders(...values: string[]): string[] {
+  return Array.from(new Set(
+    values
+      .flatMap((value) => value.match(/{{\s*[A-Za-z0-9_.-]+\s*}}/g) ?? [])
+      .map((token) => token.replace(/\s+/g, '')),
+  ))
 }
 
 function formatTimestamp(value: string | null) {
@@ -38,7 +58,7 @@ function formatTimestamp(value: string | null) {
 }
 
 export function TemplateManagementPage() {
-  const { canManageUsers } = usePermissions()
+  const { canViewEmailConfig, canManageEmailConfig } = usePermissions()
   const { success, error } = useToast()
 
   const templatesQuery = useTemplates()
@@ -55,10 +75,11 @@ export function TemplateManagementPage() {
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
   const [editingTemplate, setEditingTemplate] = useState<MailTemplate | null>(null)
   const [form, setForm] = useState<TemplateFormState>(EMPTY_FORM)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
 
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  if (!canManageUsers) {
+  if (!canViewEmailConfig) {
     return (
       <div className="p-6">
         <EmptyState
@@ -70,6 +91,11 @@ export function TemplateManagementPage() {
     )
   }
 
+  const availableUsageTypes = Array.from(new Set(templates.map((template) => template.usageType).filter((value): value is string => Boolean(value))))
+  const showUsageTypeField = availableUsageTypes.length > 0 || Boolean(editingTemplate?.usageType) || modalMode === 'create'
+  const detectedPlaceholders = extractPlaceholders(form.subjectTemplate, form.htmlTemplate, form.plainTextTemplate)
+  const previewPlainText = form.plainTextTemplate.trim() || form.htmlTemplate.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+
   // --- Derived ---
   const filtered = useMemo(
     () => templates.filter((template) => {
@@ -77,6 +103,7 @@ export function TemplateManagementPage() {
       if (!value) return true
 
       return template.code.toLowerCase().includes(value)
+        || template.name.toLowerCase().includes(value)
         || template.subjectTemplate.toLowerCase().includes(value)
     }),
     [search, templates],
@@ -93,6 +120,7 @@ export function TemplateManagementPage() {
     setForm({
       name: template.name,
       code: template.code,
+      usageType: template.usageType ?? '',
       subjectTemplate: template.subjectTemplate,
       htmlTemplate: template.htmlTemplate,
       plainTextTemplate: template.plainTextTemplate,
@@ -113,7 +141,8 @@ export function TemplateManagementPage() {
 
     const payload = {
       name: form.name.trim(),
-      code: form.code.trim(),
+      code: normalizeTemplateCode(form.code),
+      usageType: form.usageType.trim() || null,
       subjectTemplate: form.subjectTemplate.trim(),
       htmlTemplate: form.htmlTemplate.trim(),
       plainTextTemplate: form.plainTextTemplate.trim(),
@@ -146,6 +175,7 @@ export function TemplateManagementPage() {
         data: {
           name: tpl.name,
           code: tpl.code,
+          usageType: tpl.usageType,
           subjectTemplate: tpl.subjectTemplate,
           htmlTemplate: tpl.htmlTemplate,
           plainTextTemplate: tpl.plainTextTemplate,
@@ -172,40 +202,53 @@ export function TemplateManagementPage() {
   const isFormValid = form.name.trim() && form.code.trim() && form.subjectTemplate.trim() && form.htmlTemplate.trim()
 
   return (
-    <div className="p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Template Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">
+          <h1 className="admin-page-title">Template Management</h1>
+          <p className="admin-page-subtitle">
             {templates.length} şablon · {templates.filter((t) => t.isActive).length} aktif
           </p>
         </div>
-        <Button
-          variant="primary"
-          size="md"
-          leftIcon={<Plus size={16} />}
-          onClick={openCreate}
-        >
-          Yeni Şablon
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="md" onClick={() => setIsHelpOpen(true)}>
+            Help
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            leftIcon={<Plus size={16} />}
+            onClick={openCreate}
+            disabled={!canManageEmailConfig}
+          >
+            Yeni Şablon
+          </Button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3">
+      <PageIntro summary={templatesHelp.summary} />
+
+      {!canManageEmailConfig ? (
+        <div className="admin-panel-soft px-4 py-3 text-sm text-blue-50/90">
+          Read-only mode. You can review templates here, but create, edit, activate, and delete actions require email configuration management permission.
+        </div>
+      ) : null}
+
+      <div className="admin-panel-soft flex items-center gap-3 px-4 py-3">
         <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Şablon ara…"
+            placeholder="Şablon adı, kodu veya konuya göre ara…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+            className="ui-input ui-input-with-icon pr-3"
           />
         </div>
       </div>
 
-      {/* Table */}
+      <SectionHelp title={templatesHelp.sections.catalog.title} description={templatesHelp.sections.catalog.description} />
+
       {filtered.length === 0 ? (
         <EmptyState
           icon={<FileText className="w-10 h-10 text-gray-300" />}
@@ -213,45 +256,46 @@ export function TemplateManagementPage() {
           description={search ? 'Arama kriterlerinize uygun şablon yok.' : 'Henüz şablon oluşturulmamış.'}
         />
       ) : (
-        <div className="border border-gray-200 rounded-xl overflow-hidden">
+        <div className="admin-table-shell overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              <tr className="admin-table-head">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   Ad
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   Kod
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
+                  Usage
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   Konu
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   İçerik
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                  Sistem
-                </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   Durum
                 </th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   Güncellendi
                 </th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="admin-table-striped divide-y divide-white/10">
               {filtered.map((tpl) => (
-                <tr key={tpl.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={tpl.id} className="transition-colors hover:bg-white/[0.08]">
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-800">{tpl.name}</div>
+                    <div className="font-medium text-white">{tpl.name}</div>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-gray-800">{tpl.code}</div>
+                    <div className="font-medium text-blue-50">{tpl.code}</div>
                   </td>
-                  <td className="px-4 py-3 text-gray-600 max-w-[260px] truncate">{tpl.subjectTemplate}</td>
-                  <td className="px-4 py-3 text-xs text-gray-500">
+                  <td className="px-4 py-3 text-blue-100/72">{tpl.usageType ?? 'GENERAL'}</td>
+                  <td className="max-w-[260px] truncate px-4 py-3 text-blue-100/72">{tpl.subjectTemplate}</td>
+                  <td className="px-4 py-3 text-xs text-blue-100/60">
                     <div className="flex gap-1.5">
                       {tpl.htmlTemplate && <Badge variant="info" size="sm">HTML</Badge>}
                       {tpl.plainTextTemplate && <Badge variant="outline" size="sm">Text</Badge>}
@@ -259,40 +303,33 @@ export function TemplateManagementPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    {tpl.isBuiltIn ? (
-                      <Badge variant="warning" size="sm">Built-in</Badge>
-                    ) : (
-                      <span className="text-xs text-gray-400">Custom</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
                     <button
                       type="button"
                       onClick={() => handleToggleActive(tpl.id)}
-                      disabled={!tpl.canEdit}
+                      disabled={!canManageEmailConfig || !tpl.canEdit}
                       className="flex items-center gap-1.5 text-xs"
                       title={tpl.isActive ? 'Devre dışı bırak' : 'Aktif et'}
                     >
                       {tpl.isActive ? (
                         <>
-                          <ToggleRight size={18} className="text-indigo-600" />
-                          <span className="text-indigo-600 font-medium">Aktif</span>
+                          <ToggleRight size={18} className="text-emerald-300" />
+                          <span className="font-medium text-emerald-100">Aktif</span>
                         </>
                       ) : (
                         <>
-                          <ToggleLeft size={18} className="text-gray-400" />
-                          <span className="text-gray-400">Pasif</span>
+                          <ToggleLeft size={18} className="text-blue-100/40" />
+                          <span className="text-blue-100/48">Pasif</span>
                         </>
                       )}
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-500">{formatTimestamp(tpl.updatedAt)}</td>
+                  <td className="px-4 py-3 text-xs text-blue-100/60">{formatTimestamp(tpl.updatedAt)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 justify-end">
                       <button
                         type="button"
                         onClick={() => setPreviewTemplateId(tpl.id)}
-                        className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                        className="rounded p-1.5 text-blue-100/52 transition-colors hover:bg-white/[0.08] hover:text-white"
                         title="Önizleme"
                       >
                         <Eye size={14} />
@@ -300,8 +337,8 @@ export function TemplateManagementPage() {
                       <button
                         type="button"
                         onClick={() => openEdit(tpl)}
-                        disabled={!tpl.canEdit}
-                        className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!canManageEmailConfig || !tpl.canEdit}
+                        className="rounded p-1.5 text-blue-100/52 transition-colors hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
                         title="Düzenle"
                       >
                         <Pencil size={14} />
@@ -309,8 +346,8 @@ export function TemplateManagementPage() {
                       <button
                         type="button"
                         onClick={() => setDeletingId(tpl.id)}
-                        disabled={!tpl.canDelete}
-                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!canManageEmailConfig || !tpl.canDelete}
+                        className="rounded p-1.5 text-blue-100/52 transition-colors hover:bg-red-500/12 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-40"
                         title="Sil"
                       >
                         <Trash2 size={14} />
@@ -330,6 +367,7 @@ export function TemplateManagementPage() {
         onClose={closeModal}
         title={modalMode === 'create' ? 'Yeni Şablon Oluştur' : 'Şablonu Düzenle'}
         size="xl"
+        variant="admin"
         footer={
           <>
             <Button variant="secondary" size="sm" onClick={closeModal} disabled={createMutation.isPending || updateMutation.isPending}>
@@ -340,15 +378,22 @@ export function TemplateManagementPage() {
               size="sm"
               onClick={handleSave}
               isLoading={createMutation.isPending || updateMutation.isPending}
-              disabled={!isFormValid}
+              disabled={!isFormValid || !canManageEmailConfig}
             >
               {modalMode === 'create' ? 'Oluştur' : 'Kaydet'}
             </Button>
           </>
         }
       >
-        <div className="space-y-4 p-1">
-          <div>
+        <div className="grid grid-cols-1 gap-5 p-1 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+          <div className="space-y-4">
+            <SectionHelp title={templatesHelp.sections.editor.title} description={templatesHelp.sections.editor.description} />
+
+            <InlineCallout title={templatesHelp.sections.preview.title}>
+              Detected placeholders: {detectedPlaceholders.length > 0 ? detectedPlaceholders.join(', ') : 'No placeholders detected yet.'}
+            </InlineCallout>
+
+            <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
               Ad <span className="text-red-500">*</span>
             </label>
@@ -359,22 +404,44 @@ export function TemplateManagementPage() {
               placeholder="ör. Ticket Reply Acknowledgement"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
             />
-          </div>
+            <FieldHint text={templatesHelp.fieldHints.name} />
+            </div>
 
-          <div>
+            <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
               Kod <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={form.code}
-              onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, code: normalizeTemplateCode(e.target.value) }))}
               placeholder="ör. TICKET_REPLY_ACK"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
             />
-          </div>
+              <FieldHint text={templatesHelp.fieldHints.code} />
+            </div>
 
-          <div>
+            {showUsageTypeField ? (
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Usage Type</label>
+                <input
+                  type="text"
+                  list="template-usage-types"
+                  value={form.usageType}
+                  onChange={(e) => setForm((current) => ({ ...current, usageType: e.target.value.toUpperCase() }))}
+                  placeholder="ör. TICKET_REPLY"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+                />
+                <datalist id="template-usage-types">
+                  {availableUsageTypes.map((usageType) => (
+                    <option key={usageType} value={usageType} />
+                  ))}
+                </datalist>
+                <FieldHint text={templatesHelp.fieldHints.usageType} />
+              </div>
+            ) : null}
+
+            <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">
               Konu Şablonu <span className="text-red-500">*</span>
             </label>
@@ -385,10 +452,11 @@ export function TemplateManagementPage() {
               placeholder="ör. Destek Talebiniz Alındı"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
             />
-          </div>
+            <FieldHint text={templatesHelp.fieldHints.subjectTemplate} />
+            </div>
 
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div>
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">HTML Şablonu</label>
               <textarea
                 value={form.htmlTemplate}
@@ -397,9 +465,9 @@ export function TemplateManagementPage() {
                 rows={10}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
               />
-              <p className="mt-1 text-xs text-gray-400">Backend bu alanı zorunlu istiyor.</p>
-            </div>
-            <div>
+              <FieldHint text={templatesHelp.fieldHints.htmlTemplate} />
+              </div>
+              <div>
               <label className="block text-xs font-semibold text-gray-600 mb-1">Plain Text Şablonu</label>
               <textarea
                 value={form.plainTextTemplate}
@@ -408,26 +476,61 @@ export function TemplateManagementPage() {
                 rows={10}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
               />
+                <FieldHint text={templatesHelp.fieldHints.plainTextTemplate} />
+              </div>
             </div>
-          </div>
 
-          <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
+            <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
             <input
               type="checkbox"
               checked={form.isActive}
               onChange={(e) => setForm((f) => ({ ...f, isActive: e.target.checked }))}
               className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             />
-            Şablon aktif
-          </label>
+              Şablon aktif
+            </label>
+            <FieldHint className="mt-0" text={templatesHelp.fieldHints.isActive} />
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Subject Preview</div>
+                <div className="mt-1 rounded-lg border border-gray-200 bg-slate-50 px-3 py-2 text-sm text-gray-800">{form.subjectTemplate.trim() || 'No subject yet'}</div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">HTML Preview</div>
+                <div className="min-h-[14rem] rounded-lg border border-gray-200 bg-white p-3 text-sm text-gray-800">
+                  {form.htmlTemplate.trim() ? (
+                    <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(form.htmlTemplate) }} />
+                  ) : (
+                    <span className="text-gray-400">HTML preview is empty.</span>
+                  )}
+                </div>
+              </div>
+              <div>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Plain Text Preview</div>
+                <div className="min-h-[14rem] rounded-lg border border-gray-200 bg-slate-950 p-3 text-sm text-slate-100">
+                  {previewPlainText ? (
+                    <pre className="whitespace-pre-wrap font-sans">{previewPlainText}</pre>
+                  ) : (
+                    <span className="text-slate-400">Plain text preview is empty.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </Modal>
+
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={templatesHelp} />
 
       <Modal
         isOpen={!!previewTemplateId}
         onClose={() => setPreviewTemplateId(null)}
         title="Şablon Önizleme"
         size="xl"
+        variant="admin"
       >
         {previewQuery.isLoading ? (
           <div className="text-sm text-gray-500">Önizleme yükleniyor...</div>
@@ -484,6 +587,7 @@ export function TemplateManagementPage() {
         confirmLabel="Sil"
         isDestructive
         isLoading={deleteMutation.isPending}
+        variant="admin"
       />
     </div>
   )

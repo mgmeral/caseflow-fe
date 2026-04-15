@@ -114,7 +114,7 @@ export interface TicketEmailMessage {
   mailboxId: string | null
   mailboxName: string | null
   mailboxAddress?: string | null
-  sourceEventId: string | null
+  sourceEventId: number | null
   direction: 'INBOUND' | 'OUTBOUND'
   subject: string | null
   from: string | null
@@ -142,12 +142,12 @@ export interface TicketEmailMessage {
   hasAttachments?: boolean
   isPreviewAvailable?: boolean
   templateInfo?: {
-    templateId: string | null
+    templateId: number | null
     templateCode: string | null
     templateName: string | null
   } | null
   replyContext?: {
-    sourceEventId: string | null
+    sourceEventId: number | null
     sourceEmailDocumentId: string | null
     resolvedReplyTarget: string | null
   } | null
@@ -167,7 +167,7 @@ export interface TicketReplyPreview {
   bodyText: string | null
   bodyHtml: string | null
   templateInfo: {
-    templateId: string | null
+    templateId: number | null
     templateCode: string | null
     templateName: string | null
   } | null
@@ -179,32 +179,20 @@ export interface TicketReplyPreview {
 }
 
 export interface TicketReplyPreviewRequest {
-  sourceEventId: string
-  mailboxId?: string | null
-  templateId?: string | null
+  sourceEventId: number
+  mailboxId?: number | null
+  templateId?: number | null
 }
 
-interface BaseSendTicketReplyRequest {
-  mailboxId: string | null
+export interface SendTicketReplyRequest {
+  mailboxId: number
+  sourceEventId: number
   subject: string
-  textBody?: string
-  htmlBody?: string
-  inReplyToMessageId?: string
-  contentWasEdited?: boolean
-  templateId?: string | null
+  textBody: string | null
+  htmlBody?: string | null
+  contentWasEdited: boolean
+  templateId?: number | null
 }
-
-export interface ThreadedSendTicketReplyRequest extends BaseSendTicketReplyRequest {
-  sourceEventId: string
-  toAddress?: never
-}
-
-export interface DirectSendTicketReplyRequest extends BaseSendTicketReplyRequest {
-  sourceEventId?: never
-  toAddress: string
-}
-
-export type SendTicketReplyRequest = ThreadedSendTicketReplyRequest | DirectSendTicketReplyRequest
 
 export interface SendTicketReplyResult {
   requestId: string

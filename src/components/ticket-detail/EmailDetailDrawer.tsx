@@ -85,16 +85,16 @@ export function EmailDetailDrawer({ isOpen, onClose, email, isLoading }: EmailDe
 
           {rawHtml && (
             <div className="flex gap-2">
-              <button type="button" onClick={() => setActiveTab('body')} className={`rounded-full px-3 py-1 text-xs font-medium ${activeTab === 'body' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
+              <button type="button" onClick={() => setActiveTab('body')} className={`surface-tab px-3 py-1 text-xs ${activeTab === 'body' ? 'surface-tab-active' : ''}`}>
                 Body
               </button>
-              <button type="button" onClick={() => setActiveTab('raw')} className={`rounded-full px-3 py-1 text-xs font-medium ${activeTab === 'raw' ? 'bg-slate-900 text-white' : 'bg-gray-100 text-gray-600'}`}>
+              <button type="button" onClick={() => setActiveTab('raw')} className={`surface-tab px-3 py-1 text-xs ${activeTab === 'raw' ? 'surface-tab-active' : ''}`}>
                 Raw HTML
               </button>
             </div>
           )}
 
-          <div className="border border-gray-200 rounded-lg p-3 bg-white">
+          <div className="surface-section rounded-xl p-3">
             {activeTab === 'raw' && rawHtml ? (
               <pre className="text-sm text-gray-800 whitespace-pre-wrap">{rawHtml}</pre>
             ) : displayHtml ? (

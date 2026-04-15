@@ -70,30 +70,32 @@ export function CustomerListPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-gray-900">Customers</h1>
+    <div className="page-shell">
+      <div className="page-header gap-4">
+        <div>
+          <h1 className="page-title">Customers</h1>
+          <p className="page-subtitle">Routing owners, color identity, and onboarding controls in the same soft visual system.</p>
+        </div>
         <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => setIsCreateOpen(true)}>
           Create Customer
         </Button>
       </div>
 
-      {/* Search & filters */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative max-w-sm w-full sm:w-auto sm:min-w-[300px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+      <div className="surface-card flex flex-wrap items-center gap-3 px-4 py-4">
+        <div className="relative w-full max-w-sm sm:w-auto sm:min-w-[300px]">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
             placeholder="Search by name or code..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="ui-input ui-input-with-icon"
           />
         </div>
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="ui-select w-auto min-w-[180px]"
         >
           <option value="all">All status</option>
           <option value="active">Active</option>
@@ -101,7 +103,7 @@ export function CustomerListPage() {
         </select>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="table-shell">
         {isLoading ? (
           <table className="w-full">
             <tbody>
@@ -129,19 +131,19 @@ export function CustomerListPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
+              <tr className="border-b border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.76)_0%,rgba(244,248,255,0.64)_100%)]">
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Name</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Code</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Status</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="table-body-striped divide-y divide-white/50">
               {customers.map((c) => (
                 <tr
                   key={c.id}
                   onClick={() => navigate(`/customers/${c.id}`)}
-                  className="hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="cursor-pointer transition-colors hover:bg-white/60"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
@@ -180,21 +182,21 @@ export function CustomerListPage() {
       >
         <div className="space-y-4 p-1">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Customer Name *</label>
+            <label className="ui-label normal-case tracking-[0.04em]">Customer Name *</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Akbank"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-input"
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Customer Code *</label>
+            <label className="ui-label normal-case tracking-[0.04em]">Customer Code *</label>
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
               placeholder="e.g. AKBANK"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-input font-mono uppercase"
             />
           </div>
           <ColorField value={colorHex} onChange={setColorHex} label="Customer Color" />

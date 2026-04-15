@@ -18,6 +18,7 @@ interface AuthState {
   accessToken: string | null
   refreshToken: string | null
   isAuthenticated: boolean
+  setCurrentUser: (user: User | null) => void
   login: (username: string, password: string) => Promise<void>
   logout: () => void
 }
@@ -33,6 +34,11 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
+
+      setCurrentUser: (user) => set((state) => ({
+        currentUser: user,
+        isAuthenticated: state.isAuthenticated && Boolean(user),
+      })),
 
       login: async (username: string, password: string) => {
         // POST /auth/login -> tokens, then GET /auth/me -> user

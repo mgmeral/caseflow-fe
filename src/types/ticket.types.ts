@@ -76,6 +76,7 @@ export interface CustomerTicketReport {
 export interface AdminCustomerTicketAggregateItem {
   customerId: string
   customerName: string
+  customerColorHex: string | null
   totalCount: number
   openCount: number
   closedCount: number
@@ -218,6 +219,8 @@ export interface TicketFilters {
   priorities: TicketPriority[]
   assignedUserIds: string[]
   groupIds: string[]
+  tagIds: string[]
+  tagCodes: string[]
   dateFrom: string | null
   dateTo: string | null
   unassignedOnly: boolean

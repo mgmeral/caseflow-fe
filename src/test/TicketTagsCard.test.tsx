@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { TicketTagAssignment } from '@/types/ticket.types'
 
 const mockSuccess = vi.hoisted(() => vi.fn())
 const mockError = vi.hoisted(() => vi.fn())
 const addMutate = vi.hoisted(() => vi.fn())
 const removeMutate = vi.hoisted(() => vi.fn())
+const createMutateAsync = vi.hoisted(() => vi.fn())
 
 const ticketTagsState = vi.hoisted(() => ({
   data: [
@@ -47,6 +48,7 @@ vi.mock('@/hooks/useTags', () => ({
   useActiveTags: () => activeTagsState,
   useAddTicketTag: () => ({ mutate: addMutate, isPending: false }),
   useRemoveTicketTag: () => ({ mutate: removeMutate, isPending: false }),
+  useCreateTag: () => ({ mutateAsync: createMutateAsync, isPending: false }),
 }))
 
 const { TicketTagsCard } = await import('@/components/ticket-detail/TicketTagsCard')
@@ -57,6 +59,7 @@ describe('TicketTagsCard', () => {
     mockError.mockReset()
     addMutate.mockReset()
     removeMutate.mockReset()
+    createMutateAsync.mockReset()
     ticketTagsState.data = [
       {
         id: 'tt1',
@@ -228,5 +231,28 @@ describe('TicketTagsCard', () => {
 
     expect(ticketTagsState.refetch).toHaveBeenCalled()
     expect(activeTagsState.refetch).toHaveBeenCalled()
+  })
+
+  it('quick-creates a tag and refreshes available options', async () => {
+    createMutateAsync.mockResolvedValueOnce({ id: '9', code: 'OPS', name: 'Ops', color: '#475569', isActive: true })
+
+    render(<TicketTagsCard ticketId="t1" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Quick Create' }))
+    fireEvent.change(screen.getByPlaceholderText('VIP'), { target: { value: 'ops' } })
+    fireEvent.change(screen.getByPlaceholderText('Priority Customer'), { target: { value: 'Ops' } })
+    fireEvent.change(screen.getByLabelText('Custom Hex'), { target: { value: '#475569' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create Tag' }))
+
+    await waitFor(() => {
+      expect(createMutateAsync).toHaveBeenCalledWith({
+        code: 'OPS',
+        name: 'Ops',
+        color: '#475569',
+        isActive: true,
+      })
+      expect(activeTagsState.refetch).toHaveBeenCalled()
+      expect(mockSuccess).toHaveBeenCalledWith('Tag created.')
+    })
   })
 })

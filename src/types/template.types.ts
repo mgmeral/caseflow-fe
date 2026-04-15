@@ -2,6 +2,7 @@ export interface MailTemplate {
   id: string
   name: string
   code: string
+  usageType: string | null
   subjectTemplate: string
   htmlTemplate: string
   plainTextTemplate: string
@@ -16,6 +17,7 @@ export interface MailTemplate {
 export interface MailTemplateUpsertInput {
   name: string
   code: string
+  usageType?: string | null
   subjectTemplate: string
   htmlTemplate: string
   plainTextTemplate: string

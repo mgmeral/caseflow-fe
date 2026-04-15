@@ -50,6 +50,7 @@ describe('ticketEmailService', () => {
           direction: 'INBOUND',
           id: 74,
           emailDocumentId: 'email-74',
+          sourceEventId: 9001,
           messageId: '<msg74>',
           fromAddress: 'c@test.com',
           toAddress: null,
@@ -64,7 +65,7 @@ describe('ticketEmailService', () => {
 
       expect(result[0].id).toBe('74')
       expect(result[0].emailDocumentId).toBe('email-74')
-      expect(result[0].sourceEventId).toBe('74')
+      expect(result[0].sourceEventId).toBe(9001)
     })
 
     it('falls back to a non-numeric thread id when the backend uses it as the real email document id', async () => {
@@ -88,10 +89,10 @@ describe('ticketEmailService', () => {
 
       expect(result[0].id).toBe('69d239b6d87d2153052e7461')
       expect(result[0].emailDocumentId).toBe('69d239b6d87d2153052e7461')
-      expect(result[0].sourceEventId).toBe('79')
+      expect(result[0].sourceEventId).toBe(79)
     })
 
-    it('does not infer legacy event-like ids as email document ids', async () => {
+    it('does not infer legacy event-like ids as email document ids or reply source ids', async () => {
       mockGet.mockResolvedValueOnce([
         {
           direction: 'INBOUND',
@@ -110,7 +111,7 @@ describe('ticketEmailService', () => {
       const result = await ticketEmailService.listThread('tkt-1')
 
       expect(result[0].emailDocumentId).toBeNull()
-      expect(result[0].sourceEventId).toBe('evt-74')
+      expect(result[0].sourceEventId).toBeNull()
     })
 
     it('returns sorted results by date', async () => {
@@ -208,18 +209,29 @@ describe('ticketEmailService', () => {
       })
 
       const result = await ticketEmailService.previewReply('tkt-1', {
-        sourceEventId: 'evt-1',
-        mailboxId: '1',
-        templateId: 'tpl-1',
+        sourceEventId: 101,
+        mailboxId: 1,
+        templateId: 5,
       })
 
       expect(mockPost).toHaveBeenCalledWith('/tickets/tkt-1/email/reply/preview', {
-        sourceEventId: 'evt-1',
-        mailboxId: '1',
-        templateId: 'tpl-1',
+        sourceEventId: 101,
+        mailboxId: 1,
+        templateId: 5,
       })
       expect(result.derivedToAddress).toBe('customer@test.com')
       expect(result.placeholderDiagnostics[0]?.placeholder).toBe('customer.name')
+    })
+
+    it('does not send preview requests when sourceEventId is a non-numeric string', async () => {
+      await expect(
+        ticketEmailService.previewReply('tkt-1', {
+          sourceEventId: '69d8325094ebbe5f95845795' as unknown as number,
+          mailboxId: 1,
+        }),
+      ).rejects.toThrow('Reply context is invalid. Source event id must be numeric.')
+
+      expect(mockPost).not.toHaveBeenCalled()
     })
   })
 
@@ -227,12 +239,13 @@ describe('ticketEmailService', () => {
     it('throws when mailboxId is missing', async () => {
       await expect(
         ticketEmailService.sendReply('tkt-1', {
-          mailboxId: null,
-          sourceEventId: 'evt-1',
+          mailboxId: null as unknown as number,
+          sourceEventId: 101,
           subject: 'Re: Help',
           textBody: 'Here is help.',
+          contentWasEdited: false,
         }),
-      ).rejects.toThrow('mailboxId is required for ticket email replies')
+      ).rejects.toThrow('Select the mailbox that should send this reply.')
 
       expect(mockPost).not.toHaveBeenCalled()
     })
@@ -241,81 +254,72 @@ describe('ticketEmailService', () => {
       mockPost.mockResolvedValueOnce({ requestId: 'req-1', ticketId: 'tkt-1', status: 'QUEUED' })
 
       const result = await ticketEmailService.sendReply('tkt-1', {
-        mailboxId: '1',
-        sourceEventId: 'evt-1',
-        subject: 'Re: Help',
+        mailboxId: 1,
+        sourceEventId: 101,
+        subject: ' Re: Help ',
         textBody: 'Here is help.',
-        inReplyToMessageId: '<msg1>',
+        htmlBody: null,
+        contentWasEdited: true,
+        templateId: 5,
       })
 
       expect(mockPost).toHaveBeenCalledWith('/tickets/tkt-1/email/reply', {
         mailboxId: 1,
-        sourceEventId: 'evt-1',
+        sourceEventId: 101,
+        templateId: 5,
         subject: 'Re: Help',
         textBody: 'Here is help.',
-        inReplyToMessageId: '<msg1>',
+        htmlBody: null,
+        contentWasEdited: true,
       })
       expect(result.requestId).toBe('req-1')
       expect(result.ticketId).toBe('tkt-1')
-    })
-
-    it('posts the direct-reply contract without unsupported fields', async () => {
-      mockPost.mockResolvedValueOnce({ requestId: 'req-2', ticketId: 'tkt-1', status: 'QUEUED' })
-
-      await ticketEmailService.sendReply('tkt-1', {
-        mailboxId: '1',
-        toAddress: 'c@test.com',
-        subject: 'With attachment',
-        textBody: 'See attached.',
-      })
-
-      expect(mockPost).toHaveBeenCalledWith('/tickets/tkt-1/email/reply', {
-        mailboxId: 1,
-        toAddress: 'c@test.com',
-        subject: 'With attachment',
-        textBody: 'See attached.',
-      })
     })
 
     it('uses an unknown fallback status when the backend does not return a structured reply body', async () => {
       mockPost.mockResolvedValueOnce(undefined)
 
       const result = await ticketEmailService.sendReply('tkt-1', {
-        mailboxId: '1',
-        sourceEventId: 'evt-1',
+        mailboxId: 1,
+        sourceEventId: 101,
         subject: 'Re: Help',
         textBody: 'Here is help.',
+        htmlBody: null,
+        contentWasEdited: false,
       })
 
       expect(result.status).toBe('UNKNOWN')
     })
 
-    it('extracts plain email from display-name recipient format', async () => {
-      mockPost.mockResolvedValueOnce({ requestId: 'req-3', ticketId: 'tkt-1', status: 'QUEUED' })
-
-      await ticketEmailService.sendReply('tkt-1', {
-        mailboxId: '1',
-        toAddress: '"Irem Meral" <iremizbudak1@gmail.com>',
-        subject: 'Re: Hello',
-        textBody: 'Hello back',
-      })
-
-      expect(mockPost).toHaveBeenCalledWith('/tickets/tkt-1/email/reply', {
-        mailboxId: 1,
-        toAddress: 'iremizbudak1@gmail.com',
-        subject: 'Re: Hello',
-        textBody: 'Hello back',
-      })
-    })
-
-    it('throws when neither sourceEventId nor toAddress is provided', async () => {
+    it('throws when sourceEventId is an invalid string and does not send the request', async () => {
       await expect(
         ticketEmailService.sendReply('tkt-1', {
-          mailboxId: '1',
+          mailboxId: 1,
+          sourceEventId: '69d8325094ebbe5f95845795' as unknown as number,
           subject: 'Re: Help',
           textBody: 'Here is help.',
-        } as unknown as Parameters<typeof ticketEmailService.sendReply>[1]),
-      ).rejects.toThrow('sourceEventId or toAddress is required for ticket email replies')
+          htmlBody: null,
+          contentWasEdited: false,
+        }),
+      ).rejects.toThrow('Reply context is invalid. Source event id must be numeric.')
+
+      expect(mockPost).not.toHaveBeenCalled()
+    })
+
+    it('throws when templateId is an invalid string and does not send the request', async () => {
+      await expect(
+        ticketEmailService.sendReply('tkt-1', {
+          mailboxId: 1,
+          sourceEventId: 101,
+          subject: 'Re: Help',
+          textBody: 'Here is help.',
+          htmlBody: null,
+          contentWasEdited: false,
+          templateId: 'tpl-1' as unknown as number,
+        }),
+      ).rejects.toThrow('Selected template id is invalid.')
+
+      expect(mockPost).not.toHaveBeenCalled()
     })
   })
 })

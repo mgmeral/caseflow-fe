@@ -44,7 +44,8 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
   return (
     <div
       className={clsx(
-        'flex items-start gap-3 p-4 rounded-xl border shadow-elevated min-w-[300px] max-w-[400px]',
+        'min-w-[320px] max-w-[420px] rounded-2xl border p-4 shadow-elevated backdrop-blur-md',
+        'flex items-start gap-3',
         config.bg,
         config.border,
       )}
@@ -54,7 +55,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
       <p className={clsx('flex-1 text-sm font-medium', config.text)}>{toast.message}</p>
       <button
         onClick={onDismiss}
-        className={clsx('shrink-0 p-0.5 rounded hover:opacity-70 transition-opacity', config.text)}
+        className={clsx('ui-icon-button h-7 w-7 shrink-0 border-transparent bg-white/20 hover:bg-white/45', config.text)}
         aria-label="Dismiss notification"
       >
         <X size={14} />
@@ -67,7 +68,7 @@ export function ToastContainer() {
   const { toasts, removeToast } = useUIStore()
 
   return (
-    <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="fixed right-4 top-4 z-50 flex flex-col gap-3 pointer-events-none">
       {toasts.map((toast) => (
         <div key={toast.id} className="pointer-events-auto">
           <ToastItem toast={toast} onDismiss={() => removeToast(toast.id)} />

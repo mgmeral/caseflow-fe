@@ -2,6 +2,7 @@
  * Assignment service — aligned to CaseFlow API v2.0.0 /api/assignments endpoints.
  */
 import type { AssignmentResponse } from '@/types/api.types'
+import { ApiError } from './api.client'
 import { apiClient } from './api.client'
 
 export const assignmentService = {
@@ -32,6 +33,22 @@ export const assignmentService = {
       ...(req.newUserId !== undefined ? { newUserId: Number(req.newUserId) } : {}),
       ...(req.newGroupId !== undefined ? { newGroupId: Number(req.newGroupId) } : {}),
     }),
+
+  assignOrReassign: async (req: { ticketId: string; assignedUserId?: string; assignedGroupId?: string }) => {
+    try {
+      return await assignmentService.assign(req)
+    } catch (error) {
+      if (!(error instanceof ApiError) || error.status !== 409 || error.code !== 'ASSIGNMENT_CONFLICT') {
+        throw error
+      }
+
+      return assignmentService.reassign({
+        ticketId: req.ticketId,
+        ...(req.assignedUserId !== undefined ? { newUserId: req.assignedUserId } : {}),
+        ...(req.assignedGroupId !== undefined ? { newGroupId: req.assignedGroupId } : {}),
+      })
+    }
+  },
 
   /**
    * POST /api/assignments/unassign

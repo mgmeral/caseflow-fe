@@ -11,6 +11,7 @@ interface ConfirmModalProps {
   isDestructive?: boolean
   isLoading?: boolean
   children?: React.ReactNode
+  variant?: 'default' | 'admin'
 }
 
 export function ConfirmModal({
@@ -23,6 +24,7 @@ export function ConfirmModal({
   isDestructive = false,
   isLoading = false,
   children,
+  variant = 'default',
 }: ConfirmModalProps) {
   return (
     <Modal
@@ -30,6 +32,7 @@ export function ConfirmModal({
       onClose={onClose}
       title={title}
       size="sm"
+      variant={variant}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose} disabled={isLoading}>
@@ -46,7 +49,7 @@ export function ConfirmModal({
         </>
       }
     >
-      {children ?? <p className="text-sm text-gray-600">{message}</p>}
+      {children ?? <p className={variant === 'admin' ? 'text-sm text-blue-100/72' : 'text-sm text-gray-600'}>{message}</p>}
     </Modal>
   )
 }

@@ -1,21 +1,19 @@
 import { apiClient } from './api.client'
 import type { ScheduleEmailRequest, ScheduledEmailResponse } from '@/types/api.types'
-
-function trimToNull(value: string | null | undefined): string | null {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
+import { optionalNumericContractId, trimOptionalText } from '@/lib/ticketEmailContracts'
 
 function toScheduledEmailPayload(request: ScheduleEmailRequest): ScheduleEmailRequest {
+  const toAddress = trimOptionalText(request.toAddress)
+
   return {
     mailboxId: request.mailboxId,
-    toAddress: request.toAddress.trim(),
+    ...(toAddress ? { toAddress } : {}),
     subject: request.subject.trim(),
     textBody: request.textBody.trim(),
-    htmlBody: trimToNull(request.htmlBody),
+    htmlBody: trimOptionalText(request.htmlBody),
     sendNotBefore: request.sendNotBefore,
-    sourceEventId: trimToNull(request.sourceEventId),
-    templateId: trimToNull(request.templateId),
+    sourceEventId: optionalNumericContractId(request.sourceEventId, 'Reply context is invalid. Source event id must be numeric.'),
+    templateId: optionalNumericContractId(request.templateId, 'Selected template id is invalid.'),
     contentWasEdited: typeof request.contentWasEdited === 'boolean' ? request.contentWasEdited : null,
   }
 }

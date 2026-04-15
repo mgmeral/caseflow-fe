@@ -76,7 +76,7 @@ vi.mock('@/hooks/useTemplates', () => ({
   useTemplates: () => ({
     data: [
       {
-        id: 'tpl-1',
+        id: '1',
         name: 'Acknowledgement',
         code: 'ACK',
         subjectTemplate: 'Template Subject',
@@ -106,10 +106,10 @@ function buildInboundReplyContext() {
     providerMessageId: null,
     mailboxId: '1',
     mailboxName: 'Main',
-    sourceEventId: 'evt-1',
+    sourceEventId: 101,
     resolvedReplyTarget: 'customer@example.com',
     replyContext: {
-      sourceEventId: 'evt-1',
+      sourceEventId: 101,
       sourceEmailDocumentId: 'email-1',
       resolvedReplyTarget: 'customer@example.com',
     },
@@ -172,8 +172,6 @@ describe('EmailReplyComposer', () => {
 
     expect(screen.queryByText('To *')).not.toBeInTheDocument()
     expect(screen.queryByPlaceholderText('recipient@example.com')).not.toBeInTheDocument()
-    expect(screen.getByText('Reply target is derived from the selected inbound email context. Manual To entry is disabled in real reply mode.')).toBeInTheDocument()
-    expect(screen.getByText('Real mode supports direct replies only. CC, BCC, and attachments are hidden until the backend supports them.')).toBeInTheDocument()
     expect(screen.queryByText(/^Cc$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Bcc$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Attachments$/)).not.toBeInTheDocument()
@@ -184,11 +182,10 @@ describe('EmailReplyComposer', () => {
 
     expect(mockMutate).toHaveBeenCalledWith(
       {
-        mailboxId: '1',
-        sourceEventId: 'evt-1',
+        mailboxId: 1,
+        sourceEventId: 101,
         subject: 'Preview Subject',
         textBody: 'Reply body',
-        inReplyToMessageId: '<m1>',
         contentWasEdited: true,
         templateId: null,
       },
@@ -211,6 +208,113 @@ describe('EmailReplyComposer', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
   })
 
+  it('shows a specific warning when inbound email exists but numeric source event id is missing', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={{
+          ...buildInboundReplyContext(),
+          sourceEventId: null,
+          replyContext: {
+            sourceEventId: null,
+            sourceEmailDocumentId: '69d8325094ebbe5f95845795',
+            resolvedReplyTarget: 'customer@example.com',
+          },
+        }}
+      />,
+    )
+
+    expect(screen.getByText('This message cannot be replied to because its inbound event reference is missing.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeDisabled()
+  })
+
+  it('does not show the missing inbound event warning when merged selected context keeps sourceEventId', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        replySourceEmail={{
+          ...buildInboundReplyContext(),
+          sourceEventId: 202,
+          replyContext: {
+            sourceEventId: null,
+            sourceEmailDocumentId: 'email-selected',
+            resolvedReplyTarget: 'customer@example.com',
+          },
+        }}
+        lastInbound={{
+          ...buildInboundReplyContext(),
+          sourceEventId: 101,
+        }}
+      />,
+    )
+
+    expect(screen.queryByText('This message cannot be replied to because its inbound event reference is missing.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reply target is derived from the selected inbound email context. Manual To entry is disabled in real reply mode.')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeEnabled()
+  })
+
+  it('uses the selected merged source context for send and schedule eligibility', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        replySourceEmail={{
+          ...buildInboundReplyContext(),
+          sourceEventId: 303,
+          mailboxId: '1',
+          subject: 'Selected inbound subject',
+          replyContext: {
+            sourceEventId: null,
+            sourceEmailDocumentId: 'email-selected',
+            resolvedReplyTarget: 'customer@example.com',
+          },
+        }}
+        lastInbound={{
+          ...buildInboundReplyContext(),
+          sourceEventId: 101,
+          subject: 'Last inbound subject',
+        }}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Reply body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mailboxId: 1,
+        sourceEventId: 303,
+        subject: 'Preview Subject',
+        textBody: 'Reply body',
+      }),
+      expect.any(Object),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    fireEvent.change(screen.getByLabelText('Send Not Before'), { target: { value: '2099-04-10T09:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Schedule' }))
+
+    expect(mockScheduleMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mailboxId: 1,
+        sourceEventId: 303,
+      }),
+      expect.any(Object),
+    )
+  })
+
   it('schedules an email using the ticket public id workflow extension', () => {
     render(
       <EmailReplyComposer
@@ -225,7 +329,7 @@ describe('EmailReplyComposer', () => {
 
     fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Scheduled body' } })
     fireEvent.click(screen.getByRole('button', { name: 'Schedule' }))
-    fireEvent.change(screen.getByLabelText('Send Not Before'), { target: { value: '2026-04-10T09:00' } })
+    fireEvent.change(screen.getByLabelText('Send Not Before'), { target: { value: '2099-04-10T09:00' } })
     fireEvent.click(screen.getByRole('button', { name: 'Confirm Schedule' }))
 
     expect(mockScheduleMutate).toHaveBeenCalledWith(
@@ -234,7 +338,7 @@ describe('EmailReplyComposer', () => {
         toAddress: 'customer@example.com',
         subject: 'Preview Subject',
         textBody: 'Scheduled body',
-        sourceEventId: 'evt-1',
+        sourceEventId: 101,
         templateId: null,
         contentWasEdited: true,
       }),
@@ -356,6 +460,174 @@ describe('EmailReplyComposer', () => {
     expect(mockError).toHaveBeenCalledWith('Mailbox unavailable')
   })
 
+  it('translates malformed backend reply errors into actionable guidance', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Reply body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    const failedOptions = mockMutate.mock.calls[0][1]
+    act(() => {
+      failedOptions.onError(new Error('Request body is missing or malformed'))
+    })
+
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('The backend rejected this reply request.'))
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('mailbox selected (Main (support@caseflow.com))'))
+    expect(mockError).toHaveBeenCalledWith(expect.stringContaining('reply source valid'))
+  })
+
+  it('allows send attempts even when the preview request failed', () => {
+    mockReplyPreviewState.data = undefined
+    mockReplyPreviewState.isError = true
+
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Reply body despite preview failure' } })
+
+    expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({
+      mailboxId: 1,
+      sourceEventId: 101,
+      textBody: 'Reply body despite preview failure',
+    }), expect.any(Object))
+  })
+
+  it('shows the schedule disabled reason when mailbox is missing', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={{
+          ...buildInboundReplyContext(),
+          mailboxId: null,
+        }}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Body' } })
+
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeDisabled()
+    expect(screen.getByText('Schedule unavailable: Select a mailbox.')).toBeInTheDocument()
+  })
+
+  it('does not block schedule opening when recipient preview is unresolved but source event is valid', () => {
+    mockReplyPreviewState.data = {
+      ...mockReplyPreviewState.data!,
+      derivedToAddress: '',
+    }
+
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Scheduled body' } })
+
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeEnabled()
+    expect(screen.getByText('Recipient preview is unavailable right now. The backend will resolve the reply target from the source email when you schedule it.')).toBeInTheDocument()
+  })
+
+  it('shows the missing schedule time reason inside the modal before confirmation', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Scheduled body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+
+    expect(screen.getByRole('button', { name: 'Confirm Schedule' })).toBeDisabled()
+    expect(screen.getByText('Schedule is blocked until: Choose a schedule time.')).toBeInTheDocument()
+  })
+
+  it('schedules even when recipient preview is unresolved by deferring resolution to the backend', () => {
+    mockReplyPreviewState.data = {
+      ...mockReplyPreviewState.data!,
+      derivedToAddress: '',
+    }
+
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Scheduled body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Schedule' }))
+    fireEvent.change(screen.getByLabelText('Send Not Before'), { target: { value: '2099-04-10T09:00' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Schedule' }))
+
+    expect(mockScheduleMutate).toHaveBeenCalledWith(expect.objectContaining({
+      mailboxId: 1,
+      toAddress: null,
+      sourceEventId: 101,
+    }), expect.any(Object))
+  })
+
+  it('maps backend reply error codes into user-friendly guidance', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Reply body' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+
+    const failedOptions = mockMutate.mock.calls[0][1]
+    act(() => {
+      failedOptions.onError({ code: 'SOURCE_EVENT_NOT_FOUND', message: 'source event lookup failed' })
+    })
+
+    expect(mockError).toHaveBeenCalledWith('The source email for this reply could not be found. Refresh the thread and try again.')
+  })
+
   it('loads backend templates, applies selection, and opens template preview', () => {
     render(
       <EmailReplyComposer
@@ -368,7 +640,7 @@ describe('EmailReplyComposer', () => {
       />,
     )
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tpl-1' } })
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '1' } })
 
     expect(screen.getByDisplayValue('Preview Subject')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Preview text')).toBeInTheDocument()
@@ -412,7 +684,7 @@ describe('EmailReplyComposer', () => {
       />,
     )
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: 'tpl-1' } })
+    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '1' } })
 
     expect(screen.getByDisplayValue('Template Subject')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Template body')).toBeInTheDocument()

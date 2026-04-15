@@ -12,13 +12,11 @@ interface TransferModalProps {
   fromGroupId: string
   fromGroupName: string
   transferableGroups: Group[]
-  onTransfer: (toGroupId: string, reason: string) => void
+  onTransfer: (toGroupId: string, reason: string) => Promise<unknown> | unknown
   isTransferring: boolean
 }
 
 type Step = 'form' | 'confirm'
-
-const MIN_REASON_LENGTH = 20
 
 export function TransferModal({
   isOpen,
@@ -34,21 +32,22 @@ export function TransferModal({
   const [reason, setReason] = useState('')
 
   const toGroup = transferableGroups.find((g) => g.id === toGroupId)
-  const reasonValid = reason.trim().length >= MIN_REASON_LENGTH
+  const trimmedReason = reason.trim()
 
-  const handleClose = () => {
-    onClose()
-    // Reset after close animation
-    setTimeout(() => {
-      setStep('form')
-      setToGroupId('')
-      setReason('')
-    }, 200)
+  const resetState = () => {
+    setStep('form')
+    setToGroupId('')
+    setReason('')
   }
 
-  const handleConfirm = () => {
-    if (!toGroupId || !reasonValid) return
-    onTransfer(toGroupId, reason.trim())
+  const handleClose = () => {
+    resetState()
+    onClose()
+  }
+
+  const handleConfirm = async () => {
+    if (!toGroupId) return
+    await onTransfer(toGroupId, trimmedReason)
     handleClose()
   }
 
@@ -68,7 +67,7 @@ export function TransferModal({
               variant="primary"
               size="sm"
               onClick={() => setStep('confirm')}
-              disabled={!toGroupId || !reasonValid}
+              disabled={!toGroupId}
             >
               Review Transfer
             </Button>
@@ -90,7 +89,7 @@ export function TransferModal({
           {/* From group (readonly) */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">From Group</label>
-            <div className="px-3 py-2 text-sm bg-gray-100 border border-gray-200 rounded-md text-gray-500">
+            <div className="surface-section rounded-xl px-3 py-2 text-sm text-gray-500">
               {fromGroupName}
             </div>
           </div>
@@ -101,7 +100,7 @@ export function TransferModal({
             <select
               value={toGroupId}
               onChange={(e) => setToGroupId(e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="ui-select"
             >
               <option value="">Select target group...</option>
               {transferableGroups.map((g) => (
@@ -115,26 +114,23 @@ export function TransferModal({
           {/* Reason */}
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
-              Reason for Transfer
-              <span className="ml-1 text-gray-400">({MIN_REASON_LENGTH} chars min)</span>
+              Reason for Transfer <span className="ml-1 text-gray-400">(optional)</span>
             </label>
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Explain why this ticket needs to be transferred..."
               rows={4}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+              className="ui-textarea min-h-[108px] resize-none"
             />
-            <div className="mt-1 flex justify-end">
-              <span className={reason.trim().length >= MIN_REASON_LENGTH ? 'text-green-600 text-xs' : 'text-gray-400 text-xs'}>
-                {reason.trim().length}/{MIN_REASON_LENGTH}+
-              </span>
+            <div className="mt-1 text-xs text-gray-400">
+              Add context if needed. You can continue without a note.
             </div>
           </div>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="flex items-center justify-center gap-4 py-4 bg-gray-50 rounded-lg">
+          <div className="surface-section flex items-center justify-center gap-4 rounded-xl py-4">
             <div className="text-center">
               <div className="text-xs text-gray-400 mb-1">From</div>
               <div className="text-sm font-semibold text-gray-700">{fromGroupName}</div>
@@ -146,9 +142,9 @@ export function TransferModal({
             </div>
           </div>
 
-          <div className="bg-gray-50 rounded-lg p-3">
+          <div className="surface-section rounded-xl p-3">
             <div className="text-xs font-medium text-gray-500 mb-1">Transfer Reason</div>
-            <p className="text-sm text-gray-700">{reason}</p>
+            <p className="text-sm text-gray-700">{trimmedReason || 'No reason provided.'}</p>
           </div>
 
           <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">

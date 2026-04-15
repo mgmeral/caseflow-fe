@@ -1,29 +1,75 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAdminAggregateReport } from '@/hooks/useReports'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useToast } from '@/hooks/useToast'
 import { getErrorMessage } from '@/lib/errors'
+import { exportAdminAggregateReportPdf } from '@/lib/reportPdf'
+import { ReportDateFilter } from '@/components/reports/ReportDateFilter'
+import {
+  applyReportDateRangeSearchParams,
+  formatReportDateRangeLabel,
+  parseReportDateRangeSearchParams,
+} from '@/lib/reportDateRange'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
-import { BarChart2, ShieldOff } from 'lucide-react'
+import { BarChart2, Download, ShieldOff } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 
+function CustomerColorDot({ colorHex }: { colorHex: string | null }) {
+  return (
+    <span
+      className="inline-block h-2.5 w-2.5 rounded-full border border-gray-200"
+      style={{ backgroundColor: colorHex ?? '#e5e7eb' }}
+      aria-hidden="true"
+    />
+  )
+}
+
 export function ReportsPage() {
-  const { canViewReports } = usePermissions()
+  const { canViewReports, canExport } = usePermissions()
+  const { success, error: showError } = useToast()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(0)
+  const [isExporting, setIsExporting] = useState(false)
   const pageSize = 20
-  const { data, isLoading, isError, error } = useAdminAggregateReport(page, pageSize)
+  const dateRange = useMemo(() => parseReportDateRangeSearchParams(searchParams), [searchParams])
+  const { data, isLoading, isError, error } = useAdminAggregateReport(page, pageSize, {
+    dateFrom: dateRange.dateFrom,
+    dateTo: dateRange.dateTo,
+  })
 
   const totals = (data?.items ?? []).reduce((acc, item) => ({
     total: acc.total + item.totalCount,
     open: acc.open + item.openCount,
+    closed: acc.closed + item.closedCount,
     resolved: acc.resolved + item.resolvedCount,
     waitingCustomer: acc.waitingCustomer + item.waitingCustomerCount,
   }), {
     total: 0,
     open: 0,
+    closed: 0,
     resolved: 0,
     waitingCustomer: 0,
   })
+
+  const handleExportPdf = async () => {
+    if (!data || data.items.length === 0) return
+
+    setIsExporting(true)
+    try {
+      await exportAdminAggregateReportPdf({
+        rows: data.items,
+        totals,
+        range: dateRange,
+      })
+      success(`${formatReportDateRangeLabel(dateRange)} PDF exported.`)
+    } catch (exportError) {
+      showError(getErrorMessage(exportError, 'Report PDF could not be exported.'))
+    } finally {
+      setIsExporting(false)
+    }
+  }
 
   if (!canViewReports) {
     return (
@@ -38,8 +84,33 @@ export function ReportsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">Reports</h1>
+    <div className="page-shell">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Reports</h1>
+          <p className="page-subtitle">Aggregate volume, open load, and customer breakdowns with calmer layered surfaces.</p>
+        </div>
+      </div>
+
+      <ReportDateFilter
+        value={dateRange}
+        onChange={(nextRange) => {
+          setPage(0)
+          setSearchParams(applyReportDateRangeSearchParams(searchParams, nextRange))
+        }}
+        actions={canExport ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Download size={14} />}
+            onClick={handleExportPdf}
+            isLoading={isExporting}
+            disabled={isLoading || isError || !data || data.items.length === 0}
+          >
+            Export PDF
+          </Button>
+        ) : null}
+      />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <SummaryCard label="Total Tickets" value={totals.total} isLoading={isLoading} />
@@ -48,8 +119,8 @@ export function ReportsPage() {
         <SummaryCard label="Waiting Customer" value={totals.waitingCustomer} isLoading={isLoading} />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
+      <div className="section-shell overflow-hidden">
+        <div className="section-header gap-2">
           <BarChart2 className="w-4 h-4 text-gray-400" />
           <h2 className="text-sm font-semibold text-gray-700">Customer Aggregate Report</h2>
         </div>
@@ -65,7 +136,7 @@ export function ReportsPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
+              <tr className="border-b border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.76)_0%,rgba(244,248,255,0.64)_100%)]">
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Customer</th>
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Total</th>
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Open</th>
@@ -73,15 +144,22 @@ export function ReportsPage() {
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Waiting</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="table-body-striped divide-y divide-white/50">
               {isError ? (
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-sm text-amber-700">{getErrorMessage(error, 'Failed to load aggregate report.')}</td>
                 </tr>
+              ) : (data?.items ?? []).length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-sm text-slate-500">No report rows were returned for the selected date range.</td>
+                </tr>
               ) : (data?.items ?? []).map((item) => (
                 <tr key={item.customerId}>
                   <td className="px-4 py-3">
-                    <div className="text-sm font-medium text-gray-800">{item.customerName}</div>
+                    <div className="inline-flex items-center gap-2">
+                      <CustomerColorDot colorHex={item.customerColorHex} />
+                      <span className="text-sm font-medium text-gray-800">{item.customerName}</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{item.totalCount}</td>
                   <td className="px-4 py-3 text-right text-amber-600">{item.openCount}</td>
@@ -109,9 +187,9 @@ export function ReportsPage() {
 
 function SummaryCard({ label, value, isLoading }: { label: string; value: number; isLoading: boolean }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-4">
-      <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-gray-900">{isLoading ? '...' : value}</div>
+    <div className="premium-stat-card p-4">
+      <div className="premium-stat-kicker text-[11px] tracking-[0.14em]">{label}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{isLoading ? '...' : value}</div>
     </div>
   )
 }

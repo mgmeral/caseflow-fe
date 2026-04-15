@@ -9,6 +9,8 @@ import { Button } from '@/components/shared/Button'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { Modal } from '@/components/shared/Modal'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
+import { FieldHint, HelpDrawer, InlineCallout, PageIntro, SectionHelp } from '@/components/shared/help'
+import { tagsHelp } from '@/help/tags.help'
 
 interface TagFormState {
   code: string
@@ -107,6 +109,7 @@ export function TagManagementPage() {
   const [editingTag, setEditingTag] = useState<TicketTag | null>(null)
   const [form, setForm] = useState<TagFormState>(EMPTY_FORM)
   const [showAdvancedColorInput, setShowAdvancedColorInput] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
 
   useEffect(() => {
     if (modalMode === 'edit' && editingTag) {
@@ -181,21 +184,30 @@ export function TagManagementPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between gap-4">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10 gap-4">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Tag Management</h1>
-          <p className="text-sm text-gray-500">Manage backend-controlled ticket tags, including inactive entries.</p>
+          <h1 className="admin-page-title">Tag Management</h1>
+          <p className="admin-page-subtitle">Manage backend-controlled ticket tags, including inactive entries.</p>
         </div>
-        <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => { setEditingTag(null); setModalMode('create') }}>
-          New Tag
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setIsHelpOpen(true)}>
+            Help
+          </Button>
+          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => { setEditingTag(null); setModalMode('create') }}>
+            New Tag
+          </Button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-5 py-4 border-b border-gray-100 flex items-center gap-2">
-          <Tags className="w-4 h-4 text-gray-400" />
-          <h2 className="text-sm font-semibold text-gray-700">All Tags</h2>
+      <PageIntro summary={tagsHelp.summary} />
+
+      <div className="space-y-4">
+        <SectionHelp title={tagsHelp.sections.catalog.title} description={tagsHelp.sections.catalog.description} />
+      <div className="admin-table-shell relative z-10">
+        <div className="flex items-center gap-2 border-b border-white/10 px-5 py-4">
+          <Tags className="h-4 w-4 text-blue-100/70" />
+          <h2 className="text-sm font-semibold text-blue-50">All Tags</h2>
         </div>
 
         {isLoading ? (
@@ -214,34 +226,34 @@ export function TagManagementPage() {
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Code</th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Name</th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Color</th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Status</th>
-                <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Actions</th>
+              <tr className="admin-table-head">
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-blue-100/72">Code</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-blue-100/72">Name</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-blue-100/72">Color</th>
+                <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-blue-100/72">Status</th>
+                <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-wide text-blue-100/72">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-50">
+            <tbody className="admin-table-striped divide-y divide-white/10">
               {tags.map((tag) => {
                 const isToggling = activateTag.isPending || deactivateTag.isPending
 
                 return (
-                  <tr key={tag.id}>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{tag.code}</td>
-                    <td className="px-4 py-3 text-gray-800 font-medium">{tag.name}</td>
+                  <tr key={tag.id} className="transition-colors hover:bg-white/[0.08]">
+                    <td className="px-4 py-3 font-mono text-xs text-blue-100/72">{tag.code}</td>
+                    <td className="px-4 py-3 font-medium text-white">{tag.name}</td>
                     <td className="px-4 py-3">
                       {tag.color ? (
-                        <span className="inline-flex items-center gap-2 text-gray-700">
-                          <span className="h-3 w-3 rounded-full border border-gray-200" style={{ backgroundColor: tag.color }} />
+                        <span className="inline-flex items-center gap-2 text-blue-50/90">
+                          <span className="h-3 w-3 rounded-full border border-white/20" style={{ backgroundColor: tag.color }} />
                           {tag.color}
                         </span>
                       ) : (
-                        <span className="text-gray-400">No color</span>
+                        <span className="text-blue-100/50">No color</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${tag.isActive ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${tag.isActive ? 'bg-emerald-400/18 text-emerald-100 ring-1 ring-emerald-300/25' : 'bg-white/10 text-blue-100/62 ring-1 ring-white/10'}`}>
                         {tag.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </td>
@@ -290,9 +302,11 @@ export function TagManagementPage() {
           </table>
         )}
       </div>
+      </div>
 
-      <Modal isOpen={modalMode !== null} onClose={() => { setModalMode(null); setEditingTag(null) }} title={formTitle} size="md">
+      <Modal isOpen={modalMode !== null} onClose={() => { setModalMode(null); setEditingTag(null) }} title={formTitle} size="md" variant="admin">
         <div className="space-y-4">
+          <SectionHelp title={tagsHelp.sections.editor.title} description={tagsHelp.sections.editor.description} />
           <div>
             <label htmlFor="tag-code" className="block text-xs font-medium text-gray-600 mb-1">Code</label>
             <input
@@ -303,6 +317,7 @@ export function TagManagementPage() {
               disabled={isEditMode}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400"
             />
+            <FieldHint text={tagsHelp.fieldHints.code} />
           </div>
           <div>
             <label htmlFor="tag-name" className="block text-xs font-medium text-gray-600 mb-1">Name</label>
@@ -313,11 +328,12 @@ export function TagManagementPage() {
               onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
+            <FieldHint text={tagsHelp.fieldHints.name} />
           </div>
           <div className="space-y-3">
             <div className="space-y-1">
               <label className="block text-xs font-medium text-gray-600">Color</label>
-              <p className="text-xs text-gray-400">Choose a curated color first. Custom hex is available if you need something more specific.</p>
+              <FieldHint className="mt-0" text={tagsHelp.fieldHints.color} />
             </div>
 
             <div className="space-y-2">
@@ -406,6 +422,9 @@ export function TagManagementPage() {
               ) : null}
             </div>
           </div>
+          <InlineCallout title={tagsHelp.warnings[0].title}>
+            {tagsHelp.warnings[0].description.defaultMessage}
+          </InlineCallout>
           {isCreateMode ? (
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
               <input
@@ -417,6 +436,7 @@ export function TagManagementPage() {
               Active on create
             </label>
           ) : null}
+          <FieldHint className="mt-0" text={tagsHelp.fieldHints.isActive} />
           <div className="flex items-center justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => { setModalMode(null); setEditingTag(null) }}>
               Cancel
@@ -427,6 +447,8 @@ export function TagManagementPage() {
           </div>
         </div>
       </Modal>
+
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={tagsHelp} />
     </div>
   )
 }

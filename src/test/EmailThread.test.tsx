@@ -31,7 +31,7 @@ const sampleEmail = {
   providerMessageId: null,
   mailboxId: 'm1',
   mailboxName: 'Main',
-  sourceEventId: 'evt-1',
+  sourceEventId: 101,
   direction: 'INBOUND' as const,
   subject: 'Need help',
   from: 'customer@akbank.com',

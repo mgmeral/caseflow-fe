@@ -7,15 +7,15 @@ interface TicketDetailLayoutProps {
 
 export function TicketDetailLayout({ left, right }: TicketDetailLayoutProps) {
   return (
-    <div className="flex flex-1 min-h-0 overflow-hidden">
+    <div className="ticket-detail-shell">
       {/* Left - 65% */}
-      <div className="flex flex-col min-h-0" style={{ maxWidth: '65%', flex: 1 }}>
+      <div className="flex min-h-0 flex-col" style={{ maxWidth: '65%', flex: 1 }}>
         {left}
       </div>
 
       {/* Right - 35% */}
       <div
-        className="shrink-0 overflow-y-auto border-l border-gray-200/60 bg-gray-50/50"
+        className="ticket-detail-side-column"
         style={{ width: '35%' }}
       >
         {right}

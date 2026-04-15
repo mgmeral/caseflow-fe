@@ -10,7 +10,7 @@
  *  - Degrade gracefully: missing lists become [], missing booleans become false/null
  */
 
-import type { User, Group } from '@/types/user.types'
+import type { User, Group, UserLocale, UserProfile, UserProfileGroup, UserProfileRole } from '@/types/user.types'
 import type { UserRole } from '@/types/common.types'
 import type { BackendRole } from '@/types/api.types'
 import type { Ticket, TicketAttachment, TicketStatus, TicketPriority, SourceType } from '@/types/ticket.types'
@@ -213,6 +213,136 @@ export function normalizeUser(raw: Record<string, unknown>): User {
     lastLoginAt: raw.lastLoginAt ? String(raw.lastLoginAt) : null,
     openTicketCount: typeof raw.openTicketCount === 'number' ? raw.openTicketCount : 0,
     avatarColor: deriveAvatarColor(id),
+  }
+}
+
+function normalizeProfileLocale(raw: unknown): UserLocale {
+  return String(raw ?? '').toLowerCase() === 'tr' ? 'tr' : 'en'
+}
+
+function normalizeProfileRole(raw: unknown): UserProfileRole | null {
+  if (typeof raw === 'string') {
+    const value = raw.trim()
+    if (!value) return null
+    return {
+      id: value,
+      code: value,
+      name: value,
+    }
+  }
+
+  if (!raw || typeof raw !== 'object') return null
+
+  const record = raw as Record<string, unknown>
+  const code = String(record.code ?? record.name ?? '').trim()
+  const name = String(record.name ?? record.code ?? '').trim()
+  if (!code && !name) return null
+
+  return {
+    id: String(record.id ?? (code || name)),
+    code: code || name,
+    name: name || code,
+  }
+}
+
+function normalizeProfileGroup(raw: unknown): UserProfileGroup | null {
+  if (typeof raw === 'string') {
+    const value = raw.trim()
+    if (!value) return null
+    return {
+      id: value,
+      name: value,
+    }
+  }
+
+  if (!raw || typeof raw !== 'object') return null
+
+  const record = raw as Record<string, unknown>
+  const name = String(record.name ?? '').trim()
+  if (!name) return null
+
+  return {
+    id: String(record.id ?? name),
+    name,
+  }
+}
+
+export function normalizeUserProfile(raw: Record<string, unknown>): UserProfile {
+  const normalizedUser = normalizeUser(raw)
+  const explicitDisplayName = String(raw.displayName ?? '').trim()
+  const roles = Array.isArray(raw.roles)
+    ? raw.roles.map(normalizeProfileRole).filter((value): value is UserProfileRole => value !== null)
+    : []
+  const groups = Array.isArray(raw.groups)
+    ? raw.groups.map(normalizeProfileGroup).filter((value): value is UserProfileGroup => value !== null)
+    : normalizedUser.groupNames.map((name, index) => ({
+      id: normalizedUser.groupIds[index] ?? name,
+      name,
+    }))
+
+  const fallbackRole = normalizedUser.roleName ?? normalizedUser.roleCode ?? String(normalizedUser.role).toUpperCase()
+  const normalizedRoles = roles.length > 0
+    ? roles
+    : [{
+        id: normalizedUser.roleId ?? fallbackRole,
+        code: normalizedUser.roleCode ?? fallbackRole,
+        name: normalizedUser.roleName ?? fallbackRole,
+      }]
+
+  return {
+    id: normalizedUser.id,
+    username: normalizedUser.username ?? '',
+    email: normalizedUser.email,
+    displayName: explicitDisplayName || normalizedUser.fullName,
+    firstName: normalizedUser.firstName,
+    lastName: normalizedUser.lastName,
+    fullName: normalizedUser.fullName,
+    roles: normalizedRoles,
+    groups,
+    isActive: raw.isActive == null ? true : normalizedUser.isActive,
+    locale: normalizeProfileLocale(raw.locale),
+    avatarUrl: raw.avatarUrl ? String(raw.avatarUrl) : null,
+    permissionCodes: normalizedUser.permissionCodes,
+    roleCode: normalizedUser.roleCode,
+    roleName: normalizedUser.roleName,
+    roleId: normalizedUser.roleId,
+    groupIds: normalizedUser.groupIds,
+    groupNames: groups.map((group) => group.name),
+  }
+}
+
+export function mergeUserProfileIntoUser(profile: UserProfile, currentUser: User | null): User {
+  const baseRole = profile.roles[0] ?? null
+
+  return {
+    ...(currentUser ?? normalizeUser({
+      id: profile.id,
+      username: profile.username,
+      email: profile.email,
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      fullName: profile.fullName,
+      roleCode: baseRole?.code,
+      roleName: baseRole?.name,
+      roleId: baseRole?.id,
+      permissionCodes: profile.permissionCodes,
+      groupIds: profile.groupIds,
+      groupNames: profile.groupNames,
+      isActive: profile.isActive,
+    })),
+    id: profile.id,
+    username: profile.username,
+    email: profile.email,
+    firstName: profile.firstName,
+    lastName: profile.lastName,
+    fullName: profile.displayName || profile.fullName,
+    roleId: baseRole?.id ?? currentUser?.roleId,
+    roleCode: baseRole?.code ?? currentUser?.roleCode,
+    roleName: baseRole?.name ?? currentUser?.roleName,
+    permissionCodes: profile.permissionCodes.length > 0 ? profile.permissionCodes : (currentUser?.permissionCodes ?? []),
+    groupIds: profile.groupIds,
+    groupNames: profile.groupNames,
+    isActive: profile.isActive,
   }
 }
 

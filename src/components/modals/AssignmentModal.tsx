@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from '@/components/shared/Modal'
 import { Button } from '@/components/shared/Button'
 import { Avatar } from '@/components/shared/Avatar'
@@ -12,9 +12,11 @@ interface AssignmentModalProps {
   ticketNo: string
   currentAssigneeId?: string | null
   currentAssigneeName?: string | null
+  currentGroupId?: string | null
+  currentGroupName?: string | null
   groups: Group[]
   users: User[]
-  onAssign: (userId: string | null, userName: string | null, note?: string) => void
+  onAssign: (userId: string | null, userName: string | null, note?: string) => Promise<unknown> | unknown
   isAssigning: boolean
 }
 
@@ -30,11 +32,14 @@ export function AssignmentModal({
   ticketNo,
   currentAssigneeId,
   currentAssigneeName,
+  currentGroupId,
+  currentGroupName,
   groups,
   users,
   onAssign,
   isAssigning,
 }: AssignmentModalProps) {
+  const hasActiveAssignment = !!currentAssigneeId
   const [selectedGroupId, setSelectedGroupId] = useState<string>('')
   const [selectedUserId, setSelectedUserId] = useState<string>('')
   const [note, setNote] = useState('')
@@ -49,24 +54,40 @@ export function AssignmentModal({
 
   const selectedUser = users.find((u) => u.id === selectedUserId)
 
-  const handleAssign = () => {
-    if (!selectedUserId) return
-    onAssign(selectedUserId, selectedUser?.fullName ?? null, note || undefined)
-    onClose()
+  const resetState = () => {
+    setSelectedGroupId('')
     setSelectedUserId('')
     setNote('')
     setUserSearch('')
   }
 
+  useEffect(() => {
+    if (!isOpen) return
+    resetState()
+  }, [isOpen])
+
+  const handleAssign = async () => {
+    if (!selectedUserId) return
+    await onAssign(selectedUserId, selectedUser?.fullName ?? null, note || undefined)
+    resetState()
+    onClose()
+  }
+
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
-      title={`Assign Ticket ${ticketNo}`}
+      onClose={() => {
+        resetState()
+        onClose()
+      }}
+      title={`${hasActiveAssignment ? 'Reassign' : 'Assign'} Ticket ${ticketNo}`}
       size="md"
       footer={
         <>
-          <Button variant="secondary" size="sm" onClick={onClose} disabled={isAssigning}>
+          <Button variant="secondary" size="sm" onClick={() => {
+            resetState()
+            onClose()
+          }} disabled={isAssigning}>
             Cancel
           </Button>
           <Button
@@ -76,15 +97,16 @@ export function AssignmentModal({
             isLoading={isAssigning}
             disabled={!selectedUserId}
           >
-            Assign
+            {hasActiveAssignment ? 'Reassign' : 'Assign'}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {currentAssigneeName && (
-          <div className="text-sm text-gray-500 bg-gray-50 rounded p-2.5">
-            Currently assigned to <strong>{currentAssigneeName}</strong>
+        {(currentAssigneeName || currentGroupName) && (
+          <div className="surface-section rounded-xl px-3 py-2.5 text-sm text-gray-500">
+            {currentAssigneeName ? <>Currently assigned to <strong>{currentAssigneeName}</strong></> : 'Ticket is currently unassigned.'}
+            {currentGroupName ? <span className="block mt-1 text-xs text-gray-400">Current group: {currentGroupName}</span> : null}
           </div>
         )}
 
@@ -97,7 +119,7 @@ export function AssignmentModal({
               setSelectedGroupId(e.target.value)
               setSelectedUserId('')
             }}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="ui-select"
           >
             <option value="">All Groups</option>
             {groups.map((g) => (
@@ -106,6 +128,7 @@ export function AssignmentModal({
               </option>
             ))}
           </select>
+          <p className="mt-1 text-[11px] text-gray-400">Assignments keep the current ticket group unless you explicitly transfer the ticket.</p>
         </div>
 
         {/* User search */}
@@ -116,9 +139,9 @@ export function AssignmentModal({
             placeholder="Search agents..."
             value={userSearch}
             onChange={(e) => setUserSearch(e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md mb-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="ui-input mb-2"
           />
-          <div className="border border-gray-200 rounded-md max-h-48 overflow-y-auto">
+          <div className="surface-section max-h-48 overflow-y-auto rounded-xl p-1">
             {filteredUsers.length === 0 ? (
               <p className="text-sm text-gray-400 text-center py-3">No agents found</p>
             ) : (
@@ -128,8 +151,8 @@ export function AssignmentModal({
                   type="button"
                   onClick={() => setSelectedUserId(user.id)}
                   className={clsx(
-                    'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors text-left',
-                    selectedUserId === user.id && 'bg-indigo-50',
+                    'w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors',
+                    selectedUserId === user.id ? 'bg-[#eef5ff]' : 'hover:bg-white/70',
                     user.id === currentAssigneeId && 'opacity-50',
                   )}
                 >
@@ -157,7 +180,7 @@ export function AssignmentModal({
             onChange={(e) => setNote(e.target.value)}
             placeholder="Add a handover note..."
             rows={2}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+            className="ui-textarea min-h-[92px] resize-none"
           />
         </div>
       </div>

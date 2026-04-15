@@ -127,4 +127,15 @@ describe('JiraIntegrationSettingsPage', () => {
     expect(testMutate).not.toHaveBeenCalled()
     expect(screen.getByText('Save the Jira configuration before testing the connection. The test endpoint currently checks the saved configuration.')).toBeInTheDocument()
   })
+
+  it('renders intro copy and opens the help drawer faq', () => {
+    render(<JiraIntegrationSettingsPage />)
+
+    expect(screen.getByText(/Jira integration settings define how CaseFlow creates linked Jira issues/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }))
+
+    expect(screen.getByText('What is a project key?')).toBeInTheDocument()
+    expect(screen.getByText(/It is the short Jira project identifier/i)).toBeInTheDocument()
+  })
 })

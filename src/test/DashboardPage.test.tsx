@@ -87,5 +87,8 @@ describe('DashboardPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Waiting > 24h/i }))
     expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=waiting')
+
+    fireEvent.click(screen.getByRole('button', { name: /Closed/i }))
+    expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=closed')
   })
 })

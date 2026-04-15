@@ -153,6 +153,23 @@ describe('MailboxManagementPage', () => {
     expect(screen.getByText('OAuth ready')).toBeInTheDocument()
   })
 
+  it('renders page intro, opens the help drawer, and shows field hints', () => {
+    renderPage()
+
+    expect(screen.getByText(/Mailbox settings control how CaseFlow imports inbound mail/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Help' }))
+
+    expect(screen.getByText('What does inbound polling mean?')).toBeInTheDocument()
+    expect(screen.getByText(/Inbound polling is the recurring mailbox check/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close drawer' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New Mailbox' }))
+
+    expect(screen.getByText(/Internal label shown to operators/i)).toBeInTheDocument()
+    expect(screen.getByText(/Recommended default: New messages only/i)).toBeInTheDocument()
+  })
+
   it('defaults the mailbox form to Other IMAP with password auth', () => {
     renderPage()
 

@@ -4,15 +4,23 @@ import { apiClient } from './api.client'
 import { normalizeAdminCustomerTicketAggregateReport, normalizeCustomerTicketReport } from './email-platform.normalizers'
 
 interface ReportDateFilters {
-  from?: string | null
-  to?: string | null
+  dateFrom?: string | null
+  dateTo?: string | null
+}
+
+function toApiDateTime(value: string, boundary: 'start' | 'end') {
+  return boundary === 'start' ? `${value}T00:00:00.000Z` : `${value}T23:59:59.999Z`
 }
 
 function buildCustomerReportPath(customerId: string, filters?: ReportDateFilters) {
   const query = new URLSearchParams()
 
-  if (filters?.from) query.set('from', filters.from)
-  if (filters?.to) query.set('to', filters.to)
+  if (filters?.dateFrom) {
+    query.set('from', toApiDateTime(filters.dateFrom, 'start'))
+  }
+  if (filters?.dateTo) {
+    query.set('to', toApiDateTime(filters.dateTo, 'end'))
+  }
 
   const basePath = `/customers/${customerId}/reports/tickets`
   const queryString = query.toString()
@@ -25,8 +33,12 @@ function buildAggregateReportPath(page: number, size: number, filters?: ReportDa
     size: String(size),
   })
 
-  if (filters?.from) query.set('from', filters.from)
-  if (filters?.to) query.set('to', filters.to)
+  if (filters?.dateFrom) {
+    query.set('from', toApiDateTime(filters.dateFrom, 'start'))
+  }
+  if (filters?.dateTo) {
+    query.set('to', toApiDateTime(filters.dateTo, 'end'))
+  }
 
   return `/admin/reports/customers/tickets?${query.toString()}`
 }

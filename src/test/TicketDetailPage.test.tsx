@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+
+const invalidateQueries = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const assignmentServiceAssign = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const assignmentServiceReassign = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
+const toastSuccess = vi.hoisted(() => vi.fn())
+const toastError = vi.hoisted(() => vi.fn())
 
 const ticketSidePanelProps = vi.hoisted(() => ({
   last: null as Record<string, unknown> | null,
@@ -21,11 +27,14 @@ const ticketEmailThreadState = vi.hoisted(() => ({
 
 const ticketState = vi.hoisted(() => ({
   isUnread: true,
+  assignedUserId: null as string | null,
+  assignedUserName: null as string | null,
   attachments: [] as Array<Record<string, unknown>>,
 }))
 
 const permissionState = vi.hoisted(() => ({
   canViewTicketEmail: false,
+  canAssignTickets: false,
 }))
 
 const attachmentViewerProps = vi.hoisted(() => ({
@@ -40,6 +49,33 @@ const workAreaProps = vi.hoisted(() => ({
   last: null as Record<string, unknown> | null,
 }))
 
+const emailReplyComposerProps = vi.hoisted(() => ({
+  last: null as Record<string, unknown> | null,
+}))
+
+const assignmentModalProps = vi.hoisted(() => ({
+  last: null as Record<string, unknown> | null,
+}))
+
+vi.mock('@tanstack/react-query', async () => {
+  const actual = await vi.importActual<typeof import('@tanstack/react-query')>('@tanstack/react-query')
+  return {
+    ...actual,
+    useQueryClient: () => ({ invalidateQueries }),
+  }
+})
+
+vi.mock('@/services/assignment.service', () => ({
+  assignmentService: {
+    assign: assignmentServiceAssign,
+    reassign: assignmentServiceReassign,
+  },
+}))
+
+vi.mock('@/hooks/useToast', () => ({
+  useToast: () => ({ success: toastSuccess, error: toastError }),
+}))
+
 vi.mock('@/hooks/useTicketDetail', () => ({
   useTicketDetail: () => ({
     ticket: {
@@ -51,8 +87,8 @@ vi.mock('@/hooks/useTicketDetail', () => ({
       customerName: 'Acme',
       groupId: 'g1',
       groupName: 'Support',
-      assignedUserId: null,
-      assignedUserName: null,
+      assignedUserId: ticketState.assignedUserId,
+      assignedUserName: ticketState.assignedUserName,
       status: 'ASSIGNED',
       priority: 'medium',
       sourceType: 'email',
@@ -76,14 +112,11 @@ vi.mock('@/hooks/useTicketDetail', () => ({
     allowedStatusTransitions: [],
     isLoading: false,
     addNote: vi.fn(),
-    assign: vi.fn(),
     changeStatus: vi.fn(),
     changePriority: vi.fn(),
-    transfer: vi.fn(),
     close: vi.fn(),
     reopen: vi.fn(),
     isAddingNote: false,
-    isAssigning: false,
     isTransferring: false,
     isClosing: false,
   }),
@@ -113,10 +146,11 @@ vi.mock('@/hooks/useUsers', () => ({
 
 vi.mock('@/hooks/usePermissions', () => ({
   usePermissions: () => ({
-    canAssignTickets: false,
+    canAssignTickets: permissionState.canAssignTickets,
     canTransferTickets: false,
     canSendTicketEmailReply: false,
     canViewTicketEmail: permissionState.canViewTicketEmail,
+    canCloseTickets: false,
   }),
 }))
 
@@ -163,7 +197,10 @@ vi.mock('@/components/ticket-detail/TicketSidePanel', () => ({
 }))
 
 vi.mock('@/components/ticket-detail/EmailReplyComposer', () => ({
-  EmailReplyComposer: () => null,
+  EmailReplyComposer: (props: Record<string, unknown>) => {
+    emailReplyComposerProps.last = props
+    return null
+  },
 }))
 
 vi.mock('@/components/ticket-detail/TicketTagsCard', () => ({
@@ -171,7 +208,10 @@ vi.mock('@/components/ticket-detail/TicketTagsCard', () => ({
 }))
 
 vi.mock('@/components/modals/AssignmentModal', () => ({
-  AssignmentModal: () => null,
+  AssignmentModal: (props: Record<string, unknown>) => {
+    assignmentModalProps.last = props
+    return null
+  },
 }))
 
 vi.mock('@/components/modals/TransferModal', () => ({
@@ -216,7 +256,7 @@ function makeThreadEmail(overrides: Record<string, unknown> = {}) {
     providerMessageId: null,
     mailboxId: null,
     mailboxName: null,
-    sourceEventId: 'evt-74',
+    sourceEventId: 74,
     direction: 'INBOUND',
     subject: 'Need help',
     from: 'customer@test.com',
@@ -250,7 +290,7 @@ function makeEmailDetail(emailId: string, fileName?: string) {
     providerMessageId: null,
     mailboxId: null,
     mailboxName: null,
-    sourceEventId: `evt-${emailId}`,
+    sourceEventId: Number(String(emailId).replace(/\D+/g, '')) || 74,
     direction: 'INBOUND',
     subject: 'Need help',
     from: 'customer@test.com',
@@ -288,6 +328,13 @@ describe('TicketDetailPage', () => {
     attachmentViewerProps.last = null
     emailDetailDrawerProps.last = null
     workAreaProps.last = null
+    emailReplyComposerProps.last = null
+    assignmentModalProps.last = null
+    invalidateQueries.mockClear()
+    assignmentServiceAssign.mockClear()
+    assignmentServiceReassign.mockClear()
+    toastSuccess.mockClear()
+    toastError.mockClear()
     emailDetailState.byId = {}
     emailDetailState.isLoading = false
     emailDetailState.calls = []
@@ -297,6 +344,7 @@ describe('TicketDetailPage', () => {
     ticketState.isUnread = true
     ticketState.attachments = []
     permissionState.canViewTicketEmail = false
+    permissionState.canAssignTickets = false
   })
 
   it('only requests the real email document id and never the legacy numeric id', () => {
@@ -457,6 +505,86 @@ describe('TicketDetailPage', () => {
     expect(emailDetailDrawerProps.last?.email).toBe(emailDetailState.byId['69d239-real-email-id'])
     expect(emailDetailState.calls).toContain('69d239-real-email-id')
     expect(emailDetailState.calls).not.toContain('74')
+  })
+
+  it('preserves selected inbound sourceEventId when detail omits it', () => {
+    permissionState.canViewTicketEmail = true
+    ticketEmailThreadState.data = [
+      makeThreadEmail({
+        id: '74',
+        emailDocumentId: 'email-74',
+        sourceEventId: 7401,
+        mailboxId: '12',
+        messageId: '<summary-74@mail.test>',
+      }),
+    ]
+    emailDetailState.byId = {
+      'email-74': {
+        ...makeEmailDetail('email-74'),
+        sourceEventId: null,
+        mailboxId: null,
+        messageId: '<detail-74@mail.test>',
+      },
+    }
+
+    renderPage()
+
+    expect(emailReplyComposerProps.last).toMatchObject({
+      replySourceEmail: expect.objectContaining({
+        sourceEventId: 7401,
+        mailboxId: '12',
+        messageId: '<summary-74@mail.test>',
+      }),
+      lastInbound: expect.objectContaining({
+        sourceEventId: 7401,
+      }),
+    })
+  })
+
+  it('uses the queue-style assignment payload from ticket detail', async () => {
+    permissionState.canAssignTickets = true
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }))
+
+    await act(async () => {
+      await (assignmentModalProps.last as { onAssign: (userId: string | null, userName: string | null, note?: string) => Promise<unknown> })
+        .onAssign('u77', 'Agent Queue Style', 'ignored note')
+    })
+
+    expect(assignmentServiceAssign).toHaveBeenCalledWith({
+      ticketId: 't1',
+      assignedUserId: 'u77',
+    })
+    expect(assignmentServiceReassign).not.toHaveBeenCalled()
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['ticket', 't1'], refetchType: 'all' })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['tickets'], refetchType: 'all' })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['queue'], refetchType: 'all' })
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ['queue-stats'], refetchType: 'all' })
+    expect(toastSuccess).toHaveBeenCalledWith('Ticket Agent Queue Style adına atandı')
+  })
+
+  it('uses reassign directly when the ticket already has an active assignee', async () => {
+    permissionState.canAssignTickets = true
+    ticketState.assignedUserId = 'u11'
+    ticketState.assignedUserName = 'Current Agent'
+
+    renderPage()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reassign' }))
+
+    await act(async () => {
+      await (assignmentModalProps.last as { onAssign: (userId: string | null, userName: string | null, note?: string) => Promise<unknown> })
+        .onAssign('u77', 'Agent Queue Style', 'ignored note')
+    })
+
+    expect(assignmentServiceReassign).toHaveBeenCalledWith({
+      ticketId: 't1',
+      newUserId: 'u77',
+      newGroupId: 'g1',
+    })
+    expect(assignmentServiceAssign).not.toHaveBeenCalled()
   })
 
   it('attachment URLs use downloadPath fallback when explicit urls are absent', () => {

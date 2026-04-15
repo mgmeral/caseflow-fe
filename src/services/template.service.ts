@@ -29,6 +29,7 @@ function normalizeTemplate(raw: MailTemplateResponse): MailTemplate {
     id: String(raw.id),
     name: toText(raw.name, toText(raw.code)),
     code: toText(raw.code),
+    usageType: toNullableText(raw.usageType),
     subjectTemplate: toText(raw.subjectTemplate),
     htmlTemplate: toText(raw.htmlTemplate),
     plainTextTemplate: toText(raw.plainTextTemplate),
@@ -42,9 +43,12 @@ function normalizeTemplate(raw: MailTemplateResponse): MailTemplate {
 }
 
 function toRequestBody(input: MailTemplateUpsertInput): MailTemplateRequest {
+  const usageType = input.usageType?.trim()
+
   return {
     name: input.name.trim(),
     code: input.code.trim(),
+    usageType: usageType || null,
     subjectTemplate: input.subjectTemplate.trim(),
     htmlTemplate: input.htmlTemplate.trim(),
     plainTextTemplate: input.plainTextTemplate.trim(),

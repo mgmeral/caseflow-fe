@@ -40,6 +40,10 @@ export function useTicketDetail(id: string) {
     retry: false,
   })
 
+  const syncTicket = (ticket: unknown) => {
+    queryClient.setQueryData(['ticket', id], ticket)
+  }
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', id] })
     queryClient.invalidateQueries({ queryKey: ['ticket-messages', id] })
@@ -49,9 +53,10 @@ export function useTicketDetail(id: string) {
   }
 
   const assignMutation = useMutation({
-    mutationFn: ({ userId, userName, note }: { userId: string | null; userName: string | null; note?: string }) =>
-      ticketService.assign(id, userId, userName, note),
+    mutationFn: ({ userId, userName, groupId, note }: { userId: string | null; userName: string | null; groupId: string | null; note?: string }) =>
+      ticketService.assign(id, userId, userName, groupId, note),
     onSuccess: (ticket) => {
+      syncTicket(ticket)
       success(ticket.assignedUserName ? `Ticket ${ticket.assignedUserName} adına atandı` : 'Ticket ataması kaldırıldı')
       invalidate()
     },
@@ -62,6 +67,7 @@ export function useTicketDetail(id: string) {
     mutationFn: ({ status, reason }: { status: TicketStatus; reason?: string }) =>
       ticketService.changeStatus(id, status, reason),
     onSuccess: (ticket) => {
+      syncTicket(ticket)
       success(`Durum "${ticket.status}" olarak güncellendi`)
       invalidate()
     },
@@ -70,7 +76,8 @@ export function useTicketDetail(id: string) {
 
   const changePriorityMutation = useMutation({
     mutationFn: (priority: TicketPriority) => ticketService.changePriority(id, priority),
-    onSuccess: () => {
+    onSuccess: (ticket) => {
+      syncTicket(ticket)
       success('Öncelik güncellendi')
       invalidate()
     },
@@ -112,6 +119,7 @@ export function useTicketDetail(id: string) {
       )
     },
     onSuccess: (ticket) => {
+      syncTicket(ticket)
       success(`Ticket ${ticket.groupName} ekibine transfer edildi`)
       invalidate()
     },
@@ -120,7 +128,8 @@ export function useTicketDetail(id: string) {
 
   const closeMutation = useMutation({
     mutationFn: () => ticketService.close(id),
-    onSuccess: () => {
+    onSuccess: (ticket) => {
+      syncTicket(ticket)
       success('Ticket kapatıldı')
       invalidate()
     },
@@ -129,7 +138,8 @@ export function useTicketDetail(id: string) {
 
   const reopenMutation = useMutation({
     mutationFn: () => ticketService.reopen(id),
-    onSuccess: () => {
+    onSuccess: (ticket) => {
+      syncTicket(ticket)
       success('Ticket yeniden açıldı')
       invalidate()
     },
@@ -153,19 +163,22 @@ export function useTicketDetail(id: string) {
     ticket: ticketQuery.data,
     messages: messagesQuery.data ?? [],
     transfers: transfersQuery.data ?? [],
-    allowedStatusTransitions: ticketQuery.data?.allowedTransitions ?? transitionsQuery.data ?? [],
+    allowedStatusTransitions: Array.from(new Set([...(ticketQuery.data?.allowedTransitions ?? []), ...(transitionsQuery.data ?? [])])),
     isLoading: ticketQuery.isLoading,
     isHistoryLoading: messagesQuery.isLoading || transfersQuery.isLoading,
     isError: ticketQuery.isError,
     assign: assignMutation.mutate,
+    assignAsync: assignMutation.mutateAsync,
     isAssigning: assignMutation.isPending,
     changeStatus: changeStatusMutation.mutate,
+    changeStatusAsync: changeStatusMutation.mutateAsync,
     changePriority: changePriorityMutation.mutate,
     addReply: addReplyMutation.mutate,
     isAddingReply: addReplyMutation.isPending,
     addNote: addNoteMutation.mutate,
     isAddingNote: addNoteMutation.isPending,
     transfer: transferMutation.mutate,
+    transferAsync: transferMutation.mutateAsync,
     isTransferring: transferMutation.isPending,
     close: () => closeMutation.mutate(),
     isClosing: closeMutation.isPending,

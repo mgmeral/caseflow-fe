@@ -12,24 +12,24 @@ interface BadgeProps {
 }
 
 const VARIANT_CLASSES: Record<BadgeVariant, string> = {
-  default: 'bg-gray-50 text-gray-600 border-gray-200/70',
-  success: 'bg-emerald-50 text-emerald-700 border-emerald-200/70',
-  error: 'bg-red-50 text-red-700 border-red-200/70',
-  warning: 'bg-amber-50 text-amber-700 border-amber-200/70',
-  info: 'bg-blue-50 text-blue-700 border-blue-200/70',
-  outline: 'bg-white text-gray-500 border-gray-200',
+  default: 'border-slate-200/70 bg-[linear-gradient(180deg,rgba(248,250,252,0.96)_0%,rgba(241,245,249,0.84)_100%)] text-slate-600',
+  success: 'border-emerald-200/70 bg-[linear-gradient(180deg,rgba(236,253,245,0.98)_0%,rgba(209,250,229,0.86)_100%)] text-emerald-800',
+  error: 'border-rose-200/70 bg-[linear-gradient(180deg,rgba(255,241,242,0.98)_0%,rgba(254,226,226,0.86)_100%)] text-rose-800',
+  warning: 'border-amber-200/70 bg-[linear-gradient(180deg,rgba(255,251,235,0.98)_0%,rgba(254,243,199,0.88)_100%)] text-amber-800',
+  info: 'border-blue-200/70 bg-[linear-gradient(180deg,rgba(239,246,255,0.98)_0%,rgba(219,234,254,0.88)_100%)] text-blue-800',
+  outline: 'border-slate-200/80 bg-white/85 text-slate-500',
 }
 
 const SIZE_CLASSES: Record<BadgeSize, string> = {
-  sm: 'px-2 py-0.5 text-xs',
-  md: 'px-2.5 py-1 text-sm',
+  sm: 'px-2.5 py-1 text-[11px]',
+  md: 'px-3 py-1.5 text-sm',
 }
 
 export function Badge({ children, variant = 'default', size = 'sm', className }: BadgeProps) {
   return (
     <span
       className={clsx(
-        'inline-flex items-center font-medium rounded-full border',
+        'inline-flex items-center rounded-full border font-semibold tracking-[0.01em] shadow-[inset_0_1px_0_rgba(255,255,255,0.5)]',
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
         className,

@@ -26,6 +26,7 @@ import type {
   TicketEmailMessage,
 } from '@/types/email.types'
 import type { AdminCustomerTicketAggregateReport, AdminCustomerTicketAggregateItem, CustomerTicketReport, TicketTag, TicketTagAssignment, TicketTagBreakdown } from '@/types/ticket.types'
+import { parseNumericContractId } from '@/lib/ticketEmailContracts'
 
 const LEGACY_INITIAL_SYNC_STRATEGY_MAP = {
   START_FROM_LATEST: 'NEW_MESSAGES_ONLY',
@@ -254,6 +255,7 @@ function normalizeAdminCustomerTicketAggregateItem(response: AdminCustomerTicket
   return {
     customerId: response.customerId != null ? String(response.customerId) : '',
     customerName: response.customerName ?? 'Unknown customer',
+    customerColorHex: response.customerColorHex ?? null,
     totalCount: response.totalCount ?? 0,
     openCount: response.openCount ?? 0,
     closedCount: response.closedCount ?? 0,
@@ -282,7 +284,7 @@ export function normalizeTicketReplyPreview(response: TicketEmailReplyPreviewRes
     bodyHtml: response.bodyHtml ?? null,
     templateInfo: response.templateInfo
       ? {
-          templateId: response.templateInfo.templateId != null ? String(response.templateInfo.templateId) : null,
+          templateId: parseNumericContractId(response.templateInfo.templateId),
           templateCode: response.templateInfo.templateCode ?? null,
           templateName: response.templateInfo.templateName ?? null,
         }
@@ -310,6 +312,7 @@ export function normalizeUnifiedTicketEmailDetail(response: UnifiedTicketEmailDe
     mailboxId: response.mailboxId != null ? String(response.mailboxId) : null,
     mailboxName: response.mailboxName ?? null,
     mailboxAddress: response.mailboxAddress ?? null,
+    sourceEventId: parseNumericContractId(response.replyContext?.sourceEventId),
     direction: response.direction,
     subject: response.subject ?? null,
     from: response.fromAddress ?? null,
@@ -338,14 +341,14 @@ export function normalizeUnifiedTicketEmailDetail(response: UnifiedTicketEmailDe
     threadMessageId: response.threadMessageId ?? null,
     templateInfo: response.templateInfo
       ? {
-          templateId: response.templateInfo.templateId != null ? String(response.templateInfo.templateId) : null,
+          templateId: parseNumericContractId(response.templateInfo.templateId),
           templateCode: response.templateInfo.templateCode ?? null,
           templateName: response.templateInfo.templateName ?? null,
         }
       : null,
     replyContext: response.replyContext
       ? {
-          sourceEventId: response.replyContext.sourceEventId != null ? String(response.replyContext.sourceEventId) : null,
+          sourceEventId: parseNumericContractId(response.replyContext.sourceEventId),
           sourceEmailDocumentId: response.replyContext.sourceEmailDocumentId != null ? String(response.replyContext.sourceEmailDocumentId) : null,
           resolvedReplyTarget: response.replyContext.resolvedReplyTarget ?? null,
         }
@@ -368,7 +371,7 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
   const processingStatus = message.processingStatus ?? (direction === 'INBOUND' ? (status as TicketEmailMessage['processingStatus']) : null)
   const dispatchStatus = message.dispatchStatus ?? (direction === 'OUTBOUND' ? (status as TicketEmailMessage['dispatchStatus']) : null)
   const attachments = (message.attachments ?? []).map(normalizeAttachment)
-  const sourceEventId = message.sourceEventId ?? message.sourceEmailEventId ?? message.ingressEventId ?? (direction === 'INBOUND' ? String(message.id) : null)
+  const sourceEventId = parseNumericContractId(message.sourceEventId ?? message.sourceEmailEventId ?? message.ingressEventId ?? message.replyContext?.sourceEventId)
   const emailDocumentId = message.emailDocumentId ?? message.emailId ?? message.documentId ?? null
 
   return {
@@ -381,7 +384,7 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
     mailboxId: message.mailboxId ?? null,
     mailboxName: message.mailboxName ?? null,
     mailboxAddress: message.mailboxAddress ?? null,
-    sourceEventId: sourceEventId != null ? String(sourceEventId) : null,
+    sourceEventId,
     direction,
     subject,
     from,
@@ -411,14 +414,14 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
     threadMessageId: message.threadMessageId ?? null,
     templateInfo: message.templateInfo
       ? {
-          templateId: message.templateInfo.templateId != null ? String(message.templateInfo.templateId) : null,
+          templateId: parseNumericContractId(message.templateInfo.templateId),
           templateCode: message.templateInfo.templateCode ?? null,
           templateName: message.templateInfo.templateName ?? null,
         }
       : null,
     replyContext: message.replyContext
       ? {
-          sourceEventId: message.replyContext.sourceEventId != null ? String(message.replyContext.sourceEventId) : null,
+          sourceEventId: parseNumericContractId(message.replyContext.sourceEventId),
           sourceEmailDocumentId: message.replyContext.sourceEmailDocumentId != null ? String(message.replyContext.sourceEmailDocumentId) : null,
           resolvedReplyTarget: message.replyContext.resolvedReplyTarget ?? null,
         }

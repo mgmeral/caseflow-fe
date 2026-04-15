@@ -32,18 +32,18 @@ export function StatCard({ label, value, icon: Icon, trend, color = 'indigo', ac
       onClick={onClick}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick() } } : undefined}
       className={clsx(
-        'bg-white rounded-lg border shadow-soft px-3.5 py-2.5 flex items-center gap-3 transition-all',
-        onClick && 'cursor-pointer hover:shadow-md',
+        'premium-stat-card flex items-center gap-3 px-3.5 py-3 transition-all duration-200',
+        onClick && 'cursor-pointer hover:-translate-y-[2px] hover:shadow-elevated',
         active ? `border-transparent ring-2 ${colors.ring}` : 'border-gray-200/60',
       )}
     >
-      <div className={clsx('p-2 rounded-lg flex-shrink-0', colors.bg)}>
+      <div className={clsx('flex-shrink-0 rounded-xl p-2 shadow-soft ring-1 ring-white/70', colors.bg)}>
         <Icon className={clsx('w-4 h-4', colors.icon)} />
       </div>
 
       <div className="flex-1 min-w-0">
-        <div className="text-xs text-gray-500 truncate">{label}</div>
-        <div className="text-lg font-bold text-gray-900 leading-tight">{value}</div>
+        <div className="premium-stat-kicker">{label}</div>
+        <div className="premium-stat-value">{value}</div>
       </div>
 
       {trend && (

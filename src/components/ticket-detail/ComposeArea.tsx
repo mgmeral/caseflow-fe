@@ -96,7 +96,7 @@ export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
   }
 
   return (
-    <div className="border-t border-amber-200 bg-amber-50/40 px-4 py-2.5 shrink-0 relative">
+    <div className="ticket-detail-composer">
       {/* Mention suggestions — anchored above composer */}
       {mentionQuery !== null && (
         <MentionSuggestions
@@ -115,7 +115,7 @@ export function ComposeArea({ onSendNote, isSendingNote }: ComposeAreaProps) {
           onKeyDown={handleKeyDown}
           placeholder="Add an internal note… Type @ to mention someone"
           rows={2}
-          className="flex-1 text-sm resize-none border border-amber-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 bg-white leading-snug"
+          className="ticket-detail-composer-input"
         />
         <button
           type="button"

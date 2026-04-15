@@ -8,6 +8,7 @@ interface FilterStore {
   page: number
   pageSize: number
   setFilters: (filters: Partial<TicketFilters>) => void
+  replaceFilters: (filters: TicketFilters) => void
   setSort: (sort: SortState) => void
   setPage: (page: number) => void
   setPageSize: (size: number) => void
@@ -20,6 +21,8 @@ const defaultFilters: TicketFilters = {
   priorities: [],
   assignedUserIds: [],
   groupIds: [],
+  tagIds: [],
+  tagCodes: [],
   dateFrom: null,
   dateTo: null,
   unassignedOnly: false,
@@ -36,6 +39,8 @@ export const useFilterStore = create<FilterStore>()((set) => ({
 
   setFilters: (partial) =>
     set((s) => ({ filters: { ...s.filters, ...partial }, page: 1 })),
+
+  replaceFilters: (filters) => set({ filters, page: 1 }),
 
   setSort: (sort) => set({ sort, page: 1 }),
 

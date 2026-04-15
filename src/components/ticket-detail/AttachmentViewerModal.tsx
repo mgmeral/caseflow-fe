@@ -361,11 +361,11 @@ export function AttachmentViewerModal({
         )
       ) : (
         <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
-          <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200">
-            <div className="border-b border-gray-200 bg-gray-50 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <div className="surface-section min-w-0 overflow-hidden rounded-xl p-0">
+            <div className="table-toolbar px-4 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500">
               Attachments
             </div>
-            <div className="max-h-48 overflow-y-auto divide-y divide-gray-100 sm:max-h-[26rem]">
+            <div className="max-h-48 overflow-y-auto divide-y divide-white/60 sm:max-h-[26rem]">
               {attachments.map((attachment) => {
                 const key = attachment.id ?? attachment.fileName
                 const isSelected = key === (selectedAttachment?.id ?? selectedAttachment?.fileName)
@@ -374,7 +374,7 @@ export function AttachmentViewerModal({
                     key={key}
                     type="button"
                     onClick={() => setSelectedAttachmentId(key)}
-                    className={`w-full px-4 py-3 text-left transition-colors ${isSelected ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+                    className={`w-full px-4 py-3 text-left transition-colors ${isSelected ? 'bg-[#eef5ff]' : 'hover:bg-white/70'}`}
                   >
                     <div className="flex items-start gap-2">
                       <Paperclip size={14} className="mt-0.5 shrink-0 text-gray-400" />
@@ -390,7 +390,7 @@ export function AttachmentViewerModal({
             </div>
           </div>
 
-          <div className="min-w-0 overflow-hidden rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+          <div className="surface-section min-w-0 overflow-hidden rounded-xl p-3 sm:p-4">
             {selectedAttachment ? (
               <div className="min-w-0 space-y-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

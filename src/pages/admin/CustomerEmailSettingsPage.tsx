@@ -17,6 +17,8 @@ import { Button } from '@/components/shared/Button'
 import { Modal } from '@/components/shared/Modal'
 import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { Badge } from '@/components/shared/Badge'
+import { FieldHint, HelpDrawer, PageIntro, SectionHelp, WarningCallout } from '@/components/shared/help'
+import { customerEmailSettingsHelp } from '@/help/customer-email-settings.help'
 import {
   ShieldOff, Mail, Save, Plus, Pencil, ToggleLeft, ToggleRight, Trash2, Search,
 } from 'lucide-react'
@@ -54,6 +56,7 @@ export function CustomerEmailSettingsPage() {
   })
   const [savingRule, setSavingRule] = useState(false)
   const [deletingRuleId, setDeletingRuleId] = useState<string | null>(null)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
 
   if (!canManageEmailConfig) {
     return (
@@ -202,41 +205,51 @@ export function CustomerEmailSettingsPage() {
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <h1 className="text-xl font-bold text-gray-900">Customer Email Settings</h1>
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
+        <div>
+          <h1 className="admin-page-title">Customer Email Settings</h1>
+          <p className="admin-page-subtitle">Configure inbound email behavior and sender-based routing per customer.</p>
+        </div>
+        <Button variant="secondary" size="sm" onClick={() => setIsHelpOpen(true)}>
+          Help
+        </Button>
+      </div>
+
+      <PageIntro summary={customerEmailSettingsHelp.summary} />
 
       <div className="grid grid-cols-12 gap-6">
         {/* Customer list */}
         <div className="col-span-4">
-          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-            <div className="p-3 border-b border-gray-100">
+          <div className="admin-panel overflow-hidden">
+            <div className="border-b border-white/10 p-3">
               <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search customers…"
                   value={customerSearch}
                   onChange={(e) => setCustomerSearch(e.target.value)}
-                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="ui-input ui-input-with-icon pr-3"
                 />
               </div>
             </div>
-            <div className="max-h-[60vh] overflow-y-auto divide-y divide-gray-100">
+            <div className="max-h-[60vh] overflow-y-auto divide-y divide-white/10">
               {loadingCustomers ? (
                 <div className="p-4"><SkeletonRow colCount={1} /></div>
               ) : filteredCustomers.length === 0 ? (
-                <div className="p-6 text-center text-xs text-gray-400">No customers found</div>
+                <div className="p-6 text-center text-xs text-blue-100/48">No customers found</div>
               ) : (
                 filteredCustomers.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => handleSelectCustomer(c.id)}
-                    className={`w-full text-left px-4 py-3 text-sm hover:bg-gray-50 transition-colors ${
-                      selectedCustomerId === c.id ? 'bg-indigo-50 border-l-2 border-indigo-500' : ''
+                    className={`w-full text-left px-4 py-3 text-sm transition-colors hover:bg-white/[0.06] ${
+                      selectedCustomerId === c.id ? 'border-l-2 border-[#7eb5ff] bg-white/[0.08]' : ''
                     }`}
                   >
-                    <div className="font-medium text-gray-800">{c.name}</div>
-                    {c.code && <div className="text-xs text-gray-400">{c.code}</div>}
+                    <div className="font-medium text-white">{c.name}</div>
+                    {c.code && <div className="text-xs text-blue-100/48">{c.code}</div>}
                   </button>
                 ))
               )}
@@ -253,25 +266,28 @@ export function CustomerEmailSettingsPage() {
               description="Choose a customer from the list to view or edit their email settings."
             />
           ) : loadingSettings ? (
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="admin-panel p-6">
               <SkeletonRow colCount={3} />
             </div>
           ) : (
             <>
               {/* Email settings card */}
-              <div className="bg-white rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-800">Email Settings</span>
+              <div className="admin-panel overflow-hidden">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+                  <span className="text-sm font-semibold text-blue-50">Email Settings</span>
                   {settingsForm === null && (
                     <Button variant="secondary" size="sm" leftIcon={<Pencil size={12} />} onClick={beginEditSettings}>
                       Edit
                     </Button>
                   )}
                 </div>
+                <div className="px-5 pt-4">
+                  <SectionHelp title={customerEmailSettingsHelp.sections.settings.title} description={customerEmailSettingsHelp.sections.settings.description} />
+                </div>
 
                 {settingsForm === null ? (
                   /* Read-only view */
-                  <div className="px-5 py-4 space-y-3 text-sm">
+                  <div className="space-y-3 px-5 py-4 text-sm">
                     <Row label="Enabled" value={settings?.isEnabled ? 'Yes' : 'No'} />
                     <Row label="Unknown Sender Policy" value={settings?.unknownSenderPolicy ?? '—'} />
                     <Row label="Allow Subdomains" value={settings?.allowSubdomains ? 'Yes' : 'No'} />
@@ -285,6 +301,7 @@ export function CustomerEmailSettingsPage() {
                       <input type="checkbox" checked={settingsForm.isEnabled} onChange={(e) => setSettingsForm((f) => f && ({ ...f, isEnabled: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
                       Email Integration Enabled
                     </label>
+                    <FieldHint className="mt-0" text={customerEmailSettingsHelp.fieldHints.isEnabled} />
 
                     <div>
                       <label className="block text-xs font-medium text-gray-600 mb-1">Unknown Sender Policy</label>
@@ -297,12 +314,14 @@ export function CustomerEmailSettingsPage() {
                           <option key={p} value={p}>{p.replace(/_/g, ' ')}</option>
                         ))}
                       </select>
+                      <FieldHint text={customerEmailSettingsHelp.fieldHints.unknownSenderPolicy} />
                     </div>
 
                     <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                       <input type="checkbox" checked={settingsForm.allowSubdomains} onChange={(e) => setSettingsForm((f) => f && ({ ...f, allowSubdomains: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
                       Allow Subdomains
                     </label>
+                    <FieldHint className="mt-0" text={customerEmailSettingsHelp.fieldHints.allowSubdomains} />
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -313,6 +332,7 @@ export function CustomerEmailSettingsPage() {
                           placeholder="Optional"
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                         />
+                        <FieldHint text={customerEmailSettingsHelp.fieldHints.defaultGroupId} />
                       </div>
                       <div>
                         <label className="block text-xs font-medium text-gray-600 mb-1">Default Priority</label>
@@ -322,6 +342,7 @@ export function CustomerEmailSettingsPage() {
                           placeholder="Optional"
                           className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                         />
+                        <FieldHint text={customerEmailSettingsHelp.fieldHints.defaultPriority} />
                       </div>
                     </div>
 
@@ -336,12 +357,19 @@ export function CustomerEmailSettingsPage() {
               </div>
 
               {/* Routing rules */}
-              <div className="bg-white rounded-xl border border-gray-200">
-                <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-                  <span className="text-sm font-semibold text-gray-800">Routing Rules</span>
+              <div className="admin-table-shell overflow-hidden">
+                <div className="flex items-center justify-between border-b border-white/10 px-5 py-3">
+                  <span className="text-sm font-semibold text-blue-50">Routing Rules</span>
                   <Button variant="secondary" size="sm" leftIcon={<Plus size={12} />} onClick={openCreateRule}>
                     Add Rule
                   </Button>
+                </div>
+
+                <div className="px-5 pt-4 space-y-4">
+                  <SectionHelp title={customerEmailSettingsHelp.sections.rules.title} description={customerEmailSettingsHelp.sections.rules.description} />
+                  <WarningCallout title={customerEmailSettingsHelp.warnings[0].title}>
+                    {customerEmailSettingsHelp.warnings[0].description.defaultMessage}
+                  </WarningCallout>
                 </div>
 
                 {loadingRules ? (
@@ -357,26 +385,26 @@ export function CustomerEmailSettingsPage() {
                 ) : (
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="bg-gray-50 border-b border-gray-200">
-                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Match Type</th>
-                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Match Value</th>
-                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Mailbox</th>
-                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Priority</th>
-                        <th className="px-4 py-2 text-left font-semibold text-gray-600 text-xs">Status</th>
-                        <th className="px-4 py-2 text-right font-semibold text-gray-600 text-xs">Actions</th>
+                      <tr className="admin-table-head">
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-blue-100/72">Match Type</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-blue-100/72">Match Value</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-blue-100/72">Mailbox</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-blue-100/72">Priority</th>
+                        <th className="px-4 py-2 text-left text-xs font-semibold text-blue-100/72">Status</th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-blue-100/72">Actions</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="admin-table-striped divide-y divide-white/10">
                       {rules.map((rule) => (
-                        <tr key={rule.id} className="hover:bg-gray-50">
+                        <tr key={rule.id} className="transition-colors hover:bg-white/[0.08]">
                           <td className="px-4 py-2">
                             <Badge variant={rule.senderMatchType === 'EXACT_EMAIL' ? 'info' : 'default'} size="sm">
                               {rule.senderMatchType === 'EXACT_EMAIL' ? 'Exact' : 'Domain'}
                             </Badge>
                           </td>
-                          <td className="px-4 py-2 font-mono text-xs text-gray-700">{rule.senderMatchValue}</td>
-                          <td className="px-4 py-2 text-gray-600 text-xs">{rule.recipientMailboxName ?? '—'}</td>
-                          <td className="px-4 py-2 text-gray-600 text-xs">{rule.priority}</td>
+                          <td className="px-4 py-2 font-mono text-xs text-blue-50/90">{rule.senderMatchValue}</td>
+                          <td className="px-4 py-2 text-xs text-blue-100/72">{rule.recipientMailboxName ?? '—'}</td>
+                          <td className="px-4 py-2 text-xs text-blue-100/72">{rule.priority}</td>
                           <td className="px-4 py-2">
                             {rule.isActive ? (
                               <Badge variant="success" size="sm">Active</Badge>
@@ -386,13 +414,13 @@ export function CustomerEmailSettingsPage() {
                           </td>
                           <td className="px-4 py-2 text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <button onClick={() => openEditRule(rule)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-indigo-600" title="Edit">
+                              <button onClick={() => openEditRule(rule)} className="rounded p-1 text-blue-100/52 hover:bg-white/[0.08] hover:text-white" title="Edit">
                                 <Pencil size={13} />
                               </button>
-                              <button onClick={() => handleToggleRule(rule)} className="p-1 rounded hover:bg-gray-100 text-gray-500" title={rule.isActive ? 'Deactivate' : 'Activate'}>
+                              <button onClick={() => handleToggleRule(rule)} className="rounded p-1 text-blue-100/52 hover:bg-white/[0.08]" title={rule.isActive ? 'Deactivate' : 'Activate'}>
                                 {rule.isActive ? <ToggleRight size={13} className="text-green-500" /> : <ToggleLeft size={13} />}
                               </button>
-                              <button onClick={() => setDeletingRuleId(rule.id)} className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-red-600" title="Delete">
+                              <button onClick={() => setDeletingRuleId(rule.id)} className="rounded p-1 text-blue-100/52 hover:bg-red-500/12 hover:text-red-200" title="Delete">
                                 <Trash2 size={13} />
                               </button>
                             </div>
@@ -413,6 +441,7 @@ export function CustomerEmailSettingsPage() {
         isOpen={ruleModal !== null}
         onClose={() => setRuleModal(null)}
         title={ruleModal === 'create' ? 'New Routing Rule' : `Edit Rule — ${editingRule?.senderMatchValue ?? ''}`}
+        variant="admin"
       >
         <div className="space-y-4 p-1">
           <div>
@@ -425,6 +454,7 @@ export function CustomerEmailSettingsPage() {
               <option value="EXACT_EMAIL">Exact Email</option>
               <option value="DOMAIN_SUFFIX">Domain Suffix</option>
             </select>
+            <FieldHint text={customerEmailSettingsHelp.fieldHints.senderMatchType} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Sender Match Value *</label>
@@ -434,6 +464,7 @@ export function CustomerEmailSettingsPage() {
               placeholder={ruleForm.senderMatchType === 'EXACT_EMAIL' ? 'user@example.com' : '@example.com'}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
+            <FieldHint text={customerEmailSettingsHelp.fieldHints.senderMatchValue} />
             <p className="text-xs text-gray-400 mt-1">
               {ruleForm.senderMatchType === 'EXACT_EMAIL'
                 ? 'Full email address (e.g. alerts@bank.com). Will be lowercased.'
@@ -452,6 +483,7 @@ export function CustomerEmailSettingsPage() {
                 <option key={m.id} value={m.id}>{m.name} ({m.address})</option>
               ))}
             </select>
+            <FieldHint text={customerEmailSettingsHelp.fieldHints.recipientMailboxId} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
@@ -462,6 +494,7 @@ export function CustomerEmailSettingsPage() {
               onChange={(e) => setRuleForm((f) => ({ ...f, priority: parseInt(e.target.value, 10) || 0 }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
+            <FieldHint text={customerEmailSettingsHelp.fieldHints.priority} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
@@ -472,11 +505,16 @@ export function CustomerEmailSettingsPage() {
               placeholder="Optional notes…"
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
+            <FieldHint text={customerEmailSettingsHelp.fieldHints.notes} />
           </div>
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
             <input type="checkbox" checked={ruleForm.isActive ?? true} onChange={(e) => setRuleForm((f) => ({ ...f, isActive: e.target.checked }))} className="rounded border-gray-300 text-indigo-600" />
             Active
           </label>
+          <FieldHint className="mt-0" text={customerEmailSettingsHelp.fieldHints.ruleActive} />
+          <WarningCallout title={customerEmailSettingsHelp.warnings[1].title}>
+            {customerEmailSettingsHelp.warnings[1].description.defaultMessage}
+          </WarningCallout>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" size="sm" onClick={() => setRuleModal(null)}>Cancel</Button>
             <Button variant="primary" size="sm" onClick={handleSaveRule} isLoading={savingRule} disabled={!isValidMatchValue}>
@@ -495,7 +533,10 @@ export function CustomerEmailSettingsPage() {
         confirmLabel="Delete"
         isDestructive
         onConfirm={() => deletingRuleId && handleDeleteRule(deletingRuleId)}
+        variant="admin"
       />
+
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={customerEmailSettingsHelp} />
     </div>
   )
 }
@@ -503,8 +544,8 @@ export function CustomerEmailSettingsPage() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-gray-500">{label}</span>
-      <span className="text-gray-800 font-medium">{value}</span>
+      <span className="text-blue-100/58">{label}</span>
+      <span className="font-medium text-white">{value}</span>
     </div>
   )
 }

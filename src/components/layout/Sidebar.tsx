@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   Ticket,
@@ -28,6 +28,7 @@ interface NavItem {
 export function Sidebar() {
   const { currentUser, logout } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar } = useUIStore()
+  const navigate = useNavigate()
   const {
     canViewAdminPool,
     canViewReports,
@@ -58,12 +59,13 @@ export function Sidebar() {
   return (
     <aside
       className={clsx(
-        'flex flex-col h-full bg-[#0c1d3a] text-slate-100 transition-all duration-200 ease-in-out flex-shrink-0',
+        'relative flex h-full flex-col border-r border-white/10 bg-[linear-gradient(180deg,#0b1730_0%,#10213f_48%,#0d1c36_100%)] text-slate-100 shadow-[24px_0_48px_-36px_rgba(11,19,36,0.6)] transition-all duration-200 ease-in-out flex-shrink-0',
         sidebarCollapsed ? 'w-16' : 'w-60',
       )}
     >
-      {/* Logo / Brand */}
-      <div className="flex items-center justify-between h-24 px-3 border-b border-white/[0.06] bg-[#0f2344]">
+      <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,rgba(31,111,255,0.22),transparent_58%)] opacity-90 pointer-events-none" />
+
+      <div className="relative flex h-24 items-center justify-between border-b border-white/[0.06] px-3">
         <NavLink
           to="/dashboard"
           aria-label="Go to dashboard"
@@ -73,50 +75,67 @@ export function Sidebar() {
           )}
         >
           {sidebarCollapsed ? (
-            <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.125rem] h-[2.125rem] object-contain" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(180deg,#2f7bff_0%,#1258e3_100%)] shadow-[0_14px_28px_-18px_rgba(31,111,255,0.9)] ring-1 ring-white/20">
+              <img src="/favicon-192.png" alt="CaseFlow" className="h-6 w-6 object-contain" />
+            </div>
           ) : (
-            <div className="flex items-center gap-2.5">
-              <img src="/favicon-192.png" alt="CaseFlow" className="w-[2.35rem] h-[2.35rem] object-contain" />
-              <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-white">Case</span>
-              <span className="text-[1.53rem] leading-none font-semibold tracking-tight text-[#f0b323] -ml-1">Flow</span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-[1.1rem] bg-[linear-gradient(180deg,#2f7bff_0%,#1258e3_100%)] shadow-[0_20px_34px_-20px_rgba(31,111,255,0.92)] ring-1 ring-white/20">
+                <img src="/favicon-192.png" alt="CaseFlow" className="h-6 w-6 object-contain" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[1.05rem] font-semibold leading-none tracking-[-0.04em] text-white">CaseFlow</div>
+                <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-blue-200/70">Operations Desk</div>
+              </div>
             </div>
           )}
         </NavLink>
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-md hover:bg-blue-800/70 transition-colors ml-auto text-blue-100"
+          className="ml-auto rounded-xl border border-white/10 bg-white/[0.04] p-1.5 text-blue-100 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
           aria-label="Toggle sidebar"
         >
           {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
         </button>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 py-4 overflow-y-auto space-y-1 px-2">
+      <nav className="relative flex-1 space-y-1.5 overflow-y-auto px-2.5 py-4">
         {mainNav.map((item) => (
           <SidebarLink key={item.to} item={item} collapsed={sidebarCollapsed} />
         ))}
       </nav>
 
-      {/* User section */}
-      <div className="border-t border-white/[0.06] p-3 bg-[#091b37]">
+      <div className="relative border-t border-white/[0.06] bg-[linear-gradient(180deg,rgba(255,255,255,0.03)_0%,rgba(255,255,255,0.01)_100%)] p-3">
         {currentUser && (
           <div
+            role="button"
+            tabIndex={0}
+            onClick={() => navigate('/profile')}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                navigate('/profile')
+              }
+            }}
             className={clsx(
-              'flex items-center gap-3',
+              'rounded-2xl border border-white/10 bg-white/[0.04] px-2.5 py-2.5 flex items-center gap-3 transition-all duration-200 hover:border-white/18 hover:bg-white/[0.07] focus:outline-none focus:ring-2 focus:ring-[#5f98ff]/35',
               sidebarCollapsed && 'justify-center',
             )}
+            aria-label="Open profile"
           >
             <Avatar name={currentUser.fullName} color={currentUser.avatarColor} size="sm" />
             {!sidebarCollapsed && (
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-white truncate">{currentUser.fullName}</div>
-                <div className="text-xs text-blue-200/80 truncate capitalize">{currentUser.roleName ?? currentUser.role}</div>
+                <div className="text-[11px] text-blue-200/80 truncate uppercase tracking-[0.08em]">{currentUser.roleName ?? currentUser.role}</div>
               </div>
             )}
             <button
-              onClick={logout}
-              className="p-1.5 rounded-md hover:bg-blue-800/70 transition-colors text-blue-200/70 hover:text-white flex-shrink-0"
+              onClick={(event) => {
+                event.stopPropagation()
+                logout()
+              }}
+              className="flex-shrink-0 rounded-xl border border-white/10 bg-white/[0.04] p-1.5 text-blue-200/70 transition-all duration-200 hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
               title="Logout"
               aria-label="Logout"
             >
@@ -136,15 +155,15 @@ function SidebarLink({ item, collapsed }: { item: NavItem; collapsed: boolean })
       title={collapsed ? item.label : undefined}
       className={({ isActive }) =>
         clsx(
-          'flex items-center gap-3 px-2.5 py-2 rounded-lg text-sm transition-colors w-full',
+          'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium tracking-[-0.01em] transition-all duration-200',
           isActive
-            ? 'bg-[#1a5dc4] text-white shadow-sm'
-            : 'text-blue-100/80 hover:bg-white/[0.07] hover:text-white',
+            ? 'bg-[linear-gradient(90deg,rgba(47,123,255,0.22)_0%,rgba(18,88,227,0.2)_100%)] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_24px_-18px_rgba(31,111,255,0.9)] ring-1 ring-[#5f98ff]/35'
+            : 'text-blue-100/76 hover:bg-white/[0.07] hover:text-white',
           collapsed && 'justify-center',
         )
       }
     >
-      <span className="flex-shrink-0">{item.icon}</span>
+      <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-white/[0.04] text-current transition-all duration-200 group-hover:bg-white/[0.08]">{item.icon}</span>
       {!collapsed && <span className="truncate">{item.label}</span>}
     </NavLink>
   )

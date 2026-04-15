@@ -58,6 +58,46 @@ export interface AuthMeResponse {
   groupIds: (string | number)[]
 }
 
+export interface UserProfileResponse {
+  id: string | number
+  username?: string | null
+  email?: string | null
+  displayName?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  fullName?: string | null
+  avatarUrl?: string | null
+  locale?: string | null
+  isActive?: boolean | null
+  roleId?: string | number | null
+  roleCode?: string | null
+  roleName?: string | null
+  permissionCodes?: string[] | null
+  groupIds?: Array<string | number> | null
+  groupNames?: string[] | null
+  roles?: Array<{
+    id?: string | number | null
+    code?: string | null
+    name?: string | null
+  } | string> | null
+  groups?: Array<{
+    id?: string | number | null
+    name?: string | null
+  } | string> | null
+}
+
+export interface UpdateUserProfileRequest {
+  displayName?: string
+  firstName?: string
+  lastName?: string
+  locale?: 'tr' | 'en'
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
 // ---------------------------------------------------------------------------
 // Role Management DTOs
 // ---------------------------------------------------------------------------
@@ -325,6 +365,10 @@ export interface TransferResponse {
   transferredBy: string
   transferredAt: string
   reason: string | null
+  fromGroupName?: string | null
+  toGroupName?: string | null
+  transferredByName?: string | null
+  note?: string | null
 }
 
 /**
@@ -337,6 +381,12 @@ export interface TransferListItem {
   fromGroupId: string
   toGroupId: string
   transferredAt: string
+  fromGroupName?: string | null
+  toGroupName?: string | null
+  transferredBy?: string | null
+  transferredByName?: string | null
+  reason?: string | null
+  note?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -568,13 +618,13 @@ export interface TicketEmailAttachmentResponse {
 export type TicketEmailDetailType = 'INBOUND' | 'OUTBOUND'
 
 export interface TicketEmailTemplateInfoResponse {
-  templateId?: string | null
+  templateId?: string | number | null
   templateCode?: string | null
   templateName?: string | null
 }
 
 export interface TicketEmailReplyContextResponse {
-  sourceEventId?: string | null
+  sourceEventId?: string | number | null
   sourceEmailDocumentId?: string | null
   resolvedReplyTarget?: string | null
 }
@@ -610,9 +660,9 @@ export interface UnifiedTicketEmailDetailResponse {
 }
 
 export interface TicketEmailReplyPreviewRequest {
-  sourceEventId: string
-  mailboxId?: string | null
-  templateId?: string | null
+  sourceEventId: number
+  mailboxId?: number | null
+  templateId?: number | null
 }
 
 export interface TicketEmailReplyPreviewPlaceholderDiagnosticResponse {
@@ -782,6 +832,7 @@ export interface CustomerTicketReportResponse {
 export interface AdminCustomerTicketAggregateItemResponse {
   customerId?: string | number | null
   customerName?: string | null
+  customerColorHex?: string | null
   totalCount?: number | null
   openCount?: number | null
   closedCount?: number | null
@@ -795,7 +846,7 @@ export interface SendTicketReplyResponse {
   ticketId: string
   outboundEmailId: string | null
   mailboxId: string | null
-  sourceEventId?: string | null
+  sourceEventId?: number | null
   status: OutboundDispatchStatus
   acceptedAt: string | null
   message: string | null
@@ -814,8 +865,8 @@ export interface ScheduledEmailResponse {
   status: OutboundDispatchStatus | null
   failureReason?: string | null
   failureCategory?: string | null
-  sourceEventId?: string | null
-  templateId?: string | null
+  sourceEventId?: number | null
+  templateId?: number | null
   contentWasEdited?: boolean | null
   sendNotBefore: string
   canceledAt?: string | null
@@ -825,13 +876,13 @@ export interface ScheduledEmailResponse {
 
 export interface ScheduleEmailRequest {
   mailboxId: number
-  toAddress: string
+  toAddress?: string | null
   subject: string
   textBody: string
   htmlBody?: string | null
   sendNotBefore: string
-  sourceEventId?: string | null
-  templateId?: string | null
+  sourceEventId?: number | null
+  templateId?: number | null
   contentWasEdited?: boolean | null
 }
 
@@ -844,6 +895,7 @@ export interface MailTemplateResponse {
   id: string | number
   name?: string | null
   code?: string | null
+  usageType?: string | null
   subjectTemplate?: string | null
   htmlTemplate?: string | null
   plainTextTemplate?: string | null
@@ -858,6 +910,7 @@ export interface MailTemplateResponse {
 export interface MailTemplateRequest {
   name: string
   code: string
+  usageType?: string | null
   subjectTemplate: string
   htmlTemplate: string
   plainTextTemplate: string

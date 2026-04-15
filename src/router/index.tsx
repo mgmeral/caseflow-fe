@@ -9,6 +9,7 @@ import { CustomerListPage } from '@/pages/CustomerListPage'
 import { CustomerDetailPage } from '@/pages/CustomerDetailPage'
 import { AdminPoolPage } from '@/pages/AdminPoolPage'
 import { ReportsPage } from '@/pages/ReportsPage'
+import { ProfilePage } from '@/pages/ProfilePage'
 import { UserManagementPage } from '@/pages/admin/UserManagementPage'
 import { RoleManagementPage } from '@/pages/admin/RoleManagementPage'
 import { GroupManagementPage } from '@/pages/admin/GroupManagementPage'
@@ -72,6 +73,10 @@ export const router = createBrowserRouter([
             ),
           },
           {
+            path: 'profile',
+            element: <ProfilePage />,
+          },
+          {
             path: 'admin',
             element: <ProtectedRoute requiredPermissions={['USER_MANAGE', 'ROLE_MANAGE', 'GROUP_MANAGE', 'ADMIN_CONFIG', 'EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE', 'INTEGRATION_CONFIG_MANAGE']} />,
             children: [
@@ -93,7 +98,11 @@ export const router = createBrowserRouter([
               },
               {
                 path: 'templates',
-                element: <TemplateManagementPage />,
+                element: (
+                  <ProtectedRoute requiredPermissions={['EMAIL_CONFIG_VIEW', 'EMAIL_CONFIG_MANAGE']}>
+                    <TemplateManagementPage />
+                  </ProtectedRoute>
+                ),
               },
               {
                 path: 'tags',

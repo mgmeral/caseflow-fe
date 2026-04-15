@@ -33,6 +33,8 @@ import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import { Button } from '@/components/shared/Button'
 import { Modal } from '@/components/shared/Modal'
 import { Badge } from '@/components/shared/Badge'
+import { FieldHint, HelpDrawer, InlineCallout, PageIntro, SectionHelp, WarningCallout } from '@/components/shared/help'
+import { mailboxesHelp } from '@/help/mailboxes.help'
 import {
   applyAuthTypeSelection,
   applyProviderSelection,
@@ -117,21 +119,6 @@ const PROVIDER_STEPS: Partial<Record<MailProvider, string[]>> = {
   ],
 }
 
-const FIELD_HELPERS = {
-  mailboxName: 'Uygulama içinde görünen isim.',
-  address: 'Dinlenecek gerçek mailbox adresi.',
-  imapUsername: 'Çoğu durumda mailbox adresiyle aynıdır.',
-  imapPassword: 'Gmail için normal şifre değil, App Password kullanın.',
-  smtpUsername: 'Genelde mailbox adresiyle aynıdır.',
-  smtpPassword: 'Boş bırakırsanız mevcut değer korunur.',
-  oauthTenantId: 'Microsoft 365 kuruluş kimliği.',
-  oauthClientId: 'Bağlantı için kullanılan uygulama kimliği.',
-  oauthClientSecret: 'Bağlantı için kullanılan gizli anahtar. Boş bırakırsanız mevcut değer korunur.',
-  imapFolder: 'Genelde INBOX kullanılır.',
-  pollingEnabled: 'Yeni mailboxlar polling kapalı kaydedilir. Bu seçenek yalnızca mailbox daha sonra aktive edildiğinde polling davranışını hazırlar.',
-  initialSyncStrategy: 'İlk kurulumda eski maillerin taranıp taranmayacağını belirler. Güvenli başlangıç için New messages only önerilir.',
-} as const
-
 function getInitialSyncStrategyLabel(value: InitialSyncStrategy | null | undefined): string {
   const normalized = normalizeInitialSyncStrategy(value)
   return INITIAL_SYNC_OPTIONS.find((option) => option.value === normalized)?.label ?? (normalized ?? 'Unknown')
@@ -211,10 +198,6 @@ function FieldError({ message, visible }: { message?: string; visible: boolean }
   return <p className="mt-1 text-xs text-red-600">{message}</p>
 }
 
-function FieldHelper({ text }: { text: string }) {
-  return <p className="mt-1 text-xs leading-5 text-gray-500">{text}</p>
-}
-
 export function MailboxManagementPage() {
   const { canManageEmailConfig } = usePermissions()
   const queryClient = useQueryClient()
@@ -234,6 +217,7 @@ export function MailboxManagementPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [providerHelpOpen, setProviderHelpOpen] = useState(false)
   const [showValidation, setShowValidation] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [testingConnection, setTestingConnection] = useState<{ imap: boolean; smtp: boolean }>({ imap: false, smtp: false })
@@ -498,21 +482,28 @@ Mailbox adresi: ${mailboxAddress}`
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Mailboxes</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{headerCountLabel}</p>
+          <h1 className="admin-page-title">Mailboxes</h1>
+          <p className="admin-page-subtitle">{headerCountLabel}</p>
         </div>
-        <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={openCreate}>
-          New Mailbox
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setIsHelpOpen(true)}>
+            Help
+          </Button>
+          <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={openCreate}>
+            New Mailbox
+          </Button>
+        </div>
       </div>
 
-      <div className="space-y-2">
+      <PageIntro summary={mailboxesHelp.summary} />
+
+      <div className="admin-panel-soft space-y-3 px-4 py-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="Filter current page..."
@@ -521,7 +512,7 @@ Mailbox adresi: ${mailboxAddress}`
                 setSearch(event.target.value)
                 setFilters((current) => ({ ...current, page: 0 }))
               }}
-              className="w-64 pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="ui-input ui-input-with-icon w-64 pr-3"
             />
           </div>
           <select
@@ -531,36 +522,36 @@ Mailbox adresi: ${mailboxAddress}`
               active: event.target.value === '' ? undefined : event.target.value === 'true',
               page: 0,
             }))}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="ui-select"
           >
             <option value="">All Status</option>
             <option value="true">Active</option>
             <option value="false">Inactive</option>
           </select>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        <div className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-blue-50/84">
           Status filtering is backed by the backend. Polling state indicators below are informational only, and the quick filter applies to the currently loaded page.
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="admin-table-shell overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Name</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Address</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">IMAP</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">SMTP</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Polling</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Status</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Inbound</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Outbound</th>
-                <th className="px-4 py-3 text-left font-semibold text-gray-600">Diagnostics</th>
-                <th className="px-4 py-3 text-right font-semibold text-gray-600">Actions</th>
+              <tr className="admin-table-head">
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Name</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Address</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">IMAP</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">SMTP</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Polling</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Status</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Inbound</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Outbound</th>
+                <th className="px-4 py-3 text-left font-semibold text-blue-100/72">Diagnostics</th>
+                <th className="px-4 py-3 text-right font-semibold text-blue-100/72">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100">
+            <tbody className="admin-table-striped divide-y divide-white/10">
               {isLoading ? (
                 <>
                   <SkeletonRow colCount={10} />
@@ -587,31 +578,31 @@ Mailbox adresi: ${mailboxAddress}`
                   const oauthBadge = getOauthConfiguredBadge(mailbox)
 
                   return (
-                    <tr key={mailbox.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={mailbox.id} className="transition-colors hover:bg-white/[0.08]">
                       <td className="px-4 py-3">
-                        <div className="font-medium text-gray-900">{mailbox.name}</div>
-                        {mailbox.displayName && <div className="text-xs text-gray-400">{mailbox.displayName}</div>}
+                        <div className="font-medium text-white">{mailbox.name}</div>
+                        {mailbox.displayName && <div className="text-xs text-blue-100/52">{mailbox.displayName}</div>}
                         <div className="mt-2 flex flex-wrap gap-1">
                           <Badge variant={getProviderBadgeVariant(mailbox.mailProvider)} size="sm">{getProviderLabel(mailbox.mailProvider)}</Badge>
                           <Badge variant="outline" size="sm">{getAuthTypeLabel(mailbox.authType)}</Badge>
                           {oauthBadge && <Badge variant={oauthBadge.variant} size="sm">{oauthBadge.label}</Badge>}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-gray-600">{mailbox.address}</td>
-                      <td className="px-4 py-3 text-xs text-gray-600">
+                      <td className="px-4 py-3 text-blue-100/72">{mailbox.address}</td>
+                      <td className="px-4 py-3 text-xs text-blue-100/72">
                         <div className="font-mono">{mailbox.imapHost ?? '—'}:{mailbox.imapPort ?? '—'}</div>
                         <div>{mailbox.imapUsername ?? '—'}</div>
-                        <div className="text-gray-400">Folder: {mailbox.imapFolder ?? '—'}</div>
+                        <div className="text-blue-100/48">Folder: {mailbox.imapFolder ?? '—'}</div>
                       </td>
-                      <td className="px-4 py-3 text-xs text-gray-600">
+                      <td className="px-4 py-3 text-xs text-blue-100/72">
                         {mailbox.smtpHost ? (
                           <>
                             <div className="font-mono">{mailbox.smtpHost}:{mailbox.smtpPort ?? '—'}</div>
                             <div>{mailbox.smtpUsername ?? '—'}</div>
-                            {mailbox.smtpStarttls != null && <div className="text-gray-400">STARTTLS: {mailbox.smtpStarttls ? 'On' : 'Off'}</div>}
+                            {mailbox.smtpStarttls != null && <div className="text-blue-100/48">STARTTLS: {mailbox.smtpStarttls ? 'On' : 'Off'}</div>}
                           </>
                         ) : (
-                          <span className="text-gray-400">Default / not mailbox-specific</span>
+                          <span className="text-blue-100/48">Default / not mailbox-specific</span>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -738,6 +729,7 @@ Mailbox adresi: ${mailboxAddress}`
         onClose={closeModal}
         title={modalMode === 'create' ? 'New Mailbox' : `Edit - ${editingMailbox?.name ?? ''}`}
         size="xl"
+        variant="admin"
       >
         <div className="space-y-4 p-1">
           <div className="rounded-2xl border border-gray-200 bg-gray-50/80 p-4">
@@ -752,6 +744,11 @@ Mailbox adresi: ${mailboxAddress}`
                 {oauthConfiguredBadge && <Badge variant={oauthConfiguredBadge.variant} size="sm">{oauthConfiguredBadge.label}</Badge>}
               </div>
             </div>
+            <SectionHelp
+              className="mt-4"
+              title={mailboxesHelp.sections.provider.title}
+              description={mailboxesHelp.sections.provider.description}
+            />
             <div className="mt-4 grid gap-3 md:grid-cols-3">
               {PROVIDER_OPTIONS.map((option) => {
                 const selected = form.mailProvider === option.value
@@ -826,7 +823,7 @@ Mailbox adresi: ${mailboxAddress}`
                 onChange={(event) => updateForm((current) => ({ ...current, name: event.target.value }))}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
-              <FieldHelper text={FIELD_HELPERS.mailboxName} />
+              <FieldHint text={mailboxesHelp.fieldHints.name} />
               <FieldError message={validationErrors.name} visible={showValidation} />
             </div>
             <div>
@@ -844,7 +841,7 @@ Mailbox adresi: ${mailboxAddress}`
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 disabled={modalMode === 'edit'}
               />
-              <FieldHelper text={FIELD_HELPERS.address} />
+              <FieldHint text={mailboxesHelp.fieldHints.address} />
               <FieldError message={validationErrors.address} visible={showValidation} />
             </div>
           </div>
@@ -857,6 +854,7 @@ Mailbox adresi: ${mailboxAddress}`
               onChange={(event) => updateForm((current) => ({ ...current, displayName: event.target.value }))}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
+            <FieldHint text={mailboxesHelp.fieldHints.displayName} />
           </div>
 
           <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-5 space-y-5">
@@ -893,7 +891,7 @@ Mailbox adresi: ${mailboxAddress}`
                   onChange={(event) => updateForm((current) => ({ ...current, imapUsername: event.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
-                <FieldHelper text={FIELD_HELPERS.imapUsername} />
+                <FieldHint text={mailboxesHelp.fieldHints.imapUsername} />
                 <FieldError message={validationErrors.imapUsername} visible={showValidation} />
               </div>
 
@@ -908,7 +906,7 @@ Mailbox adresi: ${mailboxAddress}`
                     placeholder={modalMode === 'create' ? 'IMAP password' : SECRET_PLACEHOLDER}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                   />
-                  <FieldHelper text={FIELD_HELPERS.imapPassword} />
+                  <FieldHint text={mailboxesHelp.fieldHints.imapPassword} />
                   <FieldError message={validationErrors.imapPassword} visible={showValidation} />
                 </div>
               ) : (
@@ -922,7 +920,7 @@ Mailbox adresi: ${mailboxAddress}`
                       placeholder="Entra tenant ID"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
-                    <FieldHelper text={FIELD_HELPERS.oauthTenantId} />
+                    <FieldHint text={mailboxesHelp.fieldHints.oauthTenantId} />
                     <FieldError message={validationErrors.oauthTenantId} visible={showValidation} />
                   </div>
                   <div>
@@ -934,7 +932,7 @@ Mailbox adresi: ${mailboxAddress}`
                       placeholder="Application (client) ID"
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
-                    <FieldHelper text={FIELD_HELPERS.oauthClientId} />
+                    <FieldHint text={mailboxesHelp.fieldHints.oauthClientId} />
                     <FieldError message={validationErrors.oauthClientId} visible={showValidation} />
                   </div>
                   <div className="md:col-span-2">
@@ -947,7 +945,7 @@ Mailbox adresi: ${mailboxAddress}`
                       placeholder={modalMode === 'create' ? 'Client secret' : SECRET_PLACEHOLDER}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
-                    <FieldHelper text={FIELD_HELPERS.oauthClientSecret} />
+                    <FieldHint text={mailboxesHelp.fieldHints.oauthClientSecret} />
                     <FieldError message={validationErrors.oauthClientSecret} visible={showValidation} />
                   </div>
                 </>
@@ -963,7 +961,7 @@ Mailbox adresi: ${mailboxAddress}`
                       onChange={(event) => updateForm((current) => ({ ...current, smtpUsername: event.target.value }))}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
-                    <FieldHelper text={FIELD_HELPERS.smtpUsername} />
+                    <FieldHint text={mailboxesHelp.fieldHints.smtpUsername} />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">SMTP Password</label>
@@ -975,7 +973,7 @@ Mailbox adresi: ${mailboxAddress}`
                       placeholder={modalMode === 'create' ? 'SMTP password' : SECRET_PLACEHOLDER}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
-                    <FieldHelper text={FIELD_HELPERS.smtpPassword} />
+                    <FieldHint text={mailboxesHelp.fieldHints.smtpPassword} />
                   </div>
                 </>
               )}
@@ -984,6 +982,7 @@ Mailbox adresi: ${mailboxAddress}`
 
           <div className="border-t border-gray-100 pt-5 space-y-5">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">IMAP Polling</h3>
+            <SectionHelp title={mailboxesHelp.sections.polling.title} description={mailboxesHelp.sections.polling.description} />
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Folder</label>
@@ -993,7 +992,7 @@ Mailbox adresi: ${mailboxAddress}`
                   onChange={(event) => updateForm((current) => ({ ...current, imapFolder: event.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
-                <FieldHelper text={FIELD_HELPERS.imapFolder} />
+                <FieldHint text={mailboxesHelp.fieldHints.imapFolder} />
                 <FieldError message={validationErrors.imapFolder} visible={showValidation} />
               </div>
               <div>
@@ -1007,6 +1006,7 @@ Mailbox adresi: ${mailboxAddress}`
                   onChange={(event) => updateForm((current) => ({ ...current, pollIntervalSeconds: event.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
+                <FieldHint text={mailboxesHelp.fieldHints.pollIntervalSeconds} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Initial Sync</label>
@@ -1020,7 +1020,7 @@ Mailbox adresi: ${mailboxAddress}`
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
                 </select>
-                <FieldHelper text={FIELD_HELPERS.initialSyncStrategy} />
+                <FieldHint text={mailboxesHelp.fieldHints.initialSyncStrategy} />
               </div>
             </div>
 
@@ -1034,7 +1034,7 @@ Mailbox adresi: ${mailboxAddress}`
                 />
                 Arm polling after activation
               </label>
-              <FieldHelper text={FIELD_HELPERS.pollingEnabled} />
+              <FieldHint text={mailboxesHelp.fieldHints.pollingEnabled} />
             </div>
 
             {selectedInitialSyncOption && (
@@ -1043,24 +1043,18 @@ Mailbox adresi: ${mailboxAddress}`
               </div>
             )}
             {isFullScanStrategy(form.initialSyncStrategy) && (
-              <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-3 text-sm text-red-900">
-                <div className="flex items-start gap-2 font-medium">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-                  <span>Scan from start can process old inbox history.</span>
-                </div>
-                <div className="mt-2 text-xs leading-5">
-                  This may process old inbox messages, ingest unrelated emails, and create a large backlog before the mailbox reaches steady-state polling.
-                </div>
-              </div>
+              <WarningCallout title={mailboxesHelp.warnings[1].title}>
+                {mailboxesHelp.warnings[1].description.defaultMessage}
+              </WarningCallout>
             )}
             {!isFullScanStrategy(form.initialSyncStrategy) && isHistoricalSyncStrategy(form.initialSyncStrategy) && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <InlineCallout tone="warning" title="Historical sync still scans old mail">
                 Recent-day scans are safer than a full scan, but they still process historical inbox messages within the selected lookback window.
-              </div>
+              </InlineCallout>
             )}
-            <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+            <InlineCallout title={mailboxesHelp.sections.testing.title}>
               Saving stores mailbox configuration only. New mailboxes are saved inactive and polling off by default. Activation remains a separate operator action, and polling only starts if this mailbox is later activated with polling armed. IMAP and SMTP tests are separate checks and IMAP success alone does not confirm outbound send health.
-            </div>
+            </InlineCallout>
           </div>
 
           {editingMailbox && (
@@ -1086,6 +1080,7 @@ Mailbox adresi: ${mailboxAddress}`
 
             {advancedOpen && (
               <div className="rounded-2xl border border-gray-200 bg-white p-4 space-y-4">
+                <SectionHelp title={mailboxesHelp.sections.advanced.title} description={mailboxesHelp.sections.advanced.description} />
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1">IMAP Host *</label>
@@ -1107,6 +1102,7 @@ Mailbox adresi: ${mailboxAddress}`
                       onChange={(event) => updateForm((current) => ({ ...current, imapPort: event.target.value }))}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
+                    <FieldHint text={mailboxesHelp.fieldHints.imapPort} />
                     <FieldError message={validationErrors.imapPort} visible={showValidation} />
                   </div>
                 </div>
@@ -1152,8 +1148,13 @@ Mailbox adresi: ${mailboxAddress}`
                       onChange={(event) => updateForm((current) => ({ ...current, smtpPort: event.target.value }))}
                       className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
                     />
+                    <FieldHint text={mailboxesHelp.fieldHints.smtpPort} />
                   </div>
                 </div>
+
+                <WarningCallout title={mailboxesHelp.warnings[0].title}>
+                  {mailboxesHelp.warnings[0].description.defaultMessage}
+                </WarningCallout>
 
                 <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                   <input
@@ -1164,6 +1165,7 @@ Mailbox adresi: ${mailboxAddress}`
                   />
                   Require secure SMTP transport
                 </label>
+                <FieldHint className="mt-0" text={mailboxesHelp.fieldHints.smtpSecurity} />
 
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
@@ -1195,9 +1197,9 @@ Mailbox adresi: ${mailboxAddress}`
                   </div>
                 </div>
 
-                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-700">
+                <InlineCallout title={mailboxesHelp.fieldHints.testConnection}>
                   Test Connection buttons use the saved mailbox configuration. Save changes before using them to verify updated advanced settings.
-                </div>
+                </InlineCallout>
               </div>
             )}
           </div>
@@ -1253,7 +1255,7 @@ Mailbox adresi: ${mailboxAddress}`
                 <Button variant="ghost" size="sm" leftIcon={<PlugZap size={14} />} onClick={handleTestImapConnection} isLoading={testingConnection.imap}>
                   Test IMAP Connection
                 </Button>
-                <span className="text-[11px] text-gray-500">Bilgileri girdikten sonra bağlantıyı test edin.</span>
+                <FieldHint className="mt-0 text-[11px] text-right" text={mailboxesHelp.fieldHints.testConnection} />
               </div>
             )}
             {editingMailbox && (
@@ -1269,7 +1271,7 @@ Mailbox adresi: ${mailboxAddress}`
                 >
                   Test SMTP Connection
                 </Button>
-                <span className="text-[11px] text-gray-500">Bilgileri girdikten sonra bağlantıyı test edin.</span>
+                <FieldHint className="mt-0 text-[11px] text-right" text={mailboxesHelp.fieldHints.testConnection} />
               </div>
             )}
             <Button variant="secondary" size="sm" onClick={closeModal}>Cancel</Button>
@@ -1280,11 +1282,14 @@ Mailbox adresi: ${mailboxAddress}`
         </div>
       </Modal>
 
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={mailboxesHelp} />
+
       <Modal
         isOpen={riskConfirmation !== null}
         onClose={() => setRiskConfirmation(null)}
         title={riskConfirmation?.action === 'activate' ? 'Confirm Mailbox Activation' : 'Confirm Historical Mail Scan'}
         size="md"
+        variant="admin"
         footer={(
           <>
             <Button variant="secondary" size="sm" onClick={() => setRiskConfirmation(null)}>

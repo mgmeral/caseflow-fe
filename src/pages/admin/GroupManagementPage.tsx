@@ -161,11 +161,11 @@ export function GroupManagementPage() {
   }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="admin-page-shell">
+      <div className="admin-page-header relative z-10">
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Group Management</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{groups.length} groups</p>
+          <h1 className="admin-page-title">Group Management</h1>
+          <p className="admin-page-subtitle">{groups.length} groups</p>
         </div>
         <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={openCreate}>
           Add Group
@@ -173,7 +173,7 @@ export function GroupManagementPage() {
       </div>
 
       {isLoading ? (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="admin-table-shell relative z-10">
           <table className="w-full">
             <tbody>
               <SkeletonRow colCount={3} />
@@ -189,7 +189,7 @@ export function GroupManagementPage() {
           action={<Button variant="primary" size="sm" onClick={openCreate}>Add Group</Button>}
         />
       ) : (
-        <div className="grid gap-3">
+        <div className="relative z-10 grid gap-3">
           {groups.map((g) => {
             // Use backend-provided memberIds; also show avatars for users we have locally
             const memberUsers = users.filter((u) => g.memberIds.includes(u.id) && u.isActive)
@@ -197,39 +197,39 @@ export function GroupManagementPage() {
             return (
               <div
                 key={g.id}
-                className={`bg-white rounded-xl border p-5 hover:border-indigo-200 transition-colors ${
-                  g.isActive ? 'border-gray-200' : 'border-gray-100 opacity-60'
+                className={`admin-panel-soft p-5 transition-colors ${
+                  g.isActive ? 'border-white/12' : 'border-white/8 opacity-70'
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center flex-wrap gap-2 mb-2">
-                      <h2 className="text-sm font-semibold text-gray-900">{g.name}</h2>
-                      <span className="text-xs bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-full font-medium">
+                      <h2 className="text-sm font-semibold text-white">{g.name}</h2>
+                      <span className="admin-badge">
                         {g.groupTypeName}
                       </span>
                       {!g.isActive && (
-                        <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Inactive</span>
+                        <span className="admin-badge text-amber-100">Inactive</span>
                       )}
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
+                      <span className="admin-badge">
                         {g.memberCount} member{g.memberCount !== 1 ? 's' : ''}
                       </span>
                     </div>
                     {g.description && (
-                      <p className="text-xs text-gray-500 mb-2">{g.description}</p>
+                      <p className="mb-2 text-xs text-blue-100/72">{g.description}</p>
                     )}
                     {g.memberCount === 0 ? (
-                      <p className="text-xs text-gray-400 italic">No members — assign via edit</p>
+                      <p className="text-xs italic text-blue-100/58">No members — assign via edit</p>
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {memberUsers.map((u) => (
-                          <div key={u.id} className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-2.5 py-1">
+                          <div key={u.id} className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.08] px-2.5 py-1">
                             <Avatar name={u.fullName} color={u.avatarColor} size="sm" />
-                            <span className="text-xs text-gray-700 font-medium">{u.fullName}</span>
+                            <span className="text-xs font-medium text-blue-50">{u.fullName}</span>
                           </div>
                         ))}
                         {g.memberCount > memberUsers.length && (
-                          <span className="text-xs text-gray-400 italic self-center">
+                          <span className="self-center text-xs italic text-blue-100/58">
                             +{g.memberCount - memberUsers.length} more
                           </span>
                         )}
@@ -241,7 +241,7 @@ export function GroupManagementPage() {
                     <button
                       type="button"
                       onClick={() => openEdit(g)}
-                      className="p-1.5 rounded-md text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      className="rounded-md p-1.5 text-blue-100/58 transition-colors hover:bg-white/[0.08] hover:text-white"
                       title="Edit group"
                     >
                       <Pencil size={14} />
@@ -250,7 +250,7 @@ export function GroupManagementPage() {
                       <button
                         type="button"
                         onClick={() => setDeletingId(g.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                        className="rounded-md p-1.5 text-blue-100/58 transition-colors hover:bg-amber-500/12 hover:text-amber-200"
                         title="Deactivate group"
                       >
                         <ToggleLeft size={14} />
@@ -259,7 +259,7 @@ export function GroupManagementPage() {
                       <button
                         type="button"
                         onClick={() => handleReactivate(g.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                        className="rounded-md p-1.5 text-blue-100/58 transition-colors hover:bg-emerald-500/12 hover:text-emerald-200"
                         title="Reactivate group"
                       >
                         <ToggleRight size={14} />
@@ -279,6 +279,7 @@ export function GroupManagementPage() {
         onClose={closeModal}
         title={modalMode === 'create' ? 'Create New Group' : 'Edit Group'}
         size="md"
+        variant="admin"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={closeModal}>Cancel</Button>
@@ -380,6 +381,7 @@ export function GroupManagementPage() {
         message="This group will be deactivated. Members keep their group association — reassign open tickets before deactivating."
         confirmLabel="Deactivate"
         isDestructive
+        variant="admin"
       />
 
       {/* New Group Type mini-modal */}
@@ -388,6 +390,7 @@ export function GroupManagementPage() {
         onClose={() => setTypeModalOpen(false)}
         title="New Group Type"
         size="sm"
+        variant="admin"
         footer={
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={() => setTypeModalOpen(false)}>Cancel</Button>

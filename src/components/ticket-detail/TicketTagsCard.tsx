@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Plus, RefreshCw, Tags, X } from 'lucide-react'
 import { ApiError } from '@/services/api.client'
-import { useActiveTags, useAddTicketTag, useRemoveTicketTag, useTicketTags } from '@/hooks/useTags'
+import { useActiveTags, useAddTicketTag, useCreateTag, useRemoveTicketTag, useTicketTags } from '@/hooks/useTags'
 import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/shared/Button'
+import { ColorField, normalizeOptionalHexColor } from '@/components/shared/ColorField'
 
 interface TicketTagsCardProps {
   ticketId: string
@@ -67,9 +68,15 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
   } = useActiveTags()
   const addTagMutation = useAddTicketTag(ticketId)
   const removeTagMutation = useRemoveTicketTag(ticketId)
+  const createTagMutation = useCreateTag()
 
   const [selectedTagId, setSelectedTagId] = useState('')
   const [inlineError, setInlineError] = useState<string | null>(null)
+  const [showCreatePanel, setShowCreatePanel] = useState(false)
+  const [createCode, setCreateCode] = useState('')
+  const [createName, setCreateName] = useState('')
+  const [createColor, setCreateColor] = useState('')
+  const [createActive, setCreateActive] = useState(true)
 
   const assignedTags = useMemo(
     () => assignments.map((assignment) => assignment.tag).filter((tag): tag is NonNullable<typeof tag> => tag !== null),
@@ -99,6 +106,8 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
     const assignedIds = new Set(assignments.map((assignment) => assignment.tagId).filter(Boolean))
     return activeTags.filter((tag) => tag.isActive && !assignedIds.has(tag.id))
   }, [activeTags, assignments])
+  const normalizedCreateColor = normalizeOptionalHexColor(createColor)
+  const canCreateTag = createCode.trim().length >= 2 && createName.trim().length >= 2 && (!createColor.trim() || Boolean(normalizedCreateColor))
 
   const handleRetry = () => {
     void refetchAssigned()
@@ -136,8 +145,42 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
     })
   }
 
+  const resetCreateState = () => {
+    setCreateCode('')
+    setCreateName('')
+    setCreateColor('')
+    setCreateActive(true)
+    setShowCreatePanel(false)
+  }
+
+  const handleCreateTag = async () => {
+    if (!canCreateTag) return
+
+    setInlineError(null)
+
+    try {
+      const created = await createTagMutation.mutateAsync({
+        code: createCode.trim().toUpperCase(),
+        name: createName.trim(),
+        color: normalizedCreateColor,
+        isActive: createActive,
+      })
+
+      await refetchActive()
+      success('Tag created.')
+      if (created.isActive) {
+        setSelectedTagId(created.id)
+      }
+      resetCreateState()
+    } catch (error) {
+      const message = formatTagMutationError(error, 'Failed to create tag.')
+      setInlineError(message)
+      showError(message)
+    }
+  }
+
   return (
-    <div className="rounded-xl bg-white border border-gray-200/60 shadow-soft overflow-hidden">
+    <div className="surface-card overflow-hidden">
       <div className="px-4 py-2.5 flex items-center gap-2">
         <Tags size={13} className="text-gray-400" />
         <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Tags</h3>
@@ -202,7 +245,7 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
               value={selectedTagId}
               onChange={(event) => setSelectedTagId(event.target.value)}
               disabled={isActiveLoading || addTagMutation.isPending || isAssignedError}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-50 disabled:text-gray-400"
+              className="ui-select flex-1"
             >
               <option value="">Select a tag</option>
               {availableTags.map((tag) => (
@@ -238,6 +281,62 @@ export function TicketTagsCard({ ticketId }: TicketTagsCardProps) {
           {inlineError ? (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{inlineError}</div>
           ) : null}
+
+          <div className="surface-section px-3 py-3 text-xs text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium text-slate-900">Need a new tag?</div>
+                <div className="mt-0.5 text-[11px] text-slate-600">Create it here without leaving the ticket.</div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setShowCreatePanel((value) => !value)}>
+                {showCreatePanel ? 'Hide' : 'Quick Create'}
+              </Button>
+            </div>
+
+            {showCreatePanel ? (
+              <div className="mt-3 space-y-3 border-t border-slate-200 pt-3">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="block text-sm text-gray-700">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Tag Code</span>
+                    <input
+                      value={createCode}
+                      onChange={(event) => setCreateCode(event.target.value.toUpperCase())}
+                      placeholder="VIP"
+                      className="ui-input font-mono uppercase"
+                    />
+                  </label>
+                  <label className="block text-sm text-gray-700">
+                    <span className="mb-1 block text-xs font-medium text-gray-600">Tag Name</span>
+                    <input
+                      value={createName}
+                      onChange={(event) => setCreateName(event.target.value)}
+                      placeholder="Priority Customer"
+                      className="ui-input"
+                    />
+                  </label>
+                </div>
+
+                <ColorField value={createColor} onChange={setCreateColor} label="Tag Color" helperText="Use the same color here that operators should recognize in ticket and report views." />
+
+                <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={createActive}
+                    onChange={(event) => setCreateActive(event.target.checked)}
+                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Make this tag active immediately
+                </label>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" size="sm" onClick={resetCreateState}>Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleCreateTag} disabled={!canCreateTag} isLoading={createTagMutation.isPending}>
+                    Create Tag
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>

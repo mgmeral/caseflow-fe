@@ -126,7 +126,7 @@ export function ReplyComposerModal({
                     key={tpl.id}
                     type="button"
                     onClick={() => handleSelectTemplate(tpl)}
-                    className="w-full flex items-start gap-3 px-4 py-3.5 rounded-lg border border-gray-200 hover:border-indigo-300 hover:bg-gray-50 transition-colors text-left group"
+                    className="group flex w-full items-start gap-3 rounded-xl border border-gray-200 px-4 py-3.5 text-left transition-colors hover:border-indigo-300 hover:bg-white/70"
                   >
                     <div className="w-9 h-9 rounded-full bg-gray-100 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
                       <FileText size={15} className="text-gray-500 group-hover:text-indigo-600 transition-colors" />
@@ -150,7 +150,7 @@ export function ReplyComposerModal({
                   placeholder="Müşteriye yanıtınızı yazın…"
                   rows={10}
                   autoFocus
-                  className="w-full text-sm resize-none border border-gray-300 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 bg-white"
+                  className="ui-textarea min-h-[220px] w-full resize-none px-3 py-2.5 text-sm"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend()
                   }}
@@ -161,7 +161,7 @@ export function ReplyComposerModal({
 
           {/* Footer — only in compose mode */}
           {mode === 'compose' && (
-            <div className="flex items-center justify-between px-5 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div className="operational-modal-footer flex items-center justify-between px-5 py-4">
               <span className="text-xs text-gray-400">Ctrl + Enter to send</span>
               <div className="flex items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={handleClose}>
