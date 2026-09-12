@@ -128,6 +128,7 @@ export function TicketTableRow({
         <AgingIndicator
           openDurationMinutes={ticket.openDurationMinutes}
           slaBreached={ticket.slaBreached}
+          slaDeadlineAt={ticket.slaDeadlineAt}
         />
       </td>
 

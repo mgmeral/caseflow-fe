@@ -1,8 +1,10 @@
+import { differenceInMinutes } from 'date-fns'
 import { clsx } from 'clsx'
 
 interface AgingIndicatorProps {
   openDurationMinutes: number
   slaBreached: boolean
+  slaDeadlineAt?: string | null
 }
 
 function formatDuration(minutes: number): string {
@@ -23,13 +25,23 @@ function getColorClass(minutes: number, slaBreached: boolean): string {
   return 'text-red-600 font-semibold'
 }
 
-export function AgingIndicator({ openDurationMinutes, slaBreached }: AgingIndicatorProps) {
+export function AgingIndicator({ openDurationMinutes, slaBreached, slaDeadlineAt }: AgingIndicatorProps) {
+  const minutesRemaining = slaDeadlineAt && !slaBreached
+    ? differenceInMinutes(new Date(slaDeadlineAt), new Date())
+    : null
+  const isAtRisk = minutesRemaining !== null && minutesRemaining > 0 && minutesRemaining < 120
+
   return (
     <span className={clsx('flex items-center gap-1 text-xs whitespace-nowrap', getColorClass(openDurationMinutes, slaBreached))}>
       {formatDuration(openDurationMinutes)}
       {slaBreached && (
         <span className="px-1 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded border border-red-200 leading-none">
           SLA
+        </span>
+      )}
+      {isAtRisk && !slaBreached && (
+        <span className="px-1 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-bold rounded border border-amber-200 leading-none">
+          AT RISK
         </span>
       )}
     </span>

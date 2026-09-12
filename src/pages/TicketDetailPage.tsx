@@ -25,9 +25,12 @@ import { AttachmentViewerModal } from '@/components/ticket-detail/AttachmentView
 import { TicketTagsCard } from '@/components/ticket-detail/TicketTagsCard'
 import { JiraIntegrationCard } from '@/components/ticket-detail/JiraIntegrationCard'
 import { ScheduledEmailsCard } from '@/components/ticket-detail/ScheduledEmailsCard'
+import { AiSummaryCard } from '@/components/ticket-detail/AiSummaryCard'
+import { AiReplyDraftCard } from '@/components/ticket-detail/AiReplyDraftCard'
 import { buildTicketActivityItems } from '@/lib/ticketActivity'
 import { mergeSelectedInboundEmail } from '@/lib/ticketReplySource'
 import { assignmentService } from '@/services/assignment.service'
+import { getErrorMessage } from '@/lib/errors'
 
 function getEmailSelectionKey(email: Pick<TicketEmailMessage, 'detailType' | 'detailId'>): string | null {
   return email.detailType && email.detailId ? `${email.detailType}:${email.detailId}` : null
@@ -71,7 +74,7 @@ export function TicketDetailPage() {
     isClosing,
   } = useTicketDetail(id)
   const queryClient = useQueryClient()
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, info } = useToast()
 
   const { users, groups } = useUsers()
   const { canAssignTickets, canTransferTickets, canSendTicketEmailReply, canViewTicketEmail, canCloseTickets } = usePermissions()
@@ -81,6 +84,7 @@ export function TicketDetailPage() {
   const [showTransfer, setShowTransfer] = useState(false)
   const [showClose, setShowClose] = useState(false)
   const [showReply, setShowReply] = useState(false)
+  const [composerInitialDraft, setComposerInitialDraft] = useState<string | null>(null)
   const [isTicketAssigning, setIsTicketAssigning] = useState(false)
   const [selectedEmailKey, setSelectedEmailKey] = useState<string | null>(null)
   const [isEmailDrawerOpen, setIsEmailDrawerOpen] = useState(false)
@@ -215,11 +219,20 @@ export function TicketDetailPage() {
       ])
       success(userName ? `Ticket ${userName} adına atandı` : 'Ticket ataması güncellendi')
       setShowAssign(false)
-    } catch {
-      toastError('Atama işlemi başarısız oldu')
+    } catch (err) {
+      toastError(getErrorMessage(err, 'Atama işlemi başarısız oldu'))
     } finally {
       setIsTicketAssigning(false)
     }
+  }
+
+  const handleApplyDraftToComposer = (draft: string) => {
+    if (showReply) {
+      info('Close the reply composer first, then apply the AI draft.')
+      return
+    }
+    setComposerInitialDraft(draft)
+    setShowReply(true)
   }
 
   return (
@@ -356,6 +369,12 @@ export function TicketDetailPage() {
           <TicketSidePanel
             ticket={ticket}
             allowedTransitions={allowedStatusTransitions}
+            aiCards={(
+              <>
+                <AiSummaryCard ticketId={ticket.id} />
+                <AiReplyDraftCard ticketId={ticket.id} onApplyDraft={handleApplyDraftToComposer} />
+              </>
+            )}
             tagsCard={<TicketTagsCard ticketId={ticket.id} />}
             integrationCards={(
               <>
@@ -410,13 +429,14 @@ export function TicketDetailPage() {
 
       <EmailReplyComposer
         isOpen={showReply}
-        onClose={() => setShowReply(false)}
+        onClose={() => { setShowReply(false); setComposerInitialDraft(null) }}
         ticketId={ticket.id}
         ticketPublicId={ticketPublicId}
         replySourceEmail={selectedInboundEmail}
         lastInbound={lastInboundEmail}
         ticketSubject={ticket.subject}
         isTicketClosed={ticket.status === 'CLOSED'}
+        initialDraft={composerInitialDraft}
       />
 
       <EmailDetailDrawer

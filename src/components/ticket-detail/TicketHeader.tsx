@@ -1,4 +1,4 @@
-import { ArrowLeft, Users, ArrowUpRight } from 'lucide-react'
+import { ArrowLeft, Users, ArrowUpRight, Reply } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import type { Ticket } from '@/types/ticket.types'
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge'
@@ -10,9 +10,10 @@ interface TicketHeaderProps {
   ticket: Ticket
   onAssign: () => void
   onTransfer: () => void
+  onReply?: () => void
 }
 
-export function TicketHeader({ ticket, onAssign, onTransfer }: TicketHeaderProps) {
+export function TicketHeader({ ticket, onAssign, onTransfer, onReply }: TicketHeaderProps) {
   const navigate = useNavigate()
 
   return (
@@ -53,6 +54,11 @@ export function TicketHeader({ ticket, onAssign, onTransfer }: TicketHeaderProps
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {onReply && ticket.status !== 'CLOSED' && (
+            <Button variant="primary" size="sm" leftIcon={<Reply size={14} />} onClick={onReply}>
+              Reply
+            </Button>
+          )}
           <Button variant="secondary" size="sm" leftIcon={<Users size={14} />} onClick={onAssign}>
             Assign
           </Button>

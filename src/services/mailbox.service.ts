@@ -5,6 +5,8 @@
   MailboxSmtpConnectionTestResponse,
   MailboxResponse,
   UpdateMailboxRequest,
+  MailboxPollNowResponse,
+  MailboxCursorResetResponse,
 } from '@/types/api.types'
 import type { MailboxListResult } from '@/types/email.types'
 import { apiClient } from './api.client'
@@ -103,5 +105,15 @@ export const mailboxService = {
   testSmtpConnection: async (id: string): Promise<MailboxSmtpConnectionTestResponse> => {
     const result = await apiClient.post<MailboxConnectionTestResponse>(`/admin/mailboxes/${id}/test-smtp-connection`, {})
     return result.smtp ?? result
+  },
+
+  /** POST /admin/mailboxes/{id}/poll-now — triggers an immediate poll cycle */
+  pollNow: async (id: string): Promise<MailboxPollNowResponse> => {
+    return apiClient.post<MailboxPollNowResponse>(`/admin/mailboxes/${id}/poll-now`, {})
+  },
+
+  /** POST /admin/mailboxes/{id}/reset-cursor — resets the IMAP cursor/UID watermark */
+  resetCursor: async (id: string, strategy?: string): Promise<MailboxCursorResetResponse> => {
+    return apiClient.post<MailboxCursorResetResponse>(`/admin/mailboxes/${id}/reset-cursor`, strategy ? { strategy } : {})
   },
 }

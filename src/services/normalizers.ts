@@ -382,6 +382,7 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
     transferredFromGroup: raw.transferredFromGroup ? String(raw.transferredFromGroup) : null,
     createdAt: String(raw.createdAt ?? new Date().toISOString()),
     updatedAt,
+    statusChangedAt: raw.statusChangedAt ? String(raw.statusChangedAt) : null,
     lastActionAt: raw.lastActionAt ? String(raw.lastActionAt) : updatedAt,
     lastActionSummary: String(raw.lastActionSummary ?? ''),
     openDurationMinutes: typeof raw.openDurationMinutes === 'number'
@@ -391,6 +392,9 @@ export function normalizeTicket(raw: Record<string, unknown>): Ticket {
         : 0,
     slaDeadlineAt: raw.slaDeadlineAt ? String(raw.slaDeadlineAt) : null,
     slaBreached: raw.slaBreached === true,
+    slaState: (raw.slaState as string | null) ?? null,
+    firstResponseDueAt: raw.firstResponseDueAt ? String(raw.firstResponseDueAt) : null,
+    resolutionDueAt: raw.resolutionDueAt ? String(raw.resolutionDueAt) : null,
     messageCount: typeof raw.messageCount === 'number' ? raw.messageCount : 0,
     internalNoteCount: typeof raw.internalNoteCount === 'number' ? raw.internalNoteCount : 0,
     tags: Array.isArray(raw.tags) ? raw.tags.map(normalizeTicketTag) : [],

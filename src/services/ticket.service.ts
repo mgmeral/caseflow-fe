@@ -59,6 +59,8 @@ export const ticketService = {
     if (filters.unassignedOnly) params.set('unassignedOnly', 'true')
     if (filters.overdueOnly) params.set('overdueOnly', 'true')
     if (filters.transferredOnly) params.set('transferredOnly', 'true')
+    if (filters.slaState === 'BREACHED') params.set('slaBreachedOnly', 'true')
+    if (filters.slaState === 'AT_RISK') params.set('slaAtRiskOnly', 'true')
 
     if (filters.dateFrom) params.set('from', filters.dateFrom)
     if (filters.dateTo) params.set('to', filters.dateTo)

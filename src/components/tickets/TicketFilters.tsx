@@ -111,6 +111,12 @@ export function TicketFilters({
   if (filters.transferredOnly) {
     activeTags.push({ label: 'Transferred Only', onRemove: () => onChange({ transferredOnly: false }) })
   }
+  if (filters.slaState === 'BREACHED') {
+    activeTags.push({ label: 'SLA Breached', onRemove: () => onChange({ slaState: undefined }) })
+  }
+  if (filters.slaState === 'AT_RISK') {
+    activeTags.push({ label: 'SLA At Risk', onRemove: () => onChange({ slaState: undefined }) })
+  }
   if (filters.dateFrom || filters.dateTo) {
     activeTags.push({ label: 'Date Range', onRemove: () => onChange({ dateFrom: null, dateTo: null }) })
   }
@@ -131,6 +137,7 @@ export function TicketFilters({
       overdueOnly: false,
       openOnly: false,
       transferredOnly: false,
+      slaState: undefined,
     })
   }
 
@@ -259,6 +266,22 @@ export function TicketFilters({
               )}
             >
               {label}
+            </button>
+          ))}
+          {/* SLA state — mutually exclusive pair */}
+          {(['BREACHED', 'AT_RISK'] as const).map((state) => (
+            <button
+              key={state}
+              type="button"
+              onClick={() => onChange({ slaState: filters.slaState === state ? undefined : state })}
+              className={clsx(
+                'rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] transition-all duration-200',
+                filters.slaState === state
+                  ? 'border-[#b7d0ff] bg-[#edf4ff] text-[#1258e3] shadow-soft'
+                  : 'border-slate-200 bg-white/80 text-slate-600 hover:border-[#c7d8f3] hover:bg-white',
+              )}
+            >
+              {state === 'BREACHED' ? 'SLA Breached' : 'SLA At Risk'}
             </button>
           ))}
         </div>

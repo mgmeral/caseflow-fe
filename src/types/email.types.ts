@@ -179,19 +179,27 @@ export interface TicketReplyPreview {
 }
 
 export interface TicketReplyPreviewRequest {
-  sourceEventId: number
-  mailboxId?: number | null
+  /** Required at runtime — validated by the service. null causes a validation error. */
+  mailboxId: number | null
+  sourceEventId?: number | null
   templateId?: number | null
+  templateCode?: string | null
+  subjectOverride?: string | null
+  bodyText?: string | null
+  bodyHtml?: string | null
 }
 
 export interface SendTicketReplyRequest {
   mailboxId: number
   sourceEventId: number
+  toAddress?: string | null
   subject: string
   textBody: string | null
   htmlBody?: string | null
-  contentWasEdited: boolean
+  inReplyToMessageId?: string | null
   templateId?: number | null
+  templateCode?: string | null
+  contentWasEdited: boolean
 }
 
 export interface SendTicketReplyResult {

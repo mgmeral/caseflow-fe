@@ -21,6 +21,18 @@ function normalizeValue(value: string | null | undefined): string {
   return (value ?? '').trim().toLowerCase()
 }
 
+/** Safely convert any `to`/`cc`/`bcc` value (string, array, or null) to string[]. */
+function toAddrList(value: unknown): string[] {
+  if (value == null) return []
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : []
+  if (Array.isArray(value)) return (value as unknown[]).flatMap((v) => toAddrList(v))
+  if (typeof value === 'object') {
+    const addr = (value as Record<string, unknown>).address ?? (value as Record<string, unknown>).email
+    if (typeof addr === 'string' && addr.trim()) return [addr.trim()]
+  }
+  return []
+}
+
 function getEmailDirectionMessageType(direction: TicketEmailMessage['direction']): TicketMessage['type'] {
   return direction === 'INBOUND' ? 'public_inbound' : 'public_outbound'
 }
@@ -175,12 +187,12 @@ function EmailCard({ ticketPublicId, email, messageFallbacks, onSelect }: { tick
           {/* Address info */}
           <div className="px-4 py-2 bg-gray-50/60 text-xs space-y-0.5">
             <div><span className="text-gray-400 w-10 inline-block">From:</span> <span className="text-gray-700">{displayEmail.from ?? '—'}</span></div>
-            <div><span className="text-gray-400 w-10 inline-block">To:</span> <span className="text-gray-700">{displayEmail.to.join(', ') || '—'}</span></div>
-            {displayEmail.cc.length > 0 && (
-              <div><span className="text-gray-400 w-10 inline-block">Cc:</span> <span className="text-gray-700">{displayEmail.cc.join(', ')}</span></div>
+            <div><span className="text-gray-400 w-10 inline-block">To:</span> <span className="text-gray-700">{toAddrList(displayEmail.to).join(', ') || '—'}</span></div>
+            {toAddrList(displayEmail.cc).length > 0 && (
+              <div><span className="text-gray-400 w-10 inline-block">Cc:</span> <span className="text-gray-700">{toAddrList(displayEmail.cc).join(', ')}</span></div>
             )}
-            {displayEmail.bcc.length > 0 && (
-              <div><span className="text-gray-400 w-10 inline-block">Bcc:</span> <span className="text-gray-700">{displayEmail.bcc.join(', ')}</span></div>
+            {toAddrList(displayEmail.bcc).length > 0 && (
+              <div><span className="text-gray-400 w-10 inline-block">Bcc:</span> <span className="text-gray-700">{toAddrList(displayEmail.bcc).join(', ')}</span></div>
             )}
             {displayEmail.mailboxName && (
               <div><span className="text-gray-400 w-10 inline-block">Via:</span> <span className="text-gray-700">{displayEmail.mailboxName}</span></div>

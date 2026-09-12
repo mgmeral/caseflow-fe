@@ -9,6 +9,7 @@ const PRIORITIES: TicketPriority[] = ['critical', 'high', 'medium', 'low']
 interface TicketSidePanelProps {
   ticket: Ticket
   allowedTransitions: TicketStatus[]
+  aiCards?: ReactNode
   tagsCard?: ReactNode
   integrationCards?: ReactNode
   onChangeStatus: (status: TicketStatus) => void
@@ -18,6 +19,7 @@ interface TicketSidePanelProps {
 export function TicketSidePanel({
   ticket,
   allowedTransitions,
+  aiCards,
   tagsCard,
   integrationCards,
   onChangeStatus,
@@ -135,6 +137,8 @@ export function TicketSidePanel({
       </div>
 
       {tagsCard}
+
+      {aiCards}
 
       {integrationCards}
     </div>

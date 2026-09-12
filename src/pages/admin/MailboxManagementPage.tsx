@@ -11,6 +11,8 @@ import {
   Pencil,
   PlugZap,
   Plus,
+  RefreshCw,
+  RotateCcw,
   Search,
   ShieldOff,
   ToggleLeft,
@@ -19,6 +21,7 @@ import {
 import { useMailboxes } from '@/hooks/useMailboxes'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errors'
 import { normalizeInitialSyncStrategy } from '@/services/email-platform.normalizers'
 import { mailboxService, type MailboxListFilters } from '@/services/mailbox.service'
 import type { Mailbox } from '@/types/email.types'
@@ -221,6 +224,7 @@ export function MailboxManagementPage() {
   const [saving, setSaving] = useState(false)
   const [toggling, setToggling] = useState<string | null>(null)
   const [testingConnection, setTestingConnection] = useState<{ imap: boolean; smtp: boolean }>({ imap: false, smtp: false })
+  const [operatorAction, setOperatorAction] = useState<{ pollNow: string | null; resetCursor: string | null }>({ pollNow: null, resetCursor: null })
   const [connectionResults, setConnectionResults] = useState<Record<string, MailboxConnectionTestResponse>>({})
   const [riskConfirmation, setRiskConfirmation] = useState<
     | {
@@ -359,7 +363,7 @@ Mailbox adresi: ${mailboxAddress}`
       await queryClient.invalidateQueries({ queryKey: ['mailboxes'] })
       closeModal()
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Failed to save mailbox')
+      error(getErrorMessage(err, 'Failed to save mailbox'))
     } finally {
       setSaving(false)
     }
@@ -402,7 +406,7 @@ Mailbox adresi: ${mailboxAddress}`
 
       await queryClient.invalidateQueries({ queryKey: ['mailboxes'] })
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Toggle failed')
+      error(getErrorMessage(err, 'Toggle failed'))
     } finally {
       setToggling(null)
     }
@@ -446,7 +450,7 @@ Mailbox adresi: ${mailboxAddress}`
     } catch (err) {
       const result: MailboxProtocolTestResult = {
         success: false,
-        message: err instanceof Error ? err.message : 'Connection test failed',
+        message: getErrorMessage(err, 'Connection test failed'),
         testedAt: new Date().toISOString(),
       }
       updateConnectionResult(editingMailbox.id, 'imap', result)
@@ -471,13 +475,47 @@ Mailbox adresi: ${mailboxAddress}`
     } catch (err) {
       const result: MailboxProtocolTestResult = {
         success: false,
-        message: err instanceof Error ? err.message : 'SMTP connection test failed',
+        message: getErrorMessage(err, 'SMTP connection test failed'),
         testedAt: new Date().toISOString(),
       }
       updateConnectionResult(editingMailbox.id, 'smtp', result)
       error(result.message)
     } finally {
       setTestingConnection((current) => ({ ...current, smtp: false }))
+    }
+  }
+
+  const handlePollNow = async (mailbox: Mailbox) => {
+    setOperatorAction((current) => ({ ...current, pollNow: mailbox.id }))
+    try {
+      const result = await mailboxService.pollNow(mailbox.id)
+      if (result.triggered) {
+        success(`Poll triggered for "${mailbox.name}"${result.triggeredAt ? ` at ${new Date(result.triggeredAt).toLocaleTimeString()}` : ''}`)
+      } else {
+        error(result.message ?? `Poll could not be triggered for "${mailbox.name}"`)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['mailboxes'] })
+    } catch (err) {
+      error(getErrorMessage(err, `Failed to trigger poll for "${mailbox.name}"`))
+    } finally {
+      setOperatorAction((current) => ({ ...current, pollNow: null }))
+    }
+  }
+
+  const handleResetCursor = async (mailbox: Mailbox) => {
+    setOperatorAction((current) => ({ ...current, resetCursor: mailbox.id }))
+    try {
+      const result = await mailboxService.resetCursor(mailbox.id)
+      if (result.reset) {
+        success(`Cursor reset for "${mailbox.name}"${result.strategy ? ` (strategy: ${result.strategy})` : ''}`)
+      } else {
+        error(result.message ?? `Cursor reset failed for "${mailbox.name}"`)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['mailboxes'] })
+    } catch (err) {
+      error(getErrorMessage(err, `Failed to reset cursor for "${mailbox.name}"`))
+    } finally {
+      setOperatorAction((current) => ({ ...current, resetCursor: null }))
     }
   }
 
@@ -691,6 +729,30 @@ Mailbox adresi: ${mailboxAddress}`
                           >
                             {mailbox.isActive ? <ToggleRight size={14} className="text-green-500" /> : <ToggleLeft size={14} />}
                           </button>
+                          {mailbox.isActive && mailbox.pollingEnabled && (
+                            <button
+                              onClick={() => handlePollNow(mailbox)}
+                              disabled={operatorAction.pollNow === mailbox.id}
+                              className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-blue-600 disabled:opacity-40"
+                              title="Trigger poll now"
+                            >
+                              {operatorAction.pollNow === mailbox.id
+                                ? <RefreshCw size={14} className="animate-spin" />
+                                : <RefreshCw size={14} />}
+                            </button>
+                          )}
+                          {mailbox.isActive && (
+                            <button
+                              onClick={() => handleResetCursor(mailbox)}
+                              disabled={operatorAction.resetCursor === mailbox.id}
+                              className="p-1.5 rounded hover:bg-gray-100 text-gray-500 hover:text-amber-600 disabled:opacity-40"
+                              title="Reset IMAP cursor"
+                            >
+                              {operatorAction.resetCursor === mailbox.id
+                                ? <RotateCcw size={14} className="animate-spin" />
+                                : <RotateCcw size={14} />}
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1060,8 +1122,8 @@ Mailbox adresi: ${mailboxAddress}`
           {editingMailbox && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-700">
               <div className="font-semibold text-slate-900">Operational Recovery</div>
-              <div className="mt-1">Available in this environment: activate or deactivate the mailbox, then run IMAP and SMTP connection tests against the saved configuration.</div>
-              <div className="mt-1">Poll-now, cursor reset, ingress event retry, quarantine, and release actions are not exposed by the backend admin contract yet, so this screen does not simulate them.</div>
+              <div className="mt-1">Available in this environment: activate or deactivate the mailbox, trigger an immediate poll cycle, reset the IMAP cursor, and run IMAP and SMTP connection tests against the saved configuration.</div>
+              <div className="mt-1">Ingress event retry, quarantine, and release actions are managed server-side and are not available through this interface.</div>
             </div>
           )}
 

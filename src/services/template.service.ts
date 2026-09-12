@@ -30,6 +30,10 @@ function normalizeTemplate(raw: MailTemplateResponse): MailTemplate {
     name: toText(raw.name, toText(raw.code)),
     code: toText(raw.code),
     usageType: toNullableText(raw.usageType),
+    description: toNullableText(raw.description),
+    supportedPlaceholders: toNullableText(raw.supportedPlaceholders),
+    customerVisible: typeof raw.customerVisible === 'boolean' ? raw.customerVisible : null,
+    defaultStatusAfterSend: toNullableText(raw.defaultStatusAfterSend),
     subjectTemplate: toText(raw.subjectTemplate),
     htmlTemplate: toText(raw.htmlTemplate),
     plainTextTemplate: toText(raw.plainTextTemplate),
@@ -49,7 +53,11 @@ function toRequestBody(input: MailTemplateUpsertInput): MailTemplateRequest {
     name: input.name.trim(),
     code: input.code.trim(),
     usageType: usageType || null,
-    subjectTemplate: input.subjectTemplate.trim(),
+    description: input.description?.trim() || null,
+    supportedPlaceholders: input.supportedPlaceholders?.trim() || null,
+    customerVisible: typeof input.customerVisible === 'boolean' ? input.customerVisible : null,
+    defaultStatusAfterSend: input.defaultStatusAfterSend?.trim() || null,
+    subjectTemplate: input.subjectTemplate?.trim() ?? '',
     htmlTemplate: input.htmlTemplate.trim(),
     plainTextTemplate: input.plainTextTemplate.trim(),
     isActive: input.isActive,
@@ -79,7 +87,8 @@ function normalizePreview(raw: MailTemplatePreviewResponse): MailTemplatePreview
   return {
     subject: toText(raw.renderedSubject ?? raw.subject),
     html: toNullableText(raw.renderedHtml ?? raw.html),
-    plainText: toNullableText(raw.renderedPlainText ?? raw.plainText),
+    text: toNullableText(raw.text ?? raw.renderedPlainText ?? raw.plainText),
+    plainText: toNullableText(raw.text ?? raw.renderedPlainText ?? raw.plainText),
   }
 }
 

@@ -123,8 +123,13 @@ export interface RoleDetailResponse {
   description?: string
   ticketScope: RoleTicketScope
   isActive: boolean
-  permissions: string[]
-  userCount?: number
+  /** Canonical field name from spec */
+  permissionCodes: string[]
+  /** @deprecated Use permissionCodes */
+  permissions?: string[]
+  version?: number | null
+  createdAt?: string | null
+  updatedAt?: string | null
 }
 
 /** Role ticket scope values supported by backend role contract */
@@ -308,12 +313,23 @@ export interface DashboardStatsResponse {
   waitingOver24h?: number | null
   myActionRequired?: number | null
   myActionRequiredItems?: Record<string, unknown>[] | null
+  /** SLA fields — present only if backend supports them.
+   *  breachedSlaCount is the canonical new field name; slaBreached is the legacy alias.
+   */
+  slaBreached?: number | null
+  breachedSlaCount?: number | null
+  atRisk?: number | null
+  atRiskSlaCount?: number | null
 }
 
 export interface QueueStatsResponse {
-  awaitingAssignment?: number | null
   allUnassigned?: number | null
+  /** Spec field */
+  highOrCritical?: number | null
+  /** @deprecated alias for highOrCritical */
   highCritical?: number | null
+  /** @deprecated alias for allUnassigned */
+  awaitingAssignment?: number | null
   waitingOver8h?: number | null
   slaBreached?: number | null
 }
@@ -547,18 +563,109 @@ export interface MailboxConnectionTestResponse extends MailboxProtocolTestResult
   smtp?: MailboxSmtpConnectionTestResponse | null
 }
 
+/** POST /admin/mailboxes/{id}/poll-now */
+export interface MailboxPollNowResponse {
+  triggered: boolean
+  message: string | null
+  triggeredAt: string | null
+}
+
+/** POST /admin/mailboxes/{id}/reset-cursor */
+export interface MailboxCursorResetResponse {
+  reset: boolean
+  message: string | null
+  strategy: string | null
+  resetAt: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Ingress Event DTOs
+// ---------------------------------------------------------------------------
+
+/**
+ * Processing/quarantine status of an ingress event.
+ * Extensible to accept new backend values without breaking the FE.
+ */
+export type IngressEventStatus = ExtensibleEnum<
+  // Spec-defined values
+  | 'RECEIVED'
+  | 'PROCESSING'
+  | 'PROCESSED'
+  | 'FAILED'
+  | 'QUARANTINED'
+  // Legacy / extended values kept for backward compat
+  | 'PENDING'
+  | 'COMPLETED'
+  | 'FAILED_RETRYABLE'
+  | 'REPROCESSING'
+  | 'RELEASED'
+  | 'SKIPPED'
+>
+
+/** GET /admin/ingress/events — list item */
+export interface IngressEventResponse {
+  id: string | number
+  externalId: string | null
+  mailboxId: string | number | null
+  mailboxName: string | null
+  mailboxAddress: string | null
+  status: IngressEventStatus
+  fromAddress: string | null
+  toAddress: string | null
+  subject: string | null
+  messageId: string | null
+  errorMessage: string | null
+  failureReason: string | null
+  retryCount: number | null
+  maxRetries: number | null
+  receivedAt: string | null
+  processedAt: string | null
+  createdAt: string
+  updatedAt: string
+  ticketId: string | number | null
+}
+
+/** Paged list response from GET /admin/ingress/events */
+export type IngressEventListResponse = {
+  items: IngressEventResponse[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+} | IngressEventResponse[]
+
+/** POST /admin/ingress/events/{id}/retry */
+export interface IngressEventActionResponse {
+  success: boolean
+  message: string | null
+  eventId: string | number
+  newStatus: IngressEventStatus | null
+}
+
+/** GET /admin/ingress/events query filters */
+export interface IngressEventListFilters {
+  status?: IngressEventStatus | null
+  mailboxId?: string | null
+  page?: number
+  size?: number
+}
+
 export interface CustomerEmailSettingsResponse {
+  /** Spec field — settings record id */
+  id?: number | null
   customerId: string
   customerName?: string | null
   isActive?: boolean
-  isEnabled: boolean
+  /** @deprecated use isActive */
+  isEnabled?: boolean
   allowSubdomains: boolean
   unknownSenderPolicy: UnknownSenderPolicy
   defaultGroupId: string | null
-  defaultGroupName: string | null
+  defaultGroupName?: string | null
   defaultPriority: string | null
   updatedAt: string | null
   rules?: CustomerEmailRoutingRuleResponse[]
+  /** @deprecated aliases */
   routingRules?: CustomerEmailRoutingRuleResponse[]
   senderPatterns?: CustomerEmailRoutingRuleResponse[]
 }
@@ -660,18 +767,32 @@ export interface UnifiedTicketEmailDetailResponse {
 }
 
 export interface TicketEmailReplyPreviewRequest {
-  sourceEventId: number
-  mailboxId?: number | null
+  /** Required — mailbox that will send the reply */
+  mailboxId: number
+  sourceEventId?: number | null
   templateId?: number | null
+  templateCode?: string | null
+  subjectOverride?: string | null
+  bodyText?: string | null
+  bodyHtml?: string | null
 }
 
 export interface TicketEmailReplyPreviewPlaceholderDiagnosticResponse {
   placeholder: string
-  status: 'EMPTY' | 'UNKNOWN'
+  /** Spec field */
+  severity: string
   message: string
+  /** @deprecated Use severity */
+  status?: 'EMPTY' | 'UNKNOWN' | null
 }
 
 export interface TicketEmailReplyPreviewResponse {
+  ticketPublicId?: string | null
+  sourceDetailType?: string | null
+  sourceDetailId?: string | null
+  mailboxId?: number | null
+  mailboxName?: string | null
+  mailboxAddress?: string | null
   derivedToAddress: string | null
   derivedFromAddress: string | null
   subject: string
@@ -680,9 +801,8 @@ export interface TicketEmailReplyPreviewResponse {
   templateInfo?: TicketEmailTemplateInfoResponse | null
   placeholderDiagnostics?: TicketEmailReplyPreviewPlaceholderDiagnosticResponse[] | null
   warnings?: string[] | null
-  mailboxName?: string | null
-  mailboxAddress?: string | null
   isEditable?: boolean | null
+  previewGeneratedAt?: string | null
 }
 
 export interface TicketEmailMessageResponse {
@@ -818,13 +938,17 @@ export interface TicketTagBreakdownResponse {
 }
 
 export interface CustomerTicketReportResponse {
+  customerId?: number | null
+  customerName?: string | null
+  from?: string | null
+  to?: string | null
   totalCount?: number | null
   openCount?: number | null
-  closedCount?: number | null
-  resolvedCount?: number | null
   newCount?: number | null
   inProgressCount?: number | null
   waitingCustomerCount?: number | null
+  resolvedCount?: number | null
+  closedCount?: number | null
   reopenedCount?: number | null
   byTag?: TicketTagBreakdownResponse[] | null
 }
@@ -835,9 +959,12 @@ export interface AdminCustomerTicketAggregateItemResponse {
   customerColorHex?: string | null
   totalCount?: number | null
   openCount?: number | null
-  closedCount?: number | null
-  resolvedCount?: number | null
+  newCount?: number | null
+  inProgressCount?: number | null
   waitingCustomerCount?: number | null
+  resolvedCount?: number | null
+  closedCount?: number | null
+  reopenedCount?: number | null
   byTag?: TicketTagBreakdownResponse[] | null
 }
 
@@ -856,22 +983,20 @@ export interface ScheduledEmailResponse {
   id: string | number
   ticketId: string | number
   mailboxId: string | number | null
-  mailboxName?: string | null
-  mailboxAddress?: string | null
+  /** Spec field — resolved outbound address */
+  resolvedToAddress?: string | null
+  /** @deprecated aliased from resolvedToAddress for backward compat */
+  toAddress?: string | null
   fromAddress?: string | null
-  resolvedRecipient?: string | null
-  toAddress: string
   subject: string
-  status: OutboundDispatchStatus | null
+  status: OutboundDispatchStatus | string | null
   failureReason?: string | null
   failureCategory?: string | null
   sourceEventId?: number | null
-  templateId?: number | null
-  contentWasEdited?: boolean | null
   sendNotBefore: string
-  canceledAt?: string | null
-  sentAt?: string | null
   createdAt: string
+  sentAt?: string | null
+  canceledAt?: string | null
 }
 
 export interface ScheduleEmailRequest {
@@ -883,6 +1008,7 @@ export interface ScheduleEmailRequest {
   sendNotBefore: string
   sourceEventId?: number | null
   templateId?: number | null
+  templateCode?: string | null
   contentWasEdited?: boolean | null
 }
 
@@ -893,9 +1019,13 @@ export interface TicketStatusTransitionListResponse {
 
 export interface MailTemplateResponse {
   id: string | number
-  name?: string | null
   code?: string | null
+  name?: string | null
   usageType?: string | null
+  description?: string | null
+  supportedPlaceholders?: string | null
+  customerVisible?: boolean | null
+  defaultStatusAfterSend?: string | null
   subjectTemplate?: string | null
   htmlTemplate?: string | null
   plainTextTemplate?: string | null
@@ -908,23 +1038,34 @@ export interface MailTemplateResponse {
 }
 
 export interface MailTemplateRequest {
-  name: string
   code: string
+  name: string
   usageType?: string | null
-  subjectTemplate: string
+  description?: string | null
+  supportedPlaceholders?: string | null
+  customerVisible?: boolean | null
+  defaultStatusAfterSend?: string | null
+  subjectTemplate?: string | null
   htmlTemplate: string
   plainTextTemplate: string
   isActive: boolean
 }
 
 export interface MailTemplatePreviewRequest {
-  variables?: Record<string, string>
+  replyBody?: string | null
+  ticketRef?: string | null
+  mailboxName?: string | null
+  agentName?: string | null
+  signatureBlock?: string | null
 }
 
 export interface MailTemplatePreviewResponse {
   subject?: string | null
-  renderedSubject?: string | null
   html?: string | null
+  /** Spec field — plain text rendered output */
+  text?: string | null
+  /** @deprecated aliases */
+  renderedSubject?: string | null
   renderedHtml?: string | null
   plainText?: string | null
   renderedPlainText?: string | null
@@ -932,14 +1073,21 @@ export interface MailTemplatePreviewResponse {
 
 export interface NotificationResponse {
   id: string | number
+  userId?: number | null
+  type?: string | null
   title?: string | null
   message?: string | null
+  /** @deprecated alias for message */
   content?: string | null
-  type?: string | null
-  isRead?: boolean | null
-  createdAt?: string | null
   ticketId?: string | number | null
+  ticketPublicId?: string | null
   ticketNo?: string | null
+  groupId?: number | null
+  actorUserId?: number | null
+  noteId?: number | null
+  isRead?: boolean | null
+  readAt?: string | null
+  createdAt?: string | null
 }
 
 export interface UnreadCountResponse {
@@ -971,11 +1119,13 @@ export interface ContactResponse {
 
 /**
  * TicketSummary from GET /api/tickets paged list
- * Spec: { id, ticketNo, subject, status, priority, customerId, customerName,
- *         assignedUserId, assignedUserName, assignedGroupId, assignedGroupName, createdAt, updatedAt }
+ * Spec: { id, publicId, ticketNo, subject, status, priority, customerId, customerName,
+ *         assignedUserId, assignedUserName, assignedGroupId, assignedGroupName,
+ *         createdAt, updatedAt, statusChangedAt, slaState, firstResponseDueAt, resolutionDueAt }
  */
 export interface TicketSummaryResponse {
   id: string
+  publicId?: string | null
   ticketNo: string
   subject: string
   status: string
@@ -988,6 +1138,10 @@ export interface TicketSummaryResponse {
   assignedGroupName: string | null
   createdAt: string
   updatedAt: string
+  statusChangedAt?: string | null
+  slaState?: 'OK' | 'WARNING' | 'BREACHED' | 'RESOLVED' | 'PAUSED' | null
+  firstResponseDueAt?: string | null
+  resolutionDueAt?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -996,26 +1150,33 @@ export interface TicketSummaryResponse {
 
 /**
  * GET /api/users list item
- * Spec: { id, username, fullName, role, isActive }
+ * Spec: { id, username, fullName, roleId, roleCode, isActive }
  */
 export interface UserSummaryResponse {
   id: number
   username: string
   fullName: string
-  role: BackendRole
+  roleId?: number | null
+  roleCode?: string | null
+  /** @deprecated Backend no longer returns a legacy role enum; use roleCode instead */
+  role?: BackendRole | null
   isActive: boolean
 }
 
 /**
  * GET /api/users/{id} / full UserResponse
- * Spec: { id, username, email, fullName, role, isActive, groupIds, groupNames, createdAt, lastLoginAt }
+ * Spec: { id, username, email, fullName, roleId, roleCode, roleName, isActive, groupIds, groupNames, createdAt, lastLoginAt }
  */
 export interface UserResponse {
   id: number
   username: string
   email: string
   fullName: string
-  role: BackendRole
+  roleId?: number | null
+  roleCode?: string | null
+  roleName?: string | null
+  /** @deprecated Backend no longer returns a legacy role enum; use roleCode instead */
+  role?: BackendRole | null
   isActive: boolean
   groupIds: number[]
   groupNames: string[]
@@ -1051,7 +1212,9 @@ export interface GroupResponse {
   description: string
   isActive: boolean
   memberCount: number
-  memberIds: number[]
+  memberIds?: number[] | null
+  /** Full member objects — returned by GET /api/groups/{id} */
+  members?: UserSummaryResponse[] | null
   createdAt: string
 }
 
@@ -1264,4 +1427,111 @@ export interface UpdateContactRequest {
   name: string
   isPrimary?: boolean
   isActive?: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Ticket detail / SLA DTOs
+// ---------------------------------------------------------------------------
+
+/** SLA state values from spec */
+export type SlaState = 'OK' | 'WARNING' | 'BREACHED' | 'RESOLVED' | 'PAUSED'
+
+/** GET /api/tickets/{id}/detail — sla sub-object */
+export interface SlaSummary {
+  firstResponseDueAt?: string | null
+  resolutionDueAt?: string | null
+  firstResponseRespondedAt?: string | null
+  firstResponseBreached?: boolean | null
+  resolutionBreached?: boolean | null
+  slaState?: SlaState | null
+  ageMinutes?: number | null
+  currentStatusAgeMinutes?: number | null
+}
+
+/**
+ * GET /api/tickets/{id}/detail response
+ * Extends TicketResponse with sla, attachments, history.
+ */
+export interface TicketDetailResponse {
+  id: string | number
+  publicId?: string | null
+  ticketNo: string
+  subject: string
+  description?: string | null
+  status: string
+  priority: string
+  customerId: string | number
+  customerName: string
+  assignedUserId?: number | null
+  assignedUserName?: string | null
+  assignedGroupId?: number | null
+  assignedGroupName?: string | null
+  createdAt: string
+  updatedAt: string
+  closedAt?: string | null
+  statusChangedAt?: string | null
+  sla?: SlaSummary | null
+  attachments?: AttachmentMetadataResponse[] | null
+  history?: Array<{
+    id: number
+    actionType: string
+    performedBy?: number | null
+    performedByName?: string | null
+    sourceType?: string | null
+    summary?: string | null
+    performedAt: string
+  }> | null
+}
+
+/**
+ * GET /api/tickets/{id}/transitions response
+ * Spec: { ticketId, currentStatus, allowedTransitions }
+ */
+export interface AllowedTransitionsResponse {
+  ticketId?: number | null
+  currentStatus?: string | null
+  allowedTransitions?: string[]
+}
+
+// ---------------------------------------------------------------------------
+// Dispatch DTO
+// ---------------------------------------------------------------------------
+
+export type DispatchFailureCategory =
+  | 'SMTP_CONNECTION'
+  | 'SMTP_AUTH_FAILURE'
+  | 'TLS_FAILURE'
+  | 'SMTP_RATE_LIMITED'
+  | 'RECIPIENT_REJECTED'
+  | 'MAILBOX_FULL'
+  | 'CONTENT_REJECTED'
+  | 'INVALID_ADDRESS'
+  | 'MAILBOX_INACTIVE'
+  | 'UNCONFIGURED'
+  | 'REVALIDATION_FAILURE'
+  | 'UNKNOWN'
+
+/**
+ * GET /api/tickets/{ticketId}/email/outbound/{dispatchId}
+ * Also returned by sendReply, retryDispatch, cancelDispatch
+ */
+export interface DispatchResponse {
+  id: string | number
+  ticketId: string | number
+  mailboxId?: number | null
+  sourceIngressEventId?: number | null
+  sentByUserId?: number | null
+  messageId?: string | null
+  fromAddress?: string | null
+  toAddress?: string | null
+  resolvedToAddress?: string | null
+  subject?: string | null
+  status: OutboundDispatchStatus
+  attempts?: number | null
+  lastAttemptAt?: string | null
+  sentAt?: string | null
+  failureReason?: string | null
+  failureCategory?: DispatchFailureCategory | null
+  scheduledAt?: string | null
+  createdAt?: string | null
 }

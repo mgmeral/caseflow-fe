@@ -13,7 +13,9 @@ import {
 } from '@/lib/reportDateRange'
 import { EmptyState } from '@/components/shared/EmptyState'
 import { SkeletonRow } from '@/components/shared/SkeletonRow'
-import { BarChart2, Download, ShieldOff } from 'lucide-react'
+import { HelpDrawer } from '@/components/shared/help'
+import { reportsHelp } from '@/help/reports.help'
+import { BarChart2, Download, HelpCircle, ShieldOff } from 'lucide-react'
 import { Button } from '@/components/shared/Button'
 
 function CustomerColorDot({ colorHex }: { colorHex: string | null }) {
@@ -32,6 +34,7 @@ export function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [page, setPage] = useState(0)
   const [isExporting, setIsExporting] = useState(false)
+  const [isHelpOpen, setIsHelpOpen] = useState(false)
   const pageSize = 20
   const dateRange = useMemo(() => parseReportDateRangeSearchParams(searchParams), [searchParams])
   const { data, isLoading, isError, error } = useAdminAggregateReport(page, pageSize, {
@@ -41,15 +44,21 @@ export function ReportsPage() {
 
   const totals = (data?.items ?? []).reduce((acc, item) => ({
     total: acc.total + item.totalCount,
+    newCount: acc.newCount + item.newCount,
+    inProgress: acc.inProgress + item.inProgressCount,
     open: acc.open + item.openCount,
     closed: acc.closed + item.closedCount,
     resolved: acc.resolved + item.resolvedCount,
+    reopened: acc.reopened + item.reopenedCount,
     waitingCustomer: acc.waitingCustomer + item.waitingCustomerCount,
   }), {
     total: 0,
+    newCount: 0,
+    inProgress: 0,
     open: 0,
     closed: 0,
     resolved: 0,
+    reopened: 0,
     waitingCustomer: 0,
   })
 
@@ -88,9 +97,22 @@ export function ReportsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Reports</h1>
-          <p className="page-subtitle">Aggregate volume, open load, and customer breakdowns with calmer layered surfaces.</p>
+          <p className="page-subtitle">
+            Aggregate volume, open load, and customer breakdowns.
+            {' '}<span className="text-gray-400">Showing: {formatReportDateRangeLabel(dateRange)}</span>
+          </p>
         </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          leftIcon={<HelpCircle size={14} />}
+          onClick={() => setIsHelpOpen(true)}
+        >
+          Help
+        </Button>
       </div>
+
+      <HelpDrawer isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} config={reportsHelp} />
 
       <ReportDateFilter
         value={dateRange}
@@ -106,16 +128,21 @@ export function ReportsPage() {
             onClick={handleExportPdf}
             isLoading={isExporting}
             disabled={isLoading || isError || !data || data.items.length === 0}
+            title={`Export ${formatReportDateRangeLabel(dateRange)}`}
           >
-            Export PDF
+            Export PDF ({formatReportDateRangeLabel(dateRange)})
           </Button>
         ) : null}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-2">
         <SummaryCard label="Total Tickets" value={totals.total} isLoading={isLoading} />
+        <SummaryCard label="New" value={totals.newCount} isLoading={isLoading} />
+        <SummaryCard label="In Progress" value={totals.inProgress} isLoading={isLoading} />
         <SummaryCard label="Open / Active" value={totals.open} isLoading={isLoading} />
         <SummaryCard label="Resolved" value={totals.resolved} isLoading={isLoading} />
+        <SummaryCard label="Closed" value={totals.closed} isLoading={isLoading} />
+        <SummaryCard label="Reopened" value={totals.reopened} isLoading={isLoading} />
         <SummaryCard label="Waiting Customer" value={totals.waitingCustomer} isLoading={isLoading} />
       </div>
 
@@ -123,14 +150,15 @@ export function ReportsPage() {
         <div className="section-header gap-2">
           <BarChart2 className="w-4 h-4 text-gray-400" />
           <h2 className="text-sm font-semibold text-gray-700">Customer Aggregate Report</h2>
+          <span className="ml-auto text-xs text-gray-400">{formatReportDateRangeLabel(dateRange)}</span>
         </div>
 
         {isLoading ? (
           <table className="w-full">
             <tbody>
-              <SkeletonRow colCount={4} />
-              <SkeletonRow colCount={4} />
-              <SkeletonRow colCount={4} />
+              <SkeletonRow colCount={9} />
+              <SkeletonRow colCount={9} />
+              <SkeletonRow colCount={9} />
             </tbody>
           </table>
         ) : (
@@ -139,19 +167,23 @@ export function ReportsPage() {
               <tr className="border-b border-white/60 bg-[linear-gradient(180deg,rgba(255,255,255,0.76)_0%,rgba(244,248,255,0.64)_100%)]">
                 <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Customer</th>
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Total</th>
+                <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">New</th>
+                <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">In Progress</th>
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Open</th>
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Resolved</th>
+                <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Closed</th>
+                <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Reopened</th>
                 <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Waiting</th>
               </tr>
             </thead>
             <tbody className="table-body-striped divide-y divide-white/50">
               {isError ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-sm text-amber-700">{getErrorMessage(error, 'Failed to load aggregate report.')}</td>
+                  <td colSpan={9} className="px-4 py-6 text-sm text-amber-700">{getErrorMessage(error, 'Failed to load aggregate report.')}</td>
                 </tr>
               ) : (data?.items ?? []).length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-sm text-slate-500">No report rows were returned for the selected date range.</td>
+                  <td colSpan={9} className="px-4 py-6 text-sm text-slate-500">No report rows were returned for the selected date range.</td>
                 </tr>
               ) : (data?.items ?? []).map((item) => (
                 <tr key={item.customerId}>
@@ -162,8 +194,12 @@ export function ReportsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right text-gray-700 font-medium">{item.totalCount}</td>
+                  <td className="px-4 py-3 text-right text-blue-600">{item.newCount}</td>
+                  <td className="px-4 py-3 text-right text-indigo-600">{item.inProgressCount}</td>
                   <td className="px-4 py-3 text-right text-amber-600">{item.openCount}</td>
                   <td className="px-4 py-3 text-right text-green-600">{item.resolvedCount}</td>
+                  <td className="px-4 py-3 text-right text-gray-500">{item.closedCount}</td>
+                  <td className="px-4 py-3 text-right text-orange-500">{item.reopenedCount}</td>
                   <td className="px-4 py-3 text-right text-sky-600">{item.waitingCustomerCount}</td>
                 </tr>
               ))}
@@ -187,9 +223,9 @@ export function ReportsPage() {
 
 function SummaryCard({ label, value, isLoading }: { label: string; value: number; isLoading: boolean }) {
   return (
-    <div className="premium-stat-card p-4">
-      <div className="premium-stat-kicker text-[11px] tracking-[0.14em]">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-slate-950">{isLoading ? '...' : value}</div>
+    <div className="premium-stat-card flex items-center gap-3 px-3 py-2.5">
+      <div className="text-xl font-semibold tracking-[-0.03em] text-slate-950 tabular-nums">{isLoading ? '…' : value}</div>
+      <div className="premium-stat-kicker text-[10px] tracking-[0.12em] leading-tight">{label}</div>
     </div>
   )
 }

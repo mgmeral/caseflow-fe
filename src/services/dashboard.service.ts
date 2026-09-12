@@ -12,6 +12,11 @@ export interface DashboardStats {
   waitingOver24h: number
   myActionRequired: number
   myActionRequiredItems: Ticket[]
+  /** Only populated when backend returns these fields */
+  slaBreached: number
+  atRisk: number
+  /** True when backend sent slaBreached/atRisk fields (even if 0) */
+  slaDataAvailable: boolean
 }
 
 function toNumber(value: unknown): number {
@@ -19,6 +24,9 @@ function toNumber(value: unknown): number {
 }
 
 function normalizeDashboardStats(response: DashboardStatsResponse): DashboardStats {
+  // Accept both legacy slaBreached and canonical breachedSlaCount
+  const slaBreachedRaw = response.breachedSlaCount ?? response.slaBreached ?? null
+  const atRiskRaw = response.atRiskSlaCount ?? response.atRisk ?? null
   return {
     totalTickets: toNumber(response.totalTickets),
     activeTickets: toNumber(response.activeTickets),
@@ -30,6 +38,9 @@ function normalizeDashboardStats(response: DashboardStatsResponse): DashboardSta
     myActionRequiredItems: Array.isArray(response.myActionRequiredItems)
       ? response.myActionRequiredItems.map((item) => normalizeTicket(item))
       : [],
+    slaBreached: toNumber(slaBreachedRaw),
+    atRisk: toNumber(atRiskRaw),
+    slaDataAvailable: slaBreachedRaw != null || atRiskRaw != null,
   }
 }
 

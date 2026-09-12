@@ -22,6 +22,7 @@ export function TransferModal({
   isOpen,
   onClose,
   ticketNo,
+  fromGroupId,
   fromGroupName,
   transferableGroups,
   onTransfer,
@@ -33,6 +34,7 @@ export function TransferModal({
 
   const toGroup = transferableGroups.find((g) => g.id === toGroupId)
   const trimmedReason = reason.trim()
+  const isSameGroup = Boolean(toGroupId && toGroupId === fromGroupId)
 
   const resetState = () => {
     setStep('form')
@@ -67,7 +69,7 @@ export function TransferModal({
               variant="primary"
               size="sm"
               onClick={() => setStep('confirm')}
-              disabled={!toGroupId}
+              disabled={!toGroupId || isSameGroup}
             >
               Review Transfer
             </Button>
@@ -110,6 +112,12 @@ export function TransferModal({
               ))}
             </select>
           </div>
+
+          {isSameGroup && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+              <strong>{fromGroupName}</strong> is already the ticket's group. Select a different group to transfer.
+            </div>
+          )}
 
           {/* Reason */}
           <div>

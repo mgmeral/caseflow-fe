@@ -3,6 +3,7 @@ import { Pencil, Plus, ShieldOff, ToggleLeft, ToggleRight, Tags } from 'lucide-r
 import { useActivateTag, useAllTags, useCreateTag, useDeactivateTag, useUpdateTag } from '@/hooks/useTags'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errors'
 import type { CreateTagRequest } from '@/types/api.types'
 import type { TicketTag } from '@/types/ticket.types'
 import { Button } from '@/components/shared/Button'
@@ -160,7 +161,7 @@ export function TagManagementPage() {
           setEditingTag(null)
         },
         onError: (error) => {
-          showError(error instanceof Error ? error.message : 'Failed to create tag.')
+          showError(getErrorMessage(error, 'Failed to create tag.'))
         },
       })
       return
@@ -178,7 +179,7 @@ export function TagManagementPage() {
         setEditingTag(null)
       },
       onError: (error) => {
-        showError(error instanceof Error ? error.message : 'Failed to update tag.')
+        showError(getErrorMessage(error, 'Failed to update tag.'))
       },
     })
   }
@@ -271,7 +272,7 @@ export function TagManagementPage() {
                             onClick={() => {
                               deactivateTag.mutate(tag.id, {
                                 onSuccess: () => success('Tag deactivated.'),
-                                onError: (error) => showError(error instanceof Error ? error.message : 'Failed to deactivate tag.'),
+                                onError: (error) => showError(getErrorMessage(error, 'Failed to deactivate tag.')),
                               })
                             }}
                           >
@@ -286,7 +287,7 @@ export function TagManagementPage() {
                             onClick={() => {
                               activateTag.mutate(tag.id, {
                                 onSuccess: () => success('Tag activated.'),
-                                onError: (error) => showError(error instanceof Error ? error.message : 'Failed to activate tag.'),
+                                onError: (error) => showError(getErrorMessage(error, 'Failed to activate tag.')),
                               })
                             }}
                           >

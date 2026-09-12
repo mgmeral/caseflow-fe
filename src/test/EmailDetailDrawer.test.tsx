@@ -111,4 +111,24 @@ describe('EmailDetailDrawer', () => {
 
     expect(screen.getByRole('button', { name: 'View Attachments' })).toBeInTheDocument()
   })
+
+  it('does not crash when to/cc/bcc are null, a plain string, or an object', () => {
+    const variants: Array<{ to: unknown; cc: unknown; bcc: unknown }> = [
+      { to: null, cc: null, bcc: null },
+      { to: 'support@example.com', cc: 'a@b.com', bcc: undefined },
+      { to: { address: 'support@example.com' }, cc: [], bcc: [] },
+    ]
+    for (const addr of variants) {
+      const { unmount } = render(
+        <EmailDetailDrawer
+          isOpen
+          onClose={() => undefined}
+          email={{ ...sampleEmail, ...(addr as Record<string, unknown>) } as typeof sampleEmail}
+          isLoading={false}
+        />,
+      )
+      expect(screen.getByText('Need help')).toBeInTheDocument()
+      unmount()
+    }
+  })
 })

@@ -8,6 +8,7 @@ import {
 import { useMailboxes } from '@/hooks/useMailboxes'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errors'
 import { customerEmailSettingsService } from '@/services/customerEmailSettings.service'
 import type { UpsertCustomerEmailSettingsRequest, UpsertCustomerEmailRoutingRuleRequest } from '@/types/api.types'
 import type { CustomerEmailRoutingRule } from '@/types/email.types'
@@ -113,7 +114,7 @@ export function CustomerEmailSettingsPage() {
       setSettingsForm(null)
       success('Email settings saved')
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Failed to save settings')
+      error(getErrorMessage(err, 'Failed to save settings'))
     } finally {
       setSavingSettings(false)
     }
@@ -164,7 +165,7 @@ export function CustomerEmailSettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ['customer-email-routing-rules', selectedCustomerId] })
       setRuleModal(null)
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Failed to save rule')
+      error(getErrorMessage(err, 'Failed to save rule'))
     } finally {
       setSavingRule(false)
     }
@@ -176,7 +177,7 @@ export function CustomerEmailSettingsPage() {
       await queryClient.invalidateQueries({ queryKey: ['customer-email-routing-rules', selectedCustomerId] })
       success('Rule deleted')
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Failed to delete rule')
+      error(getErrorMessage(err, 'Failed to delete rule'))
     } finally {
       setDeletingRuleId(null)
     }
@@ -200,7 +201,7 @@ export function CustomerEmailSettingsPage() {
       }
       await queryClient.invalidateQueries({ queryKey: ['customer-email-routing-rules', selectedCustomerId] })
     } catch (err) {
-      error(err instanceof Error ? err.message : 'Toggle failed')
+      error(getErrorMessage(err, 'Toggle failed'))
     }
   }
 

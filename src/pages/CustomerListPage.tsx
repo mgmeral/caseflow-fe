@@ -8,6 +8,7 @@ import { Button } from '@/components/shared/Button'
 import { ColorField, normalizeOptionalHexColor } from '@/components/shared/ColorField'
 import { Modal } from '@/components/shared/Modal'
 import { useToast } from '@/hooks/useToast'
+import { getErrorMessage } from '@/lib/errors'
 import { Users, Search, Plus, Settings2 } from 'lucide-react'
 
 function CustomerColorDot({ colorHex }: { colorHex: string | null }) {
@@ -65,7 +66,7 @@ export function CustomerListPage() {
       closeCreateModal()
       navigate(`/customers/${created.id}`)
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to create customer')
+      showError(getErrorMessage(err, 'Failed to create customer'))
     }
   }
 

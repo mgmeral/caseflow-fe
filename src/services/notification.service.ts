@@ -19,7 +19,12 @@ function normalizeNotification(raw: NotificationResponse): NotificationItem {
     isRead: raw.isRead === true,
     createdAt: toText(raw.createdAt, new Date().toISOString()),
     ticketId: raw.ticketId == null ? null : String(raw.ticketId),
+    ticketPublicId: raw.ticketPublicId ?? null,
     ticketNo: raw.ticketNo == null ? null : String(raw.ticketNo),
+    groupId: raw.groupId == null ? null : String(raw.groupId),
+    actorUserId: raw.actorUserId == null ? null : String(raw.actorUserId),
+    noteId: raw.noteId == null ? null : String(raw.noteId),
+    readAt: raw.readAt ?? null,
   }
 }
 

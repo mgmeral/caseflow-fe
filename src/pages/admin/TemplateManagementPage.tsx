@@ -19,6 +19,10 @@ interface TemplateFormState {
   name: string
   code: string
   usageType: string
+  description: string
+  supportedPlaceholders: string
+  customerVisible: boolean
+  defaultStatusAfterSend: string
   subjectTemplate: string
   htmlTemplate: string
   plainTextTemplate: string
@@ -29,6 +33,10 @@ const EMPTY_FORM: TemplateFormState = {
   name: '',
   code: '',
   usageType: '',
+  description: '',
+  supportedPlaceholders: '',
+  customerVisible: false,
+  defaultStatusAfterSend: '',
   subjectTemplate: '',
   htmlTemplate: '',
   plainTextTemplate: '',
@@ -121,6 +129,10 @@ export function TemplateManagementPage() {
       name: template.name,
       code: template.code,
       usageType: template.usageType ?? '',
+      description: template.description ?? '',
+      supportedPlaceholders: template.supportedPlaceholders ?? '',
+      customerVisible: template.customerVisible ?? false,
+      defaultStatusAfterSend: template.defaultStatusAfterSend ?? '',
       subjectTemplate: template.subjectTemplate,
       htmlTemplate: template.htmlTemplate,
       plainTextTemplate: template.plainTextTemplate,
@@ -143,6 +155,10 @@ export function TemplateManagementPage() {
       name: form.name.trim(),
       code: normalizeTemplateCode(form.code),
       usageType: form.usageType.trim() || null,
+      description: form.description.trim() || null,
+      supportedPlaceholders: form.supportedPlaceholders.trim() || null,
+      customerVisible: form.customerVisible,
+      defaultStatusAfterSend: form.defaultStatusAfterSend.trim() || null,
       subjectTemplate: form.subjectTemplate.trim(),
       htmlTemplate: form.htmlTemplate.trim(),
       plainTextTemplate: form.plainTextTemplate.trim(),
@@ -176,6 +192,10 @@ export function TemplateManagementPage() {
           name: tpl.name,
           code: tpl.code,
           usageType: tpl.usageType,
+          description: tpl.description,
+          supportedPlaceholders: tpl.supportedPlaceholders,
+          customerVisible: tpl.customerVisible,
+          defaultStatusAfterSend: tpl.defaultStatusAfterSend,
           subjectTemplate: tpl.subjectTemplate,
           htmlTemplate: tpl.htmlTemplate,
           plainTextTemplate: tpl.plainTextTemplate,
@@ -276,6 +296,9 @@ export function TemplateManagementPage() {
                   İçerik
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
+                  Müşteriye Görünür
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
                   Durum
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-blue-100/72">
@@ -301,6 +324,11 @@ export function TemplateManagementPage() {
                       {tpl.plainTextTemplate && <Badge variant="outline" size="sm">Text</Badge>}
                       {!tpl.htmlTemplate && !tpl.plainTextTemplate && <span>—</span>}
                     </div>
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {tpl.customerVisible
+                      ? <Badge variant="success" size="sm">Evet</Badge>
+                      : <span className="text-blue-100/40">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <button
@@ -440,6 +468,41 @@ export function TemplateManagementPage() {
                 <FieldHint text={templatesHelp.fieldHints.usageType} />
               </div>
             ) : null}
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1">Açıklama</label>
+              <input
+                type="text"
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="Şablonun ne için kullanıldığını kısaca açıklayın"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Gönderim Sonrası Durum</label>
+                <input
+                  type="text"
+                  value={form.defaultStatusAfterSend}
+                  onChange={(e) => setForm((f) => ({ ...f, defaultStatusAfterSend: e.target.value.toUpperCase() }))}
+                  placeholder="ör. WAITING_CUSTOMER"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400"
+                />
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.customerVisible}
+                    onChange={(e) => setForm((f) => ({ ...f, customerVisible: e.target.checked }))}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Müşteriye görünür
+                </label>
+              </div>
+            </div>
 
             <div>
             <label className="block text-xs font-semibold text-gray-600 mb-1">

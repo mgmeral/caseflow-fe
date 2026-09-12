@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import {
+  Activity,
   AtSign,
   FileText,
   Mail,
@@ -50,6 +51,7 @@ export function SettingsPage() {
       description: 'Connect CaseFlow with external systems used in the ticket workflow.',
       items: [
         ...(canViewEmailConfig ? [{ to: '/admin/email/mailboxes', label: 'Mailboxes', description: 'Manage mailbox connections and available sending identities.', icon: <Mail size={18} /> }] : []),
+        ...(canManageEmailConfig ? [{ to: '/admin/ingress/events', label: 'Ingress Events', description: 'Monitor, retry, quarantine and release failed inbound processing events.', icon: <Activity size={18} /> }] : []),
         ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/jira', label: 'Jira Integration', description: 'Configure Jira issue creation defaults and connection settings.', icon: <PlugZap size={18} /> }] : []),
         ...(canManageIntegrationConfig ? [{ to: '/admin/integrations/channels', label: 'Notification Channels', description: 'Route ticket events into Slack or Teams notification channels.', icon: <Webhook size={18} /> }] : []),
       ],

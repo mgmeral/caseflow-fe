@@ -343,7 +343,7 @@ describe('MailboxManagementPage', () => {
     fireEvent.click(screen.getAllByTitle('Edit')[0])
 
     expect(screen.getByText('Operational Recovery')).toBeInTheDocument()
-    expect(screen.getByText('Poll-now, cursor reset, ingress event retry, quarantine, and release actions are not exposed by the backend admin contract yet, so this screen does not simulate them.')).toBeInTheDocument()
+    expect(screen.getByText('Ingress event retry, quarantine, and release actions are managed server-side and are not available through this interface.')).toBeInTheDocument()
   })
 
   it('keeps the existing secret placeholder text in edit mode', () => {

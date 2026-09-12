@@ -39,6 +39,29 @@ function normalizeMailboxAuthType(value: MailboxAuthType | null | undefined): Ma
   return 'PASSWORD'
 }
 
+/**
+ * Safely normalize any email address value coming from the backend into a
+ * flat `string[]`.  The backend can send:
+ *   - null / undefined                → []
+ *   - "" (empty string)               → []
+ *   - "addr@example.com"              → ["addr@example.com"]
+ *   - ["a@b.com", "c@d.com"]          → ["a@b.com", "c@d.com"]
+ *   - { address: "a@b.com", name: … } → ["a@b.com"]
+ * Any other shape is silently dropped to prevent runtime crashes.
+ */
+export function normalizeAddressList(value: unknown): string[] {
+  if (value == null) return []
+  if (typeof value === 'string') return value.trim() ? [value.trim()] : []
+  if (Array.isArray(value)) {
+    return value.flatMap((v) => normalizeAddressList(v))
+  }
+  if (typeof value === 'object' && value !== null) {
+    const addr = (value as Record<string, unknown>).address ?? (value as Record<string, unknown>).email
+    if (typeof addr === 'string' && addr.trim()) return [addr.trim()]
+  }
+  return []
+}
+
 function inferMailProvider(mailbox: Pick<MailboxResponse, 'mailProvider' | 'authType' | 'imapHost' | 'smtpHost' | 'oauthTenantId' | 'oauthClientId'>): MailProvider {
   if (mailbox.mailProvider) return mailbox.mailProvider
 
@@ -239,6 +262,10 @@ function normalizeTagBreakdown(item: { tagId?: string | number | null; tagCode?:
 
 export function normalizeCustomerTicketReport(response: CustomerTicketReportResponse): CustomerTicketReport {
   return {
+    customerId: response.customerId != null ? String(response.customerId) : null,
+    customerName: response.customerName ?? null,
+    from: response.from ?? null,
+    to: response.to ?? null,
     totalCount: response.totalCount ?? 0,
     openCount: response.openCount ?? 0,
     closedCount: response.closedCount ?? 0,
@@ -257,9 +284,12 @@ function normalizeAdminCustomerTicketAggregateItem(response: AdminCustomerTicket
     customerName: response.customerName ?? 'Unknown customer',
     customerColorHex: response.customerColorHex ?? null,
     totalCount: response.totalCount ?? 0,
+    newCount: response.newCount ?? 0,
+    inProgressCount: response.inProgressCount ?? 0,
     openCount: response.openCount ?? 0,
     closedCount: response.closedCount ?? 0,
     resolvedCount: response.resolvedCount ?? 0,
+    reopenedCount: response.reopenedCount ?? 0,
     waitingCustomerCount: response.waitingCustomerCount ?? 0,
     byTag: (response.byTag ?? []).map(normalizeTagBreakdown),
   }
@@ -317,9 +347,9 @@ export function normalizeUnifiedTicketEmailDetail(response: UnifiedTicketEmailDe
     subject: response.subject ?? null,
     from: response.fromAddress ?? null,
     fromAddress: response.fromAddress ?? null,
-    to: response.toAddress ?? [],
-    cc: response.cc ?? [],
-    bcc: response.bcc ?? [],
+    to: normalizeAddressList(response.toAddress),
+    cc: normalizeAddressList(response.cc),
+    bcc: normalizeAddressList(response.bcc),
     replyTo: response.replyTo ?? null,
     bodyText: response.bodyText ?? null,
     bodyHtml: response.bodyHtml ?? null,
@@ -362,7 +392,7 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
   const status = message.status ?? null
   const timestamp = message.timestamp ?? null
   const from = message.from ?? message.fromAddress ?? null
-  const to = message.to ?? (message.toAddress ? [message.toAddress] : [])
+  const to = normalizeAddressList(message.to ?? (message.toAddress ? message.toAddress : null))
   const subject = message.subject ?? null
   const bodyPreview = message.bodyPreview ?? null
   const failureReason = message.failureReason ?? message.lastError ?? null
@@ -389,8 +419,8 @@ export function normalizeTicketEmailMessage(message: TicketEmailMessageResponse)
     subject,
     from,
     to,
-    cc: message.cc ?? [],
-    bcc: message.bcc ?? [],
+    cc: normalizeAddressList(message.cc),
+    bcc: normalizeAddressList(message.bcc),
     replyTo: message.replyTo ?? null,
     bodyText: message.bodyText ?? null,
     bodyHtml: message.bodyHtml ?? null,

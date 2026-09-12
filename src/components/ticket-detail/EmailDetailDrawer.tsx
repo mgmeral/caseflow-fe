@@ -7,6 +7,7 @@ import { SkeletonRow } from '@/components/shared/SkeletonRow'
 import type { TicketEmailMessage } from '@/types/email.types'
 import { AttachmentViewerModal } from './AttachmentViewerModal'
 import { getDispatchStatusMeta, getEmailDisplayHtml, getEmailDisplayText, isFailedDispatch } from '@/lib/ticketEmailUi'
+import { normalizeAddressList } from '@/services/email-platform.normalizers'
 
 interface EmailDetailDrawerProps {
   isOpen: boolean
@@ -72,9 +73,9 @@ export function EmailDetailDrawer({ isOpen, onClose, email, isLoading }: EmailDe
           <div className="grid grid-cols-1 gap-2 text-sm">
             <div><span className="text-gray-500">Subject:</span> <span className="text-gray-800">{email.subject ?? '—'}</span></div>
             <div><span className="text-gray-500">From:</span> <span className="text-gray-800">{email.from ?? '—'}</span></div>
-            <div><span className="text-gray-500">To:</span> <span className="text-gray-800">{email.to.join(', ') || '—'}</span></div>
-            {email.cc.length > 0 && <div><span className="text-gray-500">Cc:</span> <span className="text-gray-800">{email.cc.join(', ')}</span></div>}
-            {email.bcc.length > 0 && <div><span className="text-gray-500">Bcc:</span> <span className="text-gray-800">{email.bcc.join(', ')}</span></div>}
+            <div><span className="text-gray-500">To:</span> <span className="text-gray-800">{normalizeAddressList(email.to).join(', ') || '—'}</span></div>
+            {normalizeAddressList(email.cc).length > 0 && <div><span className="text-gray-500">Cc:</span> <span className="text-gray-800">{normalizeAddressList(email.cc).join(', ')}</span></div>}
+            {normalizeAddressList(email.bcc).length > 0 && <div><span className="text-gray-500">Bcc:</span> <span className="text-gray-800">{normalizeAddressList(email.bcc).join(', ')}</span></div>}
             {email.mailboxName && <div><span className="text-gray-500">Mailbox:</span> <span className="text-gray-800">{email.mailboxName}</span></div>}
             {email.mailboxAddress && <div><span className="text-gray-500">Mailbox Address:</span> <span className="text-gray-800">{email.mailboxAddress}</span></div>}
             {email.resolvedReplyTarget && <div><span className="text-gray-500">Reply Target:</span> <span className="text-gray-800 break-all">{email.resolvedReplyTarget}</span></div>}

@@ -4,6 +4,7 @@ import { ticketService } from '@/services/ticket.service'
 import { useAuthStore } from '@/store/auth.store'
 import { useToast } from './useToast'
 import { useMarkTicketNotificationsRead } from './useNotifications'
+import { getErrorMessage } from '@/lib/errors'
 import type { TicketStatus, TicketPriority } from '@/types/ticket.types'
 
 export function useTicketDetail(id: string) {
@@ -60,7 +61,7 @@ export function useTicketDetail(id: string) {
       success(ticket.assignedUserName ? `Ticket ${ticket.assignedUserName} adına atandı` : 'Ticket ataması kaldırıldı')
       invalidate()
     },
-    onError: () => toastError('Atama işlemi başarısız oldu'),
+    onError: (err) => toastError(getErrorMessage(err, 'Atama işlemi başarısız oldu')),
   })
 
   const changeStatusMutation = useMutation({
@@ -71,7 +72,7 @@ export function useTicketDetail(id: string) {
       success(`Durum "${ticket.status}" olarak güncellendi`)
       invalidate()
     },
-    onError: () => toastError('Durum değişikliği başarısız oldu'),
+    onError: (err) => toastError(getErrorMessage(err, 'Durum değişikliği başarısız oldu')),
   })
 
   const changePriorityMutation = useMutation({
@@ -81,7 +82,7 @@ export function useTicketDetail(id: string) {
       success('Öncelik güncellendi')
       invalidate()
     },
-    onError: () => toastError('Öncelik değişikliği başarısız oldu'),
+    onError: (err) => toastError(getErrorMessage(err, 'Öncelik değişikliği başarısız oldu')),
   })
 
   const addReplyMutation = useMutation({
@@ -91,7 +92,7 @@ export function useTicketDetail(id: string) {
       success('Yanıt gönderildi')
       invalidate()
     },
-    onError: () => toastError('Yanıt gönderilemedi'),
+    onError: (err) => toastError(getErrorMessage(err, 'Yanıt gönderilemedi')),
   })
 
   const addNoteMutation = useMutation({
@@ -101,7 +102,7 @@ export function useTicketDetail(id: string) {
       success('İç not eklendi')
       invalidate()
     },
-    onError: () => toastError('Not eklenemedi'),
+    onError: (err) => toastError(getErrorMessage(err, 'Not eklenemedi')),
   })
 
   const transferMutation = useMutation({
@@ -123,7 +124,7 @@ export function useTicketDetail(id: string) {
       success(`Ticket ${ticket.groupName} ekibine transfer edildi`)
       invalidate()
     },
-    onError: () => toastError('Transfer işlemi başarısız oldu'),
+    onError: (err) => toastError(getErrorMessage(err, 'Transfer işlemi başarısız oldu')),
   })
 
   const closeMutation = useMutation({
@@ -133,7 +134,7 @@ export function useTicketDetail(id: string) {
       success('Ticket kapatıldı')
       invalidate()
     },
-    onError: () => toastError('Ticket kapatılamadı'),
+    onError: (err) => toastError(getErrorMessage(err, 'Ticket kapatılamadı')),
   })
 
   const reopenMutation = useMutation({
@@ -143,7 +144,7 @@ export function useTicketDetail(id: string) {
       success('Ticket yeniden açıldı')
       invalidate()
     },
-    onError: () => toastError('Ticket yeniden açılamadı'),
+    onError: (err) => toastError(getErrorMessage(err, 'Ticket yeniden açılamadı')),
   })
 
   useEffect(() => {

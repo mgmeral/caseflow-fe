@@ -85,10 +85,58 @@ describe('DashboardPage', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /Waiting > 24h/i }))
-    expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=waiting')
+    fireEvent.click(screen.getByRole('button', { name: /Open > 24h/i }))
+    expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=staleOpen24h')
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: /Closed/i }))
-    expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=closed')
+  it('Open > 24h card label does not imply WAITING_CUSTOMER status only', () => {
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+
+    // Card must exist with the honest "Open > 24h" label
+    expect(screen.getByRole('button', { name: /Open > 24h/i })).toBeInTheDocument()
+
+    // Old misleading label must not exist
+    expect(screen.queryByRole('button', { name: /Waiting > 24h/i })).not.toBeInTheDocument()
+
+    // Clicking navigates to staleOpen24h preset (openOnly + overdueOnly), not
+    // the broader `active` preset, so the result set matches the metric value.
+    fireEvent.click(screen.getByRole('button', { name: /Open > 24h/i }))
+    expect(mockNavigate).toHaveBeenCalledWith('/tickets?dashboardFilter=staleOpen24h')
+  })
+
+  it('shows SLA stat cards when slaDataAvailable is true', () => {
+    dashboardState.stats = {
+      ...dashboardState.stats,
+      slaBreached: 3,
+      atRisk: 5,
+      slaDataAvailable: true,
+    } as typeof dashboardState.stats & { slaBreached: number; atRisk: number; slaDataAvailable: boolean }
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('button', { name: /SLA Breached/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /At Risk/i })).toBeInTheDocument()
+  })
+
+  it('hides SLA stat cards when slaDataAvailable is false', () => {
+    dashboardState.stats = {
+      ...dashboardState.stats,
+      slaBreached: 0,
+      atRisk: 0,
+      slaDataAvailable: false,
+    } as typeof dashboardState.stats & { slaBreached: number; atRisk: number; slaDataAvailable: boolean }
+    render(
+      <MemoryRouter>
+        <DashboardPage />
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('button', { name: /SLA Breached/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /At Risk/i })).not.toBeInTheDocument()
   })
 })

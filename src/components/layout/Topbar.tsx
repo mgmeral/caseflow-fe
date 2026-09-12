@@ -31,6 +31,28 @@ export function Topbar() {
   const notifications = notificationsQuery.data ?? []
   const unreadCount = unreadCountQuery.data ?? 0
 
+  // Client-side dedup: group by (ticketId + type). When a ticket fires the same
+  // event type multiple times (e.g. two consecutive SLA_BREACH logs) show only
+  // the most recent entry. Notifications without a ticketId are never collapsed.
+  const deduplicatedNotifications = (() => {
+    const seen = new Map<string, typeof notifications[number]>()
+    const standalone: typeof notifications[number][] = []
+    for (const n of notifications) {
+      if (!n.ticketId) {
+        standalone.push(n)
+        continue
+      }
+      const key = `${n.ticketId}::${n.type}`
+      const existing = seen.get(key)
+      if (!existing || n.createdAt > existing.createdAt) {
+        seen.set(key, n)
+      }
+    }
+    return [...seen.values(), ...standalone].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    )
+  })()
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
@@ -111,7 +133,7 @@ export function Topbar() {
                 ) : notifications.length === 0 ? (
                   <div className="px-4 py-6 text-sm text-slate-500">No notifications yet.</div>
                 ) : (
-                  notifications.slice(0, 8).map((notification) => (
+                  deduplicatedNotifications.slice(0, 8).map((notification) => (
                     <button
                       key={notification.id}
                       type="button"

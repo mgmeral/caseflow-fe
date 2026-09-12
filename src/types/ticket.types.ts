@@ -62,6 +62,10 @@ export interface TicketTagBreakdown {
 }
 
 export interface CustomerTicketReport {
+  customerId?: string | null
+  customerName?: string | null
+  from?: string | null
+  to?: string | null
   totalCount: number
   openCount: number
   closedCount: number
@@ -78,9 +82,12 @@ export interface AdminCustomerTicketAggregateItem {
   customerName: string
   customerColorHex: string | null
   totalCount: number
+  newCount: number
+  inProgressCount: number
   openCount: number
   closedCount: number
   resolvedCount: number
+  reopenedCount: number
   waitingCustomerCount: number
   byTag: TicketTagBreakdown[]
 }
@@ -92,6 +99,8 @@ export interface AdminCustomerTicketAggregateReport {
   total: number
   totalPages: number
 }
+
+export type SlaState = 'OK' | 'WARNING' | 'BREACHED' | 'RESOLVED' | 'PAUSED'
 
 export interface Ticket {
   id: string
@@ -112,11 +121,15 @@ export interface Ticket {
   transferredFromGroup: string | null
   createdAt: string
   updatedAt: string
+  statusChangedAt: string | null
   lastActionAt: string
   lastActionSummary: string
   openDurationMinutes: number
   slaDeadlineAt: string | null
   slaBreached: boolean
+  slaState: SlaState | null
+  firstResponseDueAt: string | null
+  resolutionDueAt: string | null
   messageCount: number
   internalNoteCount: number
   tags: TicketTag[]
@@ -213,6 +226,13 @@ export interface TicketActivityItem {
   linkUrl?: string | null
 }
 
+/**
+ * Canonical SLA filter state — mutually exclusive.
+ * UI cannot represent both 'BREACHED' and 'AT_RISK' simultaneously.
+ * Maps to backend params: BREACHED→slaBreachedOnly=true, AT_RISK→slaAtRiskOnly=true.
+ */
+export type SlaFilterState = 'BREACHED' | 'AT_RISK'
+
 export interface TicketFilters {
   search: string
   statuses: TicketStatus[]
@@ -227,4 +247,6 @@ export interface TicketFilters {
   overdueOnly: boolean
   openOnly: boolean
   transferredOnly: boolean
+  /** Absent means no SLA filter; present activates a mutually exclusive SLA predicate. */
+  slaState?: SlaFilterState
 }

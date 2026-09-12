@@ -175,7 +175,7 @@ describe('EmailReplyComposer', () => {
     expect(screen.queryByText(/^Cc$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Bcc$/)).not.toBeInTheDocument()
     expect(screen.queryByText(/^Attachments$/)).not.toBeInTheDocument()
-    expect(screen.getAllByRole('combobox')).toHaveLength(2)
+    expect(screen.getAllByRole('combobox')).toHaveLength(1)
 
     fireEvent.change(screen.getByPlaceholderText('Type your reply…'), { target: { value: 'Reply body' } })
     fireEvent.click(screen.getByRole('button', { name: 'Send' }))
@@ -640,11 +640,11 @@ describe('EmailReplyComposer', () => {
       />,
     )
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '1' } })
+    // Quick macro pill click is the primary selection surface
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledgement' }))
 
     expect(screen.getByDisplayValue('Preview Subject')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Preview text')).toBeInTheDocument()
-    expect(screen.getByText('Using backend reply preview for subject, body, and recipient resolution.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: /preview/i }))
 
@@ -684,11 +684,10 @@ describe('EmailReplyComposer', () => {
       />,
     )
 
-    fireEvent.change(screen.getAllByRole('combobox')[1], { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Acknowledgement' }))
 
     expect(screen.getByDisplayValue('Template Subject')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Template body')).toBeInTheDocument()
-    expect(screen.getByText('Template preview is unavailable. Using saved template content.')).toBeInTheDocument()
   })
 
   it('uses ticketPublicId for preview calls', () => {
@@ -707,5 +706,176 @@ describe('EmailReplyComposer', () => {
       ticketPublicId: '550e8400-e29b-41d4-a716-446655440000',
       enabled: true,
     })
+  })
+
+  it('renders template as quick macro pill alongside write from scratch option', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    // Write from scratch is the highlighted default
+    expect(screen.getByRole('button', { name: 'Write from scratch' })).toBeInTheDocument()
+    // Template pill appears as quick macro
+    expect(screen.getByRole('button', { name: 'Acknowledgement' })).toBeInTheDocument()
+    // No usageType group header rows in the quick picks area
+    expect(screen.queryByText('General')).not.toBeInTheDocument()
+  })
+
+  it('shows applied template context card after selecting a quick-pick pill', async () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    const pill = screen.getByRole('button', { name: 'Acknowledgement' })
+    await act(async () => { fireEvent.click(pill) })
+
+    // Compact card shows template name and code; Write from scratch and pill are gone
+    expect(screen.getByText('ACK')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Write from scratch' })).not.toBeInTheDocument()
+  })
+
+  it('single selection model: only mailbox combobox exists, no template dropdown', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    expect(screen.getAllByRole('combobox')).toHaveLength(1)
+    expect(screen.queryByRole('option', { name: /blank compose/i })).not.toBeInTheDocument()
+  })
+
+  it('advanced template search panel toggles open and filters results', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Search templates\u2026'))
+    expect(screen.getByPlaceholderText('Search by name or code\u2026')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByPlaceholderText('Search by name or code\u2026'), { target: { value: 'Ack' } })
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Acknowledgement' })).toBeInTheDocument()
+  })
+
+  it('selecting a template via search populates content and dismisses the search panel', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    fireEvent.click(screen.getByText('Search templates\u2026'))
+    fireEvent.change(screen.getByPlaceholderText('Search by name or code\u2026'), { target: { value: 'Ack' } })
+    fireEvent.click(screen.getByRole('option', { name: 'Acknowledgement' }))
+
+    // Search panel dismissed, compact card replaces quick macro row
+    expect(screen.queryByPlaceholderText('Search by name or code\u2026')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Write from scratch' })).not.toBeInTheDocument()
+    expect(screen.getByText('Acknowledgement')).toBeInTheDocument()
+  })
+
+  it('write from scratch closes the search panel without clearing a composed body', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    // Type a body first
+    fireEvent.change(screen.getByPlaceholderText('Type your reply\u2026'), { target: { value: 'My reply content' } })
+
+    // Open search panel then dismiss it via Write from scratch
+    fireEvent.click(screen.getByText('Search templates\u2026'))
+    expect(screen.getByPlaceholderText('Search by name or code\u2026')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Write from scratch' }))
+    expect(screen.queryByPlaceholderText('Search by name or code\u2026')).not.toBeInTheDocument()
+
+    // Composed body is intact
+    expect(screen.getByDisplayValue('My reply content')).toBeInTheDocument()
+  })
+
+  it('clearing a selected template via compact card restores the quick macro row', async () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Acknowledgement' })) })
+    // Compact card visible
+    expect(screen.getByRole('button', { name: 'Clear template' })).toBeInTheDocument()
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Clear template' })) })
+    // Quick macro row restored
+    expect(screen.getByRole('button', { name: 'Write from scratch' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Acknowledgement' })).toBeInTheDocument()
+  })
+
+  it('send and schedule eligibility logic is not regressed by template UI refactor', () => {
+    render(
+      <EmailReplyComposer
+        isOpen
+        onClose={vi.fn()}
+        ticketId="t1"
+        ticketPublicId="ticket-public-1"
+        ticketSubject="Need help"
+        lastInbound={buildInboundReplyContext()}
+      />,
+    )
+
+    // Reply CTAs are present in the footer
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument()
+
+    // Typing body and sending works
+    fireEvent.change(screen.getByPlaceholderText('Type your reply\u2026'), { target: { value: 'Some content' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }))
+    expect(mockMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ textBody: 'Some content', sourceEventId: 101 }),
+      expect.any(Object),
+    )
   })
 })

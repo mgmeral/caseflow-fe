@@ -18,8 +18,10 @@ import { SettingsPage } from '@/pages/admin/SettingsPage'
 import { MailboxManagementPage } from '@/pages/admin/MailboxManagementPage'
 import { CustomerEmailSettingsPage } from '@/pages/admin/CustomerEmailSettingsPage'
 import { TagManagementPage } from '../pages/admin/TagManagementPage'
+import { SLAPolicyPage } from '@/pages/admin/SLAPolicyPage'
 import { JiraIntegrationSettingsPage } from '@/pages/admin/JiraIntegrationSettingsPage'
 import { ChannelIntegrationSettingsPage } from '@/pages/admin/ChannelIntegrationSettingsPage'
+import { IngressEventPage } from '@/pages/admin/IngressEventPage'
 
 export const router = createBrowserRouter([
   {
@@ -113,6 +115,14 @@ export const router = createBrowserRouter([
                 ),
               },
               {
+                path: 'sla-policy',
+                element: (
+                  <ProtectedRoute requiredPermissions={['ADMIN_CONFIG']}>
+                    <SLAPolicyPage />
+                  </ProtectedRoute>
+                ),
+              },
+              {
                 path: 'settings',
                 element: <SettingsPage />,
               },
@@ -137,6 +147,14 @@ export const router = createBrowserRouter([
                 element: (
                   <ProtectedRoute requiredPermissions={['INTEGRATION_CONFIG_MANAGE']}>
                     <ChannelIntegrationSettingsPage />
+                  </ProtectedRoute>
+                ),
+              },
+              {
+                path: 'ingress/events',
+                element: (
+                  <ProtectedRoute requiredPermissions={['ADMIN_CONFIG']}>
+                    <IngressEventPage />
                   </ProtectedRoute>
                 ),
               },

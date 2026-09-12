@@ -189,7 +189,7 @@ export function CustomerDetailPage() {
       success('Customer updated')
       closeEditCustomer()
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to update customer')
+      showError(getErrorMessage(err, 'Failed to update customer'))
     }
   }
 
@@ -203,7 +203,7 @@ export function CustomerDetailPage() {
         success('Customer activated')
       }
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to update customer status')
+      showError(getErrorMessage(err, 'Failed to update customer status'))
     }
   }
 
@@ -237,7 +237,7 @@ export function CustomerDetailPage() {
       success('Customer deleted')
       navigate('/customers')
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to delete customer')
+      showError(getErrorMessage(err, 'Failed to delete customer'))
     } finally {
       setShowDeleteCustomerConfirm(false)
     }
@@ -276,7 +276,7 @@ export function CustomerDetailPage() {
       setSettingsForm(null)
       success('Email settings saved')
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to save settings')
+      showError(getErrorMessage(err, 'Failed to save settings'))
     } finally {
       setSavingSettings(false)
     }
@@ -327,7 +327,7 @@ export function CustomerDetailPage() {
       }
       setRuleModal(null)
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to save rule')
+      showError(getErrorMessage(err, 'Failed to save rule'))
     } finally {
       setSavingRule(false)
     }
@@ -338,7 +338,7 @@ export function CustomerDetailPage() {
       await deleteRule.mutateAsync(ruleId)
       success('Rule deleted')
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Failed to delete rule')
+      showError(getErrorMessage(err, 'Failed to delete rule'))
     } finally {
       setDeletingRuleId(null)
     }
@@ -361,7 +361,7 @@ export function CustomerDetailPage() {
         success('Rule activated')
       }
     } catch (err) {
-      showError(err instanceof Error ? err.message : 'Toggle failed')
+      showError(getErrorMessage(err, 'Toggle failed'))
     }
   }
 
@@ -455,6 +455,60 @@ export function CustomerDetailPage() {
       {/* Overview tab */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* Customer health summary */}
+          {!ticketsLoading && tickets.length > 0 && (() => {
+            const openTickets = tickets.filter((t) => !['RESOLVED', 'CLOSED'].includes(String(t.status)))
+            const criticalOpenTickets = openTickets.filter((t) => t.priority === 'critical')
+            const waitingTickets = openTickets.filter((t) => String(t.status) === 'WAITING_CUSTOMER')
+            const slaBreachedTickets = openTickets.filter((t) => t.slaBreached)
+            const lastActivity = tickets.reduce<string | null>((latest, t) => {
+              if (!latest || t.lastActionAt > latest) return t.lastActionAt
+              return latest
+            }, null)
+
+            const riskLevel = slaBreachedTickets.length > 0 ? 'breached'
+              : criticalOpenTickets.length > 0 ? 'critical'
+              : openTickets.length > 5 ? 'elevated'
+              : 'normal'
+
+            const riskStyles = {
+              breached: 'border-red-200 bg-red-50',
+              critical: 'border-amber-200 bg-amber-50',
+              elevated: 'border-yellow-100 bg-yellow-50',
+              normal: 'border-gray-200 bg-white',
+            }
+
+            return (
+              <div className={`lg:col-span-2 rounded-xl border p-4 ${riskStyles[riskLevel]}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="text-sm font-semibold text-gray-700">
+                    Customer Health
+                    {riskLevel === 'breached' && <span className="ml-2 inline-flex items-center rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">SLA Breached</span>}
+                    {riskLevel === 'critical' && <span className="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Critical Open</span>}
+                  </h2>
+                  {lastActivity && (
+                    <span className="text-xs text-gray-400">
+                      Last activity: {format(new Date(lastActivity), 'MMM d, HH:mm')}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Open', value: openTickets.length, accent: openTickets.length > 0 ? 'text-indigo-700' : 'text-gray-600' },
+                    { label: 'Waiting Customer', value: waitingTickets.length, accent: waitingTickets.length > 0 ? 'text-amber-700' : 'text-gray-600' },
+                    { label: 'SLA Breached', value: slaBreachedTickets.length, accent: slaBreachedTickets.length > 0 ? 'text-red-700' : 'text-gray-600' },
+                    { label: 'Total (all time)', value: tickets.length, accent: 'text-gray-600' },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-lg bg-white/60 px-3 py-2">
+                      <div className={`text-xl font-bold tabular-nums ${item.accent}`}>{item.value}</div>
+                      <div className="text-xs text-gray-500 mt-0.5">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
           {/* Customer info card */}
           <div className="surface-card p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Customer Information</h2>

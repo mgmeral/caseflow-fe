@@ -20,6 +20,7 @@ import {
   normalizeSendTicketReplyResult,
   normalizeTicketEmailMessage,
   normalizeUnifiedTicketEmailDetail,
+  normalizeAddressList,
 } from './email-platform.normalizers'
 
 function inferEmailDocumentId(item: EmailThreadItemResponse): string | null {
@@ -97,8 +98,8 @@ function toEmailDocumentMessage(email: EmailDocumentResponse, direction: 'INBOUN
     direction,
     subject: email.subject ?? null,
     from: email.from ?? null,
-    to: email.to ?? [],
-    cc: email.cc ?? [],
+    to: normalizeAddressList(email.to),
+    cc: normalizeAddressList(email.cc),
     bcc: [],
     bodyText: email.textBody ?? null,
     bodyHtml: email.htmlBody ?? email.sanitizedHtmlBody ?? null,
@@ -130,9 +131,12 @@ function buildReplyPayload(payload: SendTicketReplyRequest): {
   mailboxId: number
   sourceEventId: number
   templateId: number | null
+  templateCode: string | null
+  toAddress: string | null
   subject: string
   textBody: string | null
   htmlBody: string | null
+  inReplyToMessageId: string | null
   contentWasEdited: boolean
 } {
   const mailboxId = requireNumericContractId(
@@ -162,22 +166,29 @@ function buildReplyPayload(payload: SendTicketReplyRequest): {
     mailboxId,
     sourceEventId,
     templateId,
+    templateCode: trimOptionalText(payload.templateCode),
+    toAddress: trimOptionalText(payload.toAddress),
     subject,
     textBody,
     htmlBody,
+    inReplyToMessageId: trimOptionalText(payload.inReplyToMessageId),
     contentWasEdited: payload.contentWasEdited === true,
   }
 }
 
 function buildReplyPreviewPayload(payload: TicketReplyPreviewRequest): TicketReplyPreviewRequest {
   return {
-    sourceEventId: requireNumericContractId(
-      payload.sourceEventId,
-      'This message cannot be replied to because its inbound event reference is missing.',
-      'Reply context is invalid. Source event id must be numeric.',
+    mailboxId: requireNumericContractId(
+      payload.mailboxId,
+      'Select the mailbox that should send this reply.',
+      'Reply context is invalid. Mailbox id must be numeric.',
     ),
-    mailboxId: optionalNumericContractId(payload.mailboxId, 'Reply context is invalid. Mailbox id must be numeric.'),
+    sourceEventId: optionalNumericContractId(payload.sourceEventId, 'Reply context is invalid. Source event id must be numeric.'),
     templateId: optionalNumericContractId(payload.templateId, 'Selected template id is invalid.'),
+    templateCode: payload.templateCode ?? undefined,
+    subjectOverride: payload.subjectOverride ?? undefined,
+    bodyText: payload.bodyText ?? undefined,
+    bodyHtml: payload.bodyHtml ?? undefined,
   }
 }
 

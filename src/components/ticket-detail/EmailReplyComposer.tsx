@@ -25,6 +25,11 @@ interface EmailReplyComposerProps {
   /** Ticket subject fallback */
   ticketSubject?: string
   isTicketClosed?: boolean
+  /**
+   * AI-generated draft text to pre-populate the body when the composer opens.
+   * The agent must review and edit before sending — this never triggers auto-send.
+   */
+  initialDraft?: string | null
 }
 
 function stripHtml(html: string): string {
@@ -69,6 +74,7 @@ export function EmailReplyComposer({
   lastInbound,
   ticketSubject,
   isTicketClosed = false,
+  initialDraft,
 }: EmailReplyComposerProps) {
   const { success, error: toastError, info } = useToast()
   const { data: mailboxData } = useMailboxes({ active: true })
@@ -95,14 +101,17 @@ export function EmailReplyComposer({
   const [subject, setSubject] = useState(defaultSubject)
   const [body, setBody] = useState('')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const [templateSearch, setTemplateSearch] = useState('')
   const [selectedTemplateHtml, setSelectedTemplateHtml] = useState<string | null>(null)
   const [showTemplatePreview, setShowTemplatePreview] = useState(false)
+  const [showTemplateSearch, setShowTemplateSearch] = useState(false)
   const [feedback, setFeedback] = useState<ComposerFeedback | null>(null)
   const [contentWasEdited, setContentWasEdited] = useState(false)
   const [lastAppliedPreviewKey, setLastAppliedPreviewKey] = useState('')
   const [showScheduleModal, setShowScheduleModal] = useState(false)
   const [scheduleAt, setScheduleAt] = useState('')
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId) ?? null
+  const quickMacros = templates.slice(0, 6)
   const mailboxNumericId = parseNumericContractId(mailboxId)
   const defaultMailboxNumericId = parseNumericContractId(effectiveInboundEmail?.mailboxId)
   const selectedTemplateNumericId = parseNumericContractId(selectedTemplateId)
@@ -128,14 +137,16 @@ export function EmailReplyComposer({
 
     setMailboxId(effectiveInboundEmail?.mailboxId ?? '')
     setSubject(defaultSubject)
-    setBody('')
+    setBody(initialDraft ?? '')
     setSelectedTemplateId('')
     setSelectedTemplateHtml(null)
     setShowTemplatePreview(false)
+    setShowTemplateSearch(false)
+    setTemplateSearch('')
     setFeedback(null)
     setContentWasEdited(false)
     setLastAppliedPreviewKey('')
-  }, [defaultSubject, effectiveInboundEmail?.mailboxId, isOpen])
+  }, [defaultSubject, effectiveInboundEmail?.mailboxId, initialDraft, isOpen])
 
   const resolvedToAddress = previewQuery.data?.derivedToAddress ?? effectiveInboundEmail?.replyContext?.resolvedReplyTarget ?? effectiveInboundEmail?.resolvedReplyTarget ?? ''
   const canBackendResolveRecipient = replySourceEventId != null
@@ -283,6 +294,8 @@ export function EmailReplyComposer({
     setSelectedTemplateId('')
     setSelectedTemplateHtml(null)
     setShowTemplatePreview(false)
+    setShowTemplateSearch(false)
+    setTemplateSearch('')
     setFeedback(null)
     setContentWasEdited(false)
     setLastAppliedPreviewKey('')
@@ -472,36 +485,138 @@ export function EmailReplyComposer({
             ) : null}
 
             <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="block text-xs font-medium text-gray-600">Template</label>
-                {selectedTemplateId && (
-                  <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-800" onClick={() => setShowTemplatePreview(true)}>
-                    <Eye size={12} />
+              <label className="mb-1.5 block text-xs font-medium text-gray-600">Template / Macro</label>
+
+              {/* Selected template compact card */}
+              {selectedTemplate ? (
+                <div className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs font-medium text-indigo-800">{selectedTemplate.name}</span>
+                    {selectedTemplate.usageType && (
+                      <span className="ml-2 text-[10px] font-medium uppercase tracking-wide text-indigo-400">{selectedTemplate.usageType}</span>
+                    )}
+                    {selectedTemplate.code && (
+                      <span className="ml-1.5 font-mono text-[10px] text-indigo-400">{selectedTemplate.code}</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplatePreview(true)}
+                    className="flex items-center gap-0.5 text-xs text-indigo-500 hover:text-indigo-700"
+                    aria-label="Preview template"
+                  >
+                    <Eye size={11} />
                     Preview
                   </button>
-                )}
-              </div>
-              <select
-                value={selectedTemplateId}
-                onChange={(e) => handleTemplateChange(e.target.value)}
-                className="ui-select"
-              >
-                <option value="">No template</option>
-                {templates.map((template) => (
-                  <option key={template.id} value={template.id}>{template.name}</option>
-                ))}
-              </select>
+                  <button
+                    type="button"
+                    onClick={() => handleTemplateChange('')}
+                    className="ml-0.5 rounded p-0.5 text-gray-400 hover:text-gray-600"
+                    aria-label="Clear template"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                /* Quick macros + search picker (active when no template is selected) */
+                <div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {/* Write from scratch — the active default */}
+                    <button
+                      type="button"
+                      onClick={() => { setShowTemplateSearch(false); setTemplateSearch(''); }}
+                      className="rounded-full border-2 border-slate-300 bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700"
+                    >
+                      Write from scratch
+                    </button>
+
+                    {/* Quick macro pills */}
+                    {quickMacros.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => handleTemplateChange(t.id)}
+                        className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 transition-colors hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700"
+                        title={t.usageType ?? t.code}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+
+                    {/* Search toggle */}
+                    {templates.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowTemplateSearch((prev) => !prev)}
+                        className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-500 transition-colors hover:border-indigo-300 hover:text-indigo-600"
+                      >
+                        {showTemplateSearch ? 'Hide search' : 'Search templates…'}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Advanced search panel */}
+                  {showTemplateSearch && (
+                    <div className="relative mt-2">
+                      <input
+                        type="search"
+                        placeholder="Search by name or code…"
+                        value={templateSearch}
+                        onChange={(e) => setTemplateSearch(e.target.value)}
+                        className="ui-input text-xs"
+                        aria-label="Search templates"
+                        autoFocus
+                      />
+                      {templateSearch.trim() && (
+                        <ul
+                          role="listbox"
+                          aria-label="Template search results"
+                          className="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg"
+                        >
+                          {(() => {
+                            const s = templateSearch.trim().toLowerCase()
+                            const results = templates.filter(
+                              (t) =>
+                                t.name.toLowerCase().includes(s) ||
+                                (t.code ?? '').toLowerCase().includes(s) ||
+                                (t.usageType ?? '').toLowerCase().includes(s),
+                            )
+                            if (results.length === 0) {
+                              return <li className="px-3 py-2 text-xs text-gray-400">No templates match your search.</li>
+                            }
+                            return results.map((t) => (
+                              <li
+                                key={t.id}
+                                role="option"
+                                aria-selected={false}
+                                tabIndex={0}
+                                onClick={() => { handleTemplateChange(t.id); setShowTemplateSearch(false); setTemplateSearch(''); }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    handleTemplateChange(t.id)
+                                    setShowTemplateSearch(false)
+                                    setTemplateSearch('')
+                                    e.preventDefault()
+                                  }
+                                }}
+                                className="flex cursor-pointer items-center justify-between px-3 py-2 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-700"
+                              >
+                                <span>{t.name}</span>
+                                {t.usageType && (
+                                  <span className="text-[10px] uppercase tracking-wide text-slate-400">{t.usageType}</span>
+                                )}
+                              </li>
+                            ))
+                          })()}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {templatesQuery.isError && (
                 <p className="mt-1 text-xs text-amber-700">Template list is unavailable for this session.</p>
-              )}
-              {previewQuery.isLoading && (
-                <p className="mt-1 text-xs text-gray-500">Loading backend reply preview. You can still continue once mailbox, source email, and body are ready.</p>
-              )}
-              {previewQuery.data && !previewQuery.isLoading && (
-                <p className="mt-1 text-xs text-emerald-700">Using backend reply preview for subject, body, and recipient resolution.</p>
-              )}
-              {previewQuery.isError && (
-                <p className="mt-1 text-xs text-amber-700">Template preview is unavailable. Using saved template content.</p>
               )}
             </div>
 

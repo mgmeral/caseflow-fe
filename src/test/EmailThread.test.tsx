@@ -256,4 +256,55 @@ describe('EmailThread', () => {
 
     expect(screen.getByText('Delivery failed: Mailbox unavailable')).toBeInTheDocument()
   })
+
+  // -------------------------------------------------------------------------
+  // Regression: "displayEmail.to.join is not a function" crash
+  // -------------------------------------------------------------------------
+  describe('address field coercion — does not crash on non-array shapes', () => {
+    it('renders when "to" is a plain string', () => {
+      render(
+        <EmailThread
+          ticketPublicId="t1"
+          emails={[{ ...sampleEmail, to: 'support@caseflow.com' as unknown as string[] }]}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button'))
+      expect(screen.getByText(/support@caseflow\.com/)).toBeInTheDocument()
+    })
+
+    it('renders when "to" is an array', () => {
+      render(
+        <EmailThread
+          ticketPublicId="t1"
+          emails={[{ ...sampleEmail, to: ['a@b.com', 'c@d.com'] }]}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button'))
+      expect(screen.getByText(/a@b\.com/)).toBeInTheDocument()
+    })
+
+    it('renders without crashing when "to" is null', () => {
+      render(
+        <EmailThread
+          ticketPublicId="t1"
+          emails={[{ ...sampleEmail, to: null as unknown as string[] }]}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button'))
+      // Shows fallback dash
+      const toRow = screen.getByText(/^To:/i)
+      expect(toRow.closest('div')).toHaveTextContent('—')
+    })
+
+    it('renders without crashing when "to" is an object with address field', () => {
+      render(
+        <EmailThread
+          ticketPublicId="t1"
+          emails={[{ ...sampleEmail, to: { address: 'obj@example.com', name: 'Obj' } as unknown as string[] }]}
+        />,
+      )
+      fireEvent.click(screen.getByRole('button'))
+      expect(screen.getByText(/obj@example\.com/)).toBeInTheDocument()
+    })
+  })
 })

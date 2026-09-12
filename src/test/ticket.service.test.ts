@@ -62,6 +62,56 @@ describe('ticketService', () => {
     expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('tagCode=VIP'))
   })
 
+  it('sends slaBreachedOnly=true when slaState is BREACHED', async () => {
+    mockGet.mockResolvedValueOnce({ items: [], totalElements: 0 })
+
+    await ticketService.getAll({
+      search: '',
+      statuses: [],
+      priorities: [],
+      assignedUserIds: [],
+      groupIds: [],
+      tagIds: [],
+      tagCodes: [],
+      dateFrom: null,
+      dateTo: null,
+      unassignedOnly: false,
+      overdueOnly: false,
+      openOnly: true,
+      transferredOnly: false,
+      slaState: 'BREACHED',
+    }, { field: 'updatedAt', direction: 'desc' }, 1, 25)
+
+    expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('openOnly=true'))
+    expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('slaBreachedOnly=true'))
+    expect(mockGet).not.toHaveBeenCalledWith(expect.stringContaining('slaAtRiskOnly=true'))
+  })
+
+  it('sends slaAtRiskOnly=true when slaState is AT_RISK', async () => {
+    mockGet.mockResolvedValueOnce({ items: [], totalElements: 0 })
+
+    await ticketService.getAll({
+      search: '',
+      statuses: [],
+      priorities: [],
+      assignedUserIds: [],
+      groupIds: [],
+      tagIds: [],
+      tagCodes: [],
+      dateFrom: null,
+      dateTo: null,
+      unassignedOnly: false,
+      overdueOnly: false,
+      openOnly: true,
+      transferredOnly: false,
+      slaState: 'AT_RISK',
+    }, { field: 'updatedAt', direction: 'desc' }, 1, 25)
+
+    expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('openOnly=true'))
+    expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('slaAtRiskOnly=true'))
+    expect(mockGet).not.toHaveBeenCalledWith(expect.stringContaining('slaBreachedOnly=true'))
+  })
+
   it('preserves the current group in assignment payloads', async () => {
     assignOrReassignSpy.mockResolvedValueOnce({ id: 'a1' })
     mockGet.mockResolvedValueOnce({

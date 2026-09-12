@@ -1,13 +1,13 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Ticket, CheckCircle, Clock, UserX, Hourglass, CheckCircle2 } from 'lucide-react'
+import { Ticket, CheckCircle, Clock, UserX, Hourglass, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react'
 import { StatCard } from '@/components/dashboard/StatCard'
 import { useAuthStore } from '@/store/auth.store'
 import { useDashboardStats } from '@/hooks/useDashboard'
 import { PriorityBadge } from '@/components/tickets/PriorityBadge'
 import { TicketStatusBadge } from '@/components/tickets/TicketStatusBadge'
 
-type DashboardFilter = 'active' | 'unassigned' | 'waiting' | 'resolved' | 'closed'
+type DashboardFilter = 'active' | 'unassigned' | 'waiting' | 'resolved' | 'closed' | 'staleOpen24h' | 'slaBreached' | 'slaAtRisk'
 
 export function DashboardPage() {
   const { currentUser } = useAuthStore()
@@ -32,7 +32,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-4 lg:grid-cols-8 gap-3">
         <StatCard label="Total" value={stats?.totalTickets ?? 0} icon={Ticket} color="indigo" />
         <StatCard
           label="Active"
@@ -49,11 +49,11 @@ export function DashboardPage() {
           onClick={() => navigateToTickets('unassigned')}
         />
         <StatCard
-          label="Waiting > 24h"
+          label="Open > 24h"
           value={stats?.waitingOver24h ?? 0}
           icon={Hourglass}
           color="red"
-          onClick={() => navigateToTickets('waiting')}
+          onClick={() => navigateToTickets('staleOpen24h')}
         />
         <StatCard
           label="Resolved"
@@ -69,6 +69,24 @@ export function DashboardPage() {
           color="gray"
           onClick={() => navigateToTickets('closed')}
         />
+        {stats?.slaDataAvailable && (
+          <StatCard
+            label="SLA Breached"
+            value={stats.slaBreached}
+            icon={ShieldAlert}
+            color="red"
+            onClick={() => navigateToTickets('slaBreached')}
+          />
+        )}
+        {stats?.slaDataAvailable && (
+          <StatCard
+            label="At Risk"
+            value={stats.atRisk}
+            icon={AlertTriangle}
+            color="amber"
+            onClick={() => navigateToTickets('slaAtRisk')}
+          />
+        )}
       </div>
 
       <div className="section-shell">

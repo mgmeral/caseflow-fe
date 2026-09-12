@@ -53,7 +53,7 @@ export const queueService = {
     return {
       awaitingAssignment: toNumber(response.awaitingAssignment) ?? toNumber(response.allUnassigned) ?? 0,
       allUnassigned: toNumber(response.allUnassigned) ?? toNumber(response.awaitingAssignment) ?? 0,
-      highCritical: toNumber(response.highCritical),
+      highCritical: toNumber(response.highOrCritical) ?? toNumber(response.highCritical),
       waitingOver8h: toNumber(response.waitingOver8h),
       slaBreached: toNumber(response.slaBreached),
     }

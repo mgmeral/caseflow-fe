@@ -53,6 +53,7 @@ export function AssignmentModal({
   })
 
   const selectedUser = users.find((u) => u.id === selectedUserId)
+  const isSameAssignee = Boolean(selectedUserId && selectedUserId === currentAssigneeId)
 
   const resetState = () => {
     setSelectedGroupId('')
@@ -95,7 +96,7 @@ export function AssignmentModal({
             size="sm"
             onClick={handleAssign}
             isLoading={isAssigning}
-            disabled={!selectedUserId}
+            disabled={!selectedUserId || isSameAssignee}
           >
             {hasActiveAssignment ? 'Reassign' : 'Assign'}
           </Button>
@@ -143,7 +144,14 @@ export function AssignmentModal({
           />
           <div className="surface-section max-h-48 overflow-y-auto rounded-xl p-1">
             {filteredUsers.length === 0 ? (
-              <p className="text-sm text-gray-400 text-center py-3">No agents found</p>
+              <div className="px-3 py-4 text-center">
+                <p className="text-sm text-gray-400">No agents found</p>
+                {selectedGroupId && userSearch === '' && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    No active agents in this group. Try a different group or clear the filter.
+                  </p>
+                )}
+              </div>
             ) : (
               filteredUsers.map((user) => (
                 <button
@@ -169,6 +177,13 @@ export function AssignmentModal({
             )}
           </div>
         </div>
+
+        {/* Same-assignee warning */}
+        {isSameAssignee && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            {selectedUser?.fullName} is already assigned to this ticket. Select a different agent to reassign.
+          </div>
+        )}
 
         {/* Note */}
         <div>

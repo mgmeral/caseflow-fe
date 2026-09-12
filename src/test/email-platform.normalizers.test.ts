@@ -6,6 +6,7 @@ import {
   normalizeCustomerEmailRoutingRule,
   normalizeTicketEmailMessage,
   normalizeSendTicketReplyResult,
+  normalizeAddressList,
 } from '@/services/email-platform.normalizers'
 import type {
   MailboxResponse,
@@ -477,6 +478,98 @@ describe('email-platform normalizers', () => {
       expect(result.mailboxId).toBeNull()
       expect(result.acceptedAt).toBeNull()
       expect(result.message).toBeNull()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // normalizeAddressList — regression suite for the "to.join is not a function" crash
+  // -------------------------------------------------------------------------
+  describe('normalizeAddressList', () => {
+    it('returns [] for null', () => {
+      expect(normalizeAddressList(null)).toEqual([])
+    })
+
+    it('returns [] for undefined', () => {
+      expect(normalizeAddressList(undefined)).toEqual([])
+    })
+
+    it('returns [] for empty string', () => {
+      expect(normalizeAddressList('')).toEqual([])
+    })
+
+    it('wraps a plain string into a single-element array', () => {
+      expect(normalizeAddressList('user@example.com')).toEqual(['user@example.com'])
+    })
+
+    it('passes through a string array unchanged', () => {
+      expect(normalizeAddressList(['a@b.com', 'c@d.com'])).toEqual(['a@b.com', 'c@d.com'])
+    })
+
+    it('extracts address from an object with an address field', () => {
+      expect(normalizeAddressList({ address: 'obj@example.com', name: 'Test' })).toEqual(['obj@example.com'])
+    })
+
+    it('extracts address from an object with an email field', () => {
+      expect(normalizeAddressList({ email: 'obj@example.com' })).toEqual(['obj@example.com'])
+    })
+
+    it('filters nulls and empties from a mixed array', () => {
+      expect(normalizeAddressList([null, '', 'valid@example.com', undefined])).toEqual(['valid@example.com'])
+    })
+
+    it('flattens arrays of objects', () => {
+      expect(normalizeAddressList([{ address: 'a@b.com' }, { address: 'c@d.com' }])).toEqual(['a@b.com', 'c@d.com'])
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // normalizeTicketEmailMessage — address coercion paths
+  // -------------------------------------------------------------------------
+  describe('normalizeTicketEmailMessage — address coercion', () => {
+    const baseMsg = {
+      id: 'e1',
+      ticketId: 't1',
+      threadKey: null,
+      messageId: '<m1>',
+      providerMessageId: null,
+      mailboxId: null,
+      mailboxName: null,
+      direction: 'OUTBOUND' as const,
+      subject: 'Reply',
+      from: 'agent@support.com',
+      bodyText: 'body',
+      bodyHtml: null,
+      bodyPreview: null,
+      sentAt: '2026-04-16T10:00:00Z',
+      receivedAt: null,
+      dispatchStatus: 'DELIVERED' as const,
+      attachments: [] as never[],
+    }
+
+    it('accepts a string "to" value (backend omits array wrapping)', () => {
+      const result = normalizeTicketEmailMessage({ ...baseMsg, to: 'customer@test.com' as unknown as string[], cc: [], bcc: [] })
+      expect(result.to).toEqual(['customer@test.com'])
+    })
+
+    it('accepts a string[] "to" value as-is', () => {
+      const result = normalizeTicketEmailMessage({ ...baseMsg, to: ['a@b.com', 'b@c.com'], cc: [], bcc: [] })
+      expect(result.to).toEqual(['a@b.com', 'b@c.com'])
+    })
+
+    it('accepts an object "to" value with address property', () => {
+      const result = normalizeTicketEmailMessage({ ...baseMsg, to: { address: 'customer@test.com', name: 'Customer' } as unknown as string[], cc: [], bcc: [] })
+      expect(result.to).toEqual(['customer@test.com'])
+    })
+
+    it('normalizes null/undefined "to" to []', () => {
+      const result = normalizeTicketEmailMessage({ ...baseMsg, to: null as unknown as string[], cc: [], bcc: [] })
+      expect(result.to).toEqual([])
+    })
+
+    it('normalizes null cc and bcc to []', () => {
+      const result = normalizeTicketEmailMessage({ ...baseMsg, to: [], cc: null as unknown as string[], bcc: null as unknown as string[] })
+      expect(result.cc).toEqual([])
+      expect(result.bcc).toEqual([])
     })
   })
 })

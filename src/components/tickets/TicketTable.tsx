@@ -25,6 +25,7 @@ interface TicketTableProps {
   onPageSizeChange: (size: number) => void
   onBulkAssign?: () => void
   onBulkStatusChange?: () => void
+  onBulkTag?: () => void
 }
 
 const COLUMNS: Array<{ key: string; label: string; sortable?: boolean; width?: string }> = [
@@ -66,6 +67,7 @@ export function TicketTable({
   onPageSizeChange,
   onBulkAssign,
   onBulkStatusChange,
+  onBulkTag,
 }: TicketTableProps) {
   const allSelected = tickets.length > 0 && tickets.every((t) => selectedIds.includes(t.id))
 
@@ -231,6 +233,9 @@ export function TicketTable({
           </Button>
           <Button variant="ghost" size="sm" className="text-sky-700 hover:bg-sky-50 hover:text-sky-800" onClick={onBulkStatusChange}>
             Change Status
+          </Button>
+          <Button variant="ghost" size="sm" className="text-sky-700 hover:bg-sky-50 hover:text-sky-800" onClick={onBulkTag}>
+            Add Tags
           </Button>
           <Button variant="ghost" size="sm" className="text-sky-700 hover:bg-sky-50 hover:text-sky-800">
             Export

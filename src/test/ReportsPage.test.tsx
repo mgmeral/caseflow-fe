@@ -123,7 +123,7 @@ describe('ReportsPage', () => {
 
     renderPage()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export PDF' }))
+    fireEvent.click(screen.getByRole('button', { name: /Export PDF/i }))
 
     await waitFor(() => {
       expect(exportAdminAggregateReportPdf).toHaveBeenCalledWith(expect.objectContaining({

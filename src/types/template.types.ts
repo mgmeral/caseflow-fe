@@ -3,6 +3,10 @@ export interface MailTemplate {
   name: string
   code: string
   usageType: string | null
+  description: string | null
+  supportedPlaceholders: string | null
+  customerVisible: boolean | null
+  defaultStatusAfterSend: string | null
   subjectTemplate: string
   htmlTemplate: string
   plainTextTemplate: string
@@ -18,7 +22,11 @@ export interface MailTemplateUpsertInput {
   name: string
   code: string
   usageType?: string | null
-  subjectTemplate: string
+  description?: string | null
+  supportedPlaceholders?: string | null
+  customerVisible?: boolean | null
+  defaultStatusAfterSend?: string | null
+  subjectTemplate?: string | null
   htmlTemplate: string
   plainTextTemplate: string
   isActive: boolean
@@ -27,5 +35,8 @@ export interface MailTemplateUpsertInput {
 export interface MailTemplatePreview {
   subject: string
   html: string | null
-  plainText: string | null
+  /** Spec field */
+  text: string | null
+  /** @deprecated alias */
+  plainText?: string | null
 }
