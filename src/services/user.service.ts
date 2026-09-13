@@ -45,8 +45,9 @@ function createProfilePayload(data: UpdateUserProfileRequest): Record<string, un
 
 export const userService = {
   getAll: async (): Promise<User[]> => {
-    const res = await apiClient.get<Record<string, unknown>[]>('/users')
-    return res.map(normalizeUser)
+    const res = await apiClient.get<Record<string, unknown>[] | { items: Record<string, unknown>[] }>('/users')
+    const list = Array.isArray(res) ? res : res.items ?? []
+    return list.map(normalizeUser)
   },
 
   getById: async (id: string): Promise<User | null> => {

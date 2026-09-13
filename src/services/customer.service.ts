@@ -50,7 +50,8 @@ export const customerService = {
     if (typeof isActive === 'boolean') params.set('isActive', String(isActive))
     const qs = params.toString()
     const res = await apiClient.get<CustomerSummaryResponse[]>(`/customers${qs ? `?${qs}` : ''}`)
-    const list = Array.isArray(res) ? res : (res as unknown as { data: CustomerSummaryResponse[] }).data ?? []
+    const wrapped = res as unknown as { items?: CustomerSummaryResponse[]; data?: CustomerSummaryResponse[] }
+    const list = Array.isArray(res) ? res : wrapped.items ?? wrapped.data ?? []
     return list.map(toCustomer)
   },
 
