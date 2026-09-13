@@ -14,6 +14,7 @@ import type {
   TicketEmailMessage,
 } from '@/types/email.types'
 import { apiClient } from './api.client'
+import { toArrayPayload } from '@/lib/apiList'
 import { optionalNumericContractId, parseNumericContractId, requireNumericContractId, trimOptionalText } from '@/lib/ticketEmailContracts'
 import {
   normalizeTicketReplyPreview,
@@ -194,7 +195,8 @@ function buildReplyPreviewPayload(payload: TicketReplyPreviewRequest): TicketRep
 
 export const ticketEmailService = {
   listThread: async (ticketId: string): Promise<TicketEmailMessage[]> => {
-    const items = await apiClient.get<EmailThreadItemResponse[]>(`/tickets/${ticketId}/email/thread`)
+    const res = await apiClient.get<unknown>(`/tickets/${ticketId}/email/thread`)
+    const items = toArrayPayload(res) as EmailThreadItemResponse[]
     const messages = items.map((item) => toThreadMessage(ticketId, item))
     return messages
       .map(normalizeTicketEmailMessage)

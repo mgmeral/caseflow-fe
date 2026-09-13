@@ -1,4 +1,5 @@
 import { apiClient } from './api.client'
+import { toArrayPayload } from '@/lib/apiList'
 import type { ChannelEventCatalogResponseItem } from '@/types/api.types'
 import type {
   ChannelEventCatalogItem,
@@ -60,8 +61,8 @@ function normalizeCatalogItem(raw: ChannelEventCatalogResponseItem | string): Ch
 
 export const channelIntegrationService = {
   listChannelConfigs: async (): Promise<ChannelConfig[]> => {
-    const response = await apiClient.get<ChannelConfigResponse[]>('/admin/integrations/channels')
-    return response.map(normalizeChannelConfig)
+    const response = await apiClient.get<unknown>('/admin/integrations/channels')
+    return toArrayPayload(response).map((item) => normalizeChannelConfig(item as ChannelConfigResponse))
   },
 
   getChannelConfig: async (id: number): Promise<ChannelConfig> => {

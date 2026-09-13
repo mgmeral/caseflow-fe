@@ -4,6 +4,7 @@
 import type { TransferRecord } from '@/types/ticket.types'
 import type { TransferResponse, TransferListItem, TransferTicketRequest } from '@/types/api.types'
 import { apiClient } from './api.client'
+import { toArrayPayload } from '@/lib/apiList'
 
 export type { TransferTicketRequest }
 
@@ -39,8 +40,10 @@ function toTransferRecordFromListItem(t: TransferListItem): TransferRecord {
 
 export const transferService = {
   getByTicket: async (ticketId: string): Promise<TransferRecord[]> => {
-    const res = await apiClient.get<TransferListItem[]>(`/transfers/by-ticket/${ticketId}`)
-    return res.map(toTransferRecordFromListItem).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    const res = await apiClient.get<unknown>(`/transfers/by-ticket/${ticketId}`)
+    return toArrayPayload(res)
+      .map((item) => toTransferRecordFromListItem(item as TransferListItem))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
   },
 
   create: async (req: TransferTicketRequest): Promise<TransferRecord> => {

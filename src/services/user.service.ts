@@ -9,6 +9,7 @@ import type {
 import { apiClient } from './api.client'
 import { ApiError } from './api.client'
 import { normalizeUser, normalizeUserProfile } from './normalizers'
+import { toArrayPayload } from '@/lib/apiList'
 
 async function withEndpointFallback<T>(requests: Array<() => Promise<T>>): Promise<T> {
   let lastError: unknown = null
@@ -45,9 +46,8 @@ function createProfilePayload(data: UpdateUserProfileRequest): Record<string, un
 
 export const userService = {
   getAll: async (): Promise<User[]> => {
-    const res = await apiClient.get<Record<string, unknown>[] | { items: Record<string, unknown>[] }>('/users')
-    const list = Array.isArray(res) ? res : res.items ?? []
-    return list.map(normalizeUser)
+    const res = await apiClient.get<unknown>('/users')
+    return toArrayPayload(res).map((item) => normalizeUser(item as Record<string, unknown>))
   },
 
   getById: async (id: string): Promise<User | null> => {

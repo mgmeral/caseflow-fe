@@ -3,6 +3,7 @@ import type { Customer } from '@/types/customer.types'
 import type { Ticket } from '@/types/ticket.types'
 import { apiClient } from './api.client'
 import { normalizeTicket } from './normalizers'
+import { toArrayPayload } from '@/lib/apiList'
 
 function normalizeColorHex(value: string | null | undefined): string | null {
   if (!value) return null
@@ -49,10 +50,8 @@ export const customerService = {
     if (search) params.set('search', search)
     if (typeof isActive === 'boolean') params.set('isActive', String(isActive))
     const qs = params.toString()
-    const res = await apiClient.get<CustomerSummaryResponse[]>(`/customers${qs ? `?${qs}` : ''}`)
-    const wrapped = res as unknown as { items?: CustomerSummaryResponse[]; data?: CustomerSummaryResponse[] }
-    const list = Array.isArray(res) ? res : wrapped.items ?? wrapped.data ?? []
-    return list.map(toCustomer)
+    const res = await apiClient.get<unknown>(`/customers${qs ? `?${qs}` : ''}`)
+    return toArrayPayload(res).map((item) => toCustomer(item as CustomerSummaryResponse))
   },
 
   getById: async (id: string): Promise<Customer | null> => {

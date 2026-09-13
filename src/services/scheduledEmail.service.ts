@@ -1,6 +1,7 @@
 import { apiClient } from './api.client'
 import type { ScheduleEmailRequest, ScheduledEmailResponse } from '@/types/api.types'
 import { optionalNumericContractId, trimOptionalText } from '@/lib/ticketEmailContracts'
+import { toArrayPayload } from '@/lib/apiList'
 
 function toScheduledEmailPayload(request: ScheduleEmailRequest): ScheduleEmailRequest {
   const toAddress = trimOptionalText(request.toAddress)
@@ -20,7 +21,8 @@ function toScheduledEmailPayload(request: ScheduleEmailRequest): ScheduleEmailRe
 
 export const scheduledEmailService = {
   listScheduledEmails: async (ticketPublicId: string): Promise<ScheduledEmailResponse[]> => {
-    return apiClient.get<ScheduledEmailResponse[]>(`/tickets/${ticketPublicId}/scheduled-emails`)
+    const res = await apiClient.get<unknown>(`/tickets/${ticketPublicId}/scheduled-emails`)
+    return toArrayPayload(res) as ScheduledEmailResponse[]
   },
 
   createScheduledEmail: async (ticketPublicId: string, request: ScheduleEmailRequest): Promise<ScheduledEmailResponse> => {

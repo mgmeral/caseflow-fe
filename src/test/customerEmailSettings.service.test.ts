@@ -27,6 +27,23 @@ describe('customerEmailSettingsService routing-owner contract', () => {
     mockDelete.mockReset()
   })
 
+  it('unwraps a PagedResponse ({items,...}) from GET /customers — the actual backend shape', async () => {
+    mockGet.mockResolvedValueOnce({
+      items: [
+        { id: 1, name: 'Akbank', code: 'AKBNK', isActive: true, colorHex: '#DC2626' },
+      ],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+
+    const customers = await customerEmailSettingsService.listCustomers()
+
+    expect(mockGet).toHaveBeenCalledWith('/customers')
+    expect(customers).toEqual([{ id: '1', name: 'Akbank', code: 'AKBNK' }])
+  })
+
   it('upserts customer email settings via customer endpoint', async () => {
     mockPut.mockResolvedValueOnce({
       customerId: 'c1',

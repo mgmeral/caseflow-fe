@@ -14,6 +14,7 @@ import { assignmentService } from './assignment.service'
 import { normalizeStatus, normalizeTicket, toBackendStatus, toBackendPriority } from './normalizers'
 import { DEFAULT_TICKET_SORT, isSupportedTicketSortField } from '@/lib/ticketQueryContracts'
 import { mapNoteResponseToTicketMessage } from '@/lib/noteMessage'
+import { toArrayPayload } from '@/lib/apiList'
 
 function emailToMessage(e: EmailDocumentResponse): TicketMessage {
   return {
@@ -68,7 +69,7 @@ export const ticketService = {
     const res = await apiClient.get<PagedResponse<Record<string, unknown>> | Record<string, unknown>[]>(`/tickets?${params.toString()}`)
 
     if (Array.isArray(res)) return { data: res.map(normalizeTicket), total: res.length }
-    return { data: res.items.map(normalizeTicket), total: res.totalElements }
+    return { data: (res.items ?? []).map(normalizeTicket), total: res.totalElements }
   },
 
   getById: async (id: string): Promise<Ticket> => {
@@ -116,10 +117,12 @@ export const ticketService = {
   },
 
   getMessages: async (ticketId: string): Promise<TicketMessage[]> => {
-    const [notes, emailSummaries] = await Promise.all([
-      apiClient.get<NoteResponse[]>(`/notes/by-ticket/${ticketId}`),
-      apiClient.get<EmailDocumentSummaryResponse[]>(`/emails/by-ticket/${ticketId}`),
+    const [notesRes, emailSummariesRes] = await Promise.all([
+      apiClient.get<unknown>(`/notes/by-ticket/${ticketId}`),
+      apiClient.get<unknown>(`/emails/by-ticket/${ticketId}`),
     ])
+    const notes = toArrayPayload(notesRes) as NoteResponse[]
+    const emailSummaries = toArrayPayload(emailSummariesRes) as EmailDocumentSummaryResponse[]
 
     const emailDetails = await Promise.all(
       emailSummaries.map((s) => apiClient.get<EmailDocumentResponse>(`/emails/${s.id}`)),
@@ -132,8 +135,9 @@ export const ticketService = {
   },
 
   getTransferHistory: async (ticketId: string): Promise<TransferRecord[]> => {
-    const res = await apiClient.get<TransferListItem[]>(`/transfers/by-ticket/${ticketId}`)
-    return res
+    const res = await apiClient.get<unknown>(`/transfers/by-ticket/${ticketId}`)
+    return toArrayPayload(res)
+      .map((raw) => raw as TransferListItem)
       .map((t) => ({
         id: t.id,
         ticketId: String(t.ticketId),

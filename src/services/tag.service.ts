@@ -2,16 +2,17 @@ import type { CreateTagRequest, TagResponse, TicketTagResponse, UpdateTagRequest
 import type { TicketTag, TicketTagAssignment } from '@/types/ticket.types'
 import { apiClient } from './api.client'
 import { normalizeTag, normalizeTicketTagResponse } from './email-platform.normalizers'
+import { toArrayPayload } from '@/lib/apiList'
 
 export const tagService = {
   listActiveTags: async (): Promise<TicketTag[]> => {
-    const response = await apiClient.get<TagResponse[]>('/tags')
-    return response.map(normalizeTag)
+    const response = await apiClient.get<unknown>('/tags')
+    return toArrayPayload(response).map((item) => normalizeTag(item as TagResponse))
   },
 
   listAllTags: async (): Promise<TicketTag[]> => {
-    const response = await apiClient.get<TagResponse[]>('/tags/all')
-    return response.map(normalizeTag)
+    const response = await apiClient.get<unknown>('/tags/all')
+    return toArrayPayload(response).map((item) => normalizeTag(item as TagResponse))
   },
 
   getTagById: async (tagId: string): Promise<TicketTag> => {
@@ -40,8 +41,8 @@ export const tagService = {
   },
 
   listTicketTags: async (ticketId: string): Promise<TicketTagAssignment[]> => {
-    const response = await apiClient.get<TicketTagResponse[]>(`/tickets/${ticketId}/tags`)
-    return response.map(normalizeTicketTagResponse)
+    const response = await apiClient.get<unknown>(`/tickets/${ticketId}/tags`)
+    return toArrayPayload(response).map((item) => normalizeTicketTagResponse(item as TicketTagResponse))
   },
 
   addTagToTicket: async (ticketId: string, tagId: string): Promise<TicketTagAssignment> => {

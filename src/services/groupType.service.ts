@@ -1,14 +1,18 @@
 ﻿import type { GroupType } from '@/types/user.types'
 import { apiClient } from './api.client'
+import { toArrayPayload } from '@/lib/apiList'
 
 export const groupTypeService = {
   getAll: async (): Promise<GroupType[]> => {
-    const res = await apiClient.get<{ id: number | string; code: string; name: string }[]>('/group-types')
-    return res.map((item) => ({
-      id: String(item.id),
-      code: item.code,
-      name: item.name,
-    }))
+    const res = await apiClient.get<unknown>('/group-types')
+    return toArrayPayload(res).map((raw) => {
+      const item = raw as { id: number | string; code: string; name: string }
+      return {
+        id: String(item.id),
+        code: item.code,
+        name: item.name,
+      }
+    })
   },
 
   create: async (data: { code: string; name: string; description?: string }): Promise<GroupType> => {

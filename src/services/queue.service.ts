@@ -41,7 +41,7 @@ export const queueService = {
     const params = buildQueueParams(filters, sort, page, pageSize)
     const response = await apiClient.get<PagedResponse<Record<string, unknown>> | Record<string, unknown>[]>(`/queue?${params.toString()}`)
     if (Array.isArray(response)) return { data: response.map(normalizeTicket), total: response.length }
-    return { data: response.items.map(normalizeTicket), total: response.totalElements }
+    return { data: (response.items ?? []).map(normalizeTicket), total: response.totalElements }
   },
 
   getStats: async (filters: QueueFilters): Promise<QueueStats> => {

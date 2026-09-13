@@ -31,7 +31,7 @@ function normalizeNotification(raw: NotificationResponse): NotificationItem {
 export const notificationService = {
   getAll: async (): Promise<NotificationItem[]> => {
     const response = await apiClient.get<PagedResponse<NotificationResponse> | NotificationResponse[]>('/notifications')
-    const items = Array.isArray(response) ? response : response.items
+    const items = Array.isArray(response) ? response : response.items ?? []
     return items.map(normalizeNotification)
   },
 

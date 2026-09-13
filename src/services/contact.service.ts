@@ -4,6 +4,7 @@
 import type { Contact } from '@/types/customer.types'
 import type { ContactResponse, CreateContactRequest, UpdateContactRequest } from '@/types/api.types'
 import { apiClient } from './api.client'
+import { toArrayPayload } from '@/lib/apiList'
 
 function toContact(r: ContactResponse): Contact {
   return {
@@ -21,8 +22,8 @@ function toContact(r: ContactResponse): Contact {
 
 export const contactService = {
   getAll: async (): Promise<Contact[]> => {
-    const res = await apiClient.get<ContactResponse[]>('/contacts')
-    return res.map(toContact)
+    const res = await apiClient.get<unknown>('/contacts')
+    return toArrayPayload(res).map((item) => toContact(item as ContactResponse))
   },
 
   getById: async (id: string): Promise<Contact | null> => {
@@ -31,8 +32,8 @@ export const contactService = {
   },
 
   getByCustomer: async (customerId: string): Promise<Contact[]> => {
-    const res = await apiClient.get<ContactResponse[]>(`/contacts/by-customer/${customerId}`)
-    return res.map(toContact)
+    const res = await apiClient.get<unknown>(`/contacts/by-customer/${customerId}`)
+    return toArrayPayload(res).map((item) => toContact(item as ContactResponse))
   },
 
   getByEmail: async (email: string): Promise<Contact | null> => {

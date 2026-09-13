@@ -11,6 +11,7 @@ import {
   normalizeCustomerEmailRoutingRule,
   normalizeCustomerEmailSettings,
 } from './email-platform.normalizers'
+import { toArrayPayload } from '@/lib/apiList'
 
 export interface CustomerEmailSummary {
   id: string
@@ -46,12 +47,15 @@ function toBackendRoutingRulePayload(payload: UpsertCustomerEmailRoutingRuleRequ
 
 export const customerEmailSettingsService = {
   listCustomers: async (): Promise<CustomerEmailSummary[]> => {
-    const customers = await apiClient.get<CustomerSummaryResponse[]>('/customers')
-    return customers.map((customer) => ({
-      id: String(customer.id),
-      name: customer.name,
-      code: customer.code,
-    }))
+    const res = await apiClient.get<unknown>('/customers')
+    return toArrayPayload(res).map((item) => {
+      const customer = item as CustomerSummaryResponse
+      return {
+        id: String(customer.id),
+        name: customer.name,
+        code: customer.code,
+      }
+    })
   },
 
   getByCustomer: async (customerId: string): Promise<CustomerEmailSettings | null> => {
@@ -71,8 +75,8 @@ export const customerEmailSettingsService = {
   },
 
   listRoutingRules: async (customerId: string): Promise<CustomerEmailRoutingRule[]> => {
-    const rules = await apiClient.get<CustomerEmailRoutingRuleResponse[]>(`/customers/${customerId}/email-settings/rules`)
-    return (rules ?? []).map(normalizeCustomerEmailRoutingRule)
+    const res = await apiClient.get<unknown>(`/customers/${customerId}/email-settings/rules`)
+    return toArrayPayload(res).map((item) => normalizeCustomerEmailRoutingRule(item as CustomerEmailRoutingRuleResponse))
   },
 
   createRoutingRule: async (customerId: string, payload: UpsertCustomerEmailRoutingRuleRequest) => {

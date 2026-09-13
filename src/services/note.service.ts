@@ -5,11 +5,14 @@ import type { TicketMessage } from '@/types/ticket.types'
 import type { NoteResponse, AddNoteRequest } from '@/types/api.types'
 import { apiClient } from './api.client'
 import { mapNoteResponseToTicketMessage } from '@/lib/noteMessage'
+import { toArrayPayload } from '@/lib/apiList'
 
 export const noteService = {
   getByTicket: async (ticketId: string): Promise<TicketMessage[]> => {
-    const notes = await apiClient.get<NoteResponse[]>(`/notes/by-ticket/${ticketId}`)
-    return notes.map(mapNoteResponseToTicketMessage).sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    const notes = await apiClient.get<unknown>(`/notes/by-ticket/${ticketId}`)
+    return toArrayPayload(notes)
+      .map((item) => mapNoteResponseToTicketMessage(item as NoteResponse))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
   },
 
   getById: async (id: string): Promise<TicketMessage | null> => {

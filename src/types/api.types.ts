@@ -602,7 +602,7 @@ export type IngressEventStatus = ExtensibleEnum<
   | 'SKIPPED'
 >
 
-/** GET /admin/ingress/events — list item */
+/** GET /admin/ingress-events — list item */
 export interface IngressEventResponse {
   id: string | number
   externalId: string | null
@@ -625,7 +625,7 @@ export interface IngressEventResponse {
   ticketId: string | number | null
 }
 
-/** Paged list response from GET /admin/ingress/events */
+/** Paged list response from GET /admin/ingress-events */
 export type IngressEventListResponse = {
   items: IngressEventResponse[]
   page: number
@@ -634,7 +634,7 @@ export type IngressEventListResponse = {
   totalPages: number
 } | IngressEventResponse[]
 
-/** POST /admin/ingress/events/{id}/retry */
+/** POST /admin/ingress-events/{id}/retry */
 export interface IngressEventActionResponse {
   success: boolean
   message: string | null
@@ -642,7 +642,7 @@ export interface IngressEventActionResponse {
   newStatus: IngressEventStatus | null
 }
 
-/** GET /admin/ingress/events query filters */
+/** GET /admin/ingress-events query filters */
 export interface IngressEventListFilters {
   status?: IngressEventStatus | null
   mailboxId?: string | null

@@ -1,17 +1,7 @@
 ﻿import type { RoleRecord, RoleSummaryRecord, PermissionDef } from '@/types/user.types'
 import type { CreateRoleRequest, RoleDetailResponse, RoleResponse, RoleTicketScope, UpdateRoleRequest } from '@/types/api.types'
 import { apiClient } from './api.client'
-
-function toArrayPayload(raw: unknown): unknown[] {
-  if (Array.isArray(raw)) return raw
-  if (!raw || typeof raw !== 'object') return []
-  const obj = raw as Record<string, unknown>
-  if (Array.isArray(obj.items)) return obj.items
-  if (Array.isArray(obj.content)) return obj.content
-  if (Array.isArray(obj.data)) return obj.data
-  if (Array.isArray(obj.results)) return obj.results
-  return []
-}
+import { toArrayPayload } from '@/lib/apiList'
 
 function normalizePermissionCode(raw: unknown): string {
   if (typeof raw === 'string') return raw

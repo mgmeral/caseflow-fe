@@ -1,5 +1,5 @@
 /**
- * Ingress Event admin service — /admin/ingress/* endpoints.
+ * Ingress Event admin service — /admin/ingress-events/* endpoints.
  * Allows operators to list, inspect, retry, quarantine, and release
  * stuck or failed inbound processing events.
  */
@@ -67,7 +67,7 @@ export interface IngressEventPage {
 }
 
 export const ingressService = {
-  /** GET /admin/ingress/events — paginated list with optional status/mailbox filter */
+  /** GET /admin/ingress-events — paginated list with optional status/mailbox filter */
   list: async (filters: IngressEventListFilters = {}): Promise<IngressEventPage> => {
     const params = new URLSearchParams()
     if (filters.status) params.set('status', filters.status)
@@ -77,7 +77,7 @@ export const ingressService = {
 
     const query = params.toString()
     const response = await apiClient.get<IngressEventListResponse>(
-      `/admin/ingress/events${query ? `?${query}` : ''}`,
+      `/admin/ingress-events${query ? `?${query}` : ''}`,
     )
 
     if (Array.isArray(response)) {
@@ -93,25 +93,25 @@ export const ingressService = {
     }
   },
 
-  /** GET /admin/ingress/events/{id} */
+  /** GET /admin/ingress-events/{id} */
   getById: async (id: string): Promise<IngressEvent> => {
-    const raw = await apiClient.get<IngressEventResponse>(`/admin/ingress/events/${id}`)
+    const raw = await apiClient.get<IngressEventResponse>(`/admin/ingress-events/${id}`)
     return normalizeEvent(raw)
   },
 
-  /** POST /admin/ingress/events/{id}/retry */
+  /** POST /admin/ingress-events/{id}/retry */
   retry: async (id: string): Promise<IngressEventActionResponse> =>
-    apiClient.post<IngressEventActionResponse>(`/admin/ingress/events/${id}/retry`, {}),
+    apiClient.post<IngressEventActionResponse>(`/admin/ingress-events/${id}/retry`, {}),
 
-  /** POST /admin/ingress/events/{id}/quarantine */
+  /** POST /admin/ingress-events/{id}/quarantine */
   quarantine: async (id: string): Promise<IngressEventActionResponse> =>
-    apiClient.post<IngressEventActionResponse>(`/admin/ingress/events/${id}/quarantine`, {}),
+    apiClient.post<IngressEventActionResponse>(`/admin/ingress-events/${id}/quarantine`, {}),
 
-  /** POST /admin/ingress/events/{id}/release */
+  /** POST /admin/ingress-events/{id}/release */
   release: async (id: string): Promise<IngressEventActionResponse> =>
-    apiClient.post<IngressEventActionResponse>(`/admin/ingress/events/${id}/release`, {}),
+    apiClient.post<IngressEventActionResponse>(`/admin/ingress-events/${id}/release`, {}),
 
-  /** POST /admin/ingress/events/{id}/process */
+  /** POST /admin/ingress-events/{id}/process */
   process: async (id: string): Promise<IngressEventActionResponse> =>
-    apiClient.post<IngressEventActionResponse>(`/admin/ingress/events/${id}/process`, {}),
+    apiClient.post<IngressEventActionResponse>(`/admin/ingress-events/${id}/process`, {}),
 }

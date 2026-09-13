@@ -1,11 +1,12 @@
 ﻿import type { Group } from '@/types/user.types'
 import { apiClient } from './api.client'
 import { normalizeGroup } from './normalizers'
+import { toArrayPayload } from '@/lib/apiList'
 
 export const groupService = {
   getAll: async (): Promise<Group[]> => {
-    const res = await apiClient.get<Record<string, unknown>[]>('/groups')
-    return res.map(normalizeGroup)
+    const res = await apiClient.get<unknown>('/groups')
+    return toArrayPayload(res).map((item) => normalizeGroup(item as Record<string, unknown>))
   },
 
   getById: async (id: string): Promise<Group | null> => {
