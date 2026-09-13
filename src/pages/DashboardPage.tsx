@@ -16,6 +16,14 @@ export function DashboardPage() {
 
   const stats = statsQuery.data
   const myActionItems = useMemo(() => stats?.myActionRequiredItems ?? [], [stats?.myActionRequiredItems])
+  // Roles that orchestrate rather than personally own tickets (Supervisor/Admin) get an
+  // operationally-urgent queue here instead of a literal "assigned to me" one, which is
+  // almost always empty for them — see DashboardService.getStats on the backend.
+  const isOperationalQueue = currentUser?.ticketScope === 'ALL' || currentUser?.ticketScope === 'OWN_GROUPS'
+  const actionSectionTitle = isOperationalQueue ? 'Needs Attention' : 'My Action Required'
+  const actionSectionEmptyText = isOperationalQueue
+    ? 'Nothing urgent — no unassigned or at-risk tickets right now.'
+    : 'No tickets currently require your action.'
 
   const navigateToTickets = (filter: DashboardFilter) => {
     navigate(`/tickets?dashboardFilter=${filter}`)
@@ -91,7 +99,7 @@ export function DashboardPage() {
 
       <div className="section-shell">
         <div className="section-header">
-          <h2 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">My Action Required</h2>
+          <h2 className="text-xs font-semibold text-gray-700 uppercase tracking-wide">{actionSectionTitle}</h2>
           <span className="text-xs text-gray-400">
             {statsQuery.isLoading ? '...' : stats?.myActionRequired ?? myActionItems.length}
           </span>
@@ -102,7 +110,7 @@ export function DashboardPage() {
         ) : myActionItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
             <CheckCircle2 className="w-6 h-6 text-green-300 mb-1.5" />
-            <p className="text-xs text-gray-400">No tickets currently require your action.</p>
+            <p className="text-xs text-gray-400">{actionSectionEmptyText}</p>
           </div>
         ) : (
             <div className="divide-y divide-white/50">
