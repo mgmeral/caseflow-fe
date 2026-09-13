@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { userService } from '@/services/user.service'
 import { groupService } from '@/services/group.service'
 import { groupTypeService } from '@/services/groupType.service'
 import { roleService } from '@/services/role.service'
+import type { User } from '@/types/user.types'
 
 export function useUsersQuery() {
   return useQuery({
@@ -44,14 +46,36 @@ export function usePermissionDefsQuery() {
   })
 }
 
-/** Convenience hook that returns both users and groups together */
+/**
+ * Convenience hook that returns both users and groups together.
+ *
+ * GET /api/users (UserSummaryResponse) never includes group membership, so every user
+ * normalizes with empty groupIds/groupNames — that breaks any group-filtered agent picker
+ * (e.g. AssignmentModal's "Filter by Group"). GET /api/groups DOES include each group's
+ * memberIds, so we derive group membership per user from there instead.
+ */
 export function useUsers() {
   const usersQuery = useUsersQuery()
   const groupsQuery = useGroupsQuery()
 
+  const users = usersQuery.data ?? []
+  const groups = groupsQuery.data ?? []
+
+  const usersWithGroups = useMemo<User[]>(() => {
+    if (groups.length === 0) return users
+    return users.map((user) => {
+      const memberGroups = groups.filter((g) => g.memberIds.includes(user.id))
+      return {
+        ...user,
+        groupIds: memberGroups.map((g) => g.id),
+        groupNames: memberGroups.map((g) => g.name),
+      }
+    })
+  }, [users, groups])
+
   return {
-    users: usersQuery.data ?? [],
-    groups: groupsQuery.data ?? [],
+    users: usersWithGroups,
+    groups,
     isLoading: usersQuery.isLoading || groupsQuery.isLoading,
     refetch: () => {
       usersQuery.refetch()
